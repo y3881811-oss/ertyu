@@ -18,24 +18,36 @@ class DirectFileEngine : FileEngine {
         val dir = uri.toFileOrNull()?.takeIf { it.isDirectory }
             ?: return@withContext emptyList()
 
-        // 一次性拿全部字段，避免后续重复访问文件系统
         val children = dir.listFiles() ?: return@withContext emptyList()
         val result = ArrayList<FileItem>(children.size)
         for (file in children) {
+            val isDir = file.isDirectory
+            val size = if (isDir) 0L else file.length()
             val childUri = Uri.fromFile(file)
             result.add(
                 FileItem(
                     name = file.name,
                     uri = childUri,
-                    isDirectory = file.isDirectory,
-                    size = if (file.isFile) file.length() else 0L,
+                    isDirectory = isDir,
+                    size = size,
                     lastModified = file.lastModified(),
                     mimeType = null,
-                    uriString = childUri.toString()
+                    uriString = childUri.toString(),
+                    sizeText = if (isDir) "" else formatSize(size)
                 )
             )
         }
         result
+    }
+
+    private fun formatSize(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val kb = bytes / 1024.0
+        if (kb < 1024) return String.format("%.1f KB", kb)
+        val mb = kb / 1024.0
+        if (mb < 1024) return String.format("%.1f MB", mb)
+        val gb = mb / 1024.0
+        return String.format("%.2f GB", gb)
     }
 
     override suspend fun delete(uri: Uri): Boolean = withContext(Dispatchers.IO) {
