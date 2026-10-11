@@ -1,8 +1,13 @@
 package com.ertyu
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -51,8 +56,51 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 监听 PackageInstaller 的安装结果广播
+    private val installReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ApkInstaller.ACTION_INSTALL_RESULT) return
+            val status = intent.getIntExtra(
+                android.content.pm.PackageInstaller.EXTRA_STATUS,
+                -1
+            )
+            val message = intent.getStringExtra(
+                android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE
+            )
+            when (status) {
+                android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                    // 系统要求用户在界面上确认
+                    @Suppress("DEPRECATION")
+                    val confirmIntent = intent.getParcelableExtra<Intent>(
+                        android.content.Intent.EXTRA_INTENT
+                    )
+                    if (confirmIntent != null) {
+                        try {
+                            startActivity(confirmIntent)
+                        } catch (_: Exception) { }
+                    }
+                }
+                android.content.pm.PackageInstaller.STATUS_SUCCESS -> {
+                    // 安装完成，系统自己会显示
+                }
+                else -> {
+                    // 失败/取消，交给系统
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 注册安装结果接收器
+        val filter = IntentFilter(ApkInstaller.ACTION_INSTALL_RESULT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(installReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(installReceiver, filter)
+        }
+
         setContent {
             val dark = isSystemInDarkTheme()
             MaterialTheme(
@@ -64,6 +112,11 @@ class MainActivity : ComponentActivity() {
             }
         }
         requestStorageThenLoad()
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(installReceiver) }
+        super.onDestroy()
     }
 
     private fun requestStorageThenLoad() {
@@ -92,6 +145,7 @@ fun AppRoot(vm: MainViewModel) {
     val apkState by vm.apkInfoState.collectAsState()
     val apkBrowserState by vm.apkBrowserState.collectAsState()
     val pendingInstall by vm.pendingInstall.collectAsState()
+    val installState by vm.installState.collectAsState()
 
     val context = LocalContext.current
 
@@ -154,6 +208,54 @@ fun AppRoot(vm: MainViewModel) {
                 if (zipProgress.done || zipProgress.error != null) {
                     TextButton(onClick = { vm.dismissZipProgress() }) {
                         Text(if (zipProgress.error != null) "关闭" else "完成")
+                    }
+                }
+            }
+        )
+    }
+
+    // 安装进度对话框
+    if (installState.visible) {
+        AlertDialog(
+            onDismissRequest = {
+                if (installState.error != null) vm.dismissInstallProgress()
+            },
+            title = { Text("正在安装") },
+            text = {
+                Column {
+                    Text(installState.fileName, maxLines = 2)
+                    Spacer(Modifier.height(8.dp))
+                    if (installState.total > 0) {
+                        LinearProgressIndicator(
+                            progress = {
+                                installState.copied.toFloat() / installState.total
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text("${installState.percent}%")
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        installState.stage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    installState.error?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "错误: $it",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (installState.error != null) {
+                    TextButton(onClick = { vm.dismissInstallProgress() }) {
+                        Text("关闭")
                     }
                 }
             }
