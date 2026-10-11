@@ -19,7 +19,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // 只保留 32 位 + 64 位 ARM，去掉 x86_64（模拟器用，普通手机不需要）
+        // 只保留 32 位（armeabi-v7a）+ 64 位（arm64-v8a）
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
@@ -77,10 +77,6 @@ android {
         }
     }
 
-    androidResources {
-        localeFilters += listOf("zh", "en")
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -105,8 +101,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-    // 已从 extended 换成 core
-    implementation(libs.androidx.material.icons.core)
+    implementation(libs.androidx.material.icons.extended)
 
     implementation(libs.commons.compress)
     implementation(libs.xz)
