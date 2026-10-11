@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
@@ -59,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.FileItem
@@ -84,6 +88,7 @@ private val IconEdit: ImageVector = Icons.Default.Edit
 private val IconVisibility: ImageVector = Icons.Default.Visibility
 private val IconVisibilityOff: ImageVector = Icons.Default.VisibilityOff
 private val IconZip: ImageVector = Icons.Default.FolderZip
+private val IconInfo: ImageVector = Icons.Default.Info
 
 @Composable
 fun FilePanel(
@@ -100,6 +105,7 @@ fun FilePanel(
     var showSortDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<FileItem?>(null) }
     var actionTarget by remember { mutableStateOf<FileItem?>(null) }
+    var infoTarget by remember { mutableStateOf<FileItem?>(null) }
 
     Column(modifier = modifier.fillMaxHeight()) {
 
@@ -221,8 +227,16 @@ fun FilePanel(
                 actionTarget = null
                 vm.enterSelection(isLeft, target.uriString)
                 vm.compressSelection(isLeft)
+            },
+            onInfo = {
+                actionTarget = null
+                infoTarget = target
             }
         )
+    }
+
+    infoTarget?.let { target ->
+        FileInfoDialog(item = target, onDismiss = { infoTarget = null })
     }
 
     if (showSortDialog) {
@@ -283,6 +297,49 @@ fun FilePanel(
     }
 }
 
+// ==================== 文件详情对话框 ====================
+
+@Composable
+private fun FileInfoDialog(item: FileItem, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("文件属性") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                InfoRow("名称", item.name)
+                InfoRow("类型", item.typeText)
+                if (!item.isDirectory) {
+                    InfoRow("大小", "${item.sizeText}（${item.size} 字节）")
+                } else {
+                    InfoRow("大小", "—")
+                }
+                InfoRow("修改时间", item.lastModifiedText)
+                InfoRow("路径", item.path)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
 // ==================== 文件操作菜单 ====================
 
 @Composable
@@ -297,18 +354,20 @@ private fun FileActionDialog(
     onSelect: () -> Unit,
     onExtractHere: () -> Unit,
     onExtractOther: () -> Unit,
-    onZipThis: () -> Unit
+    onZipThis: () -> Unit,
+    onInfo: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 if (isZip) {
                     ActionItem("解压到当前目录", IconZip, onExtractHere)
                     ActionItem("解压到另一侧", IconZip, onExtractOther)
                 }
                 ActionItem("压缩为 ZIP", IconZip, onZipThis)
+                ActionItem("属性", IconInfo, onInfo)
                 ActionItem("重命名", IconEdit, onRename)
                 ActionItem("复制到另一侧", IconCopy, onCopy)
                 ActionItem("移动到另一侧", IconMove, onMove)
@@ -491,6 +550,21 @@ private fun FileRow(
 ) {
     val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
 
+    // 副标题：类型 · 大小 · 时间
+    val subtitle = remember(item.uriString, item.sizeText, item.typeText, item.lastModifiedText) {
+        buildString {
+            append(item.typeText)
+            if (!item.isDirectory && item.sizeText.isNotEmpty()) {
+                append(" · ")
+                append(item.sizeText)
+            }
+            if (item.lastModifiedText.isNotEmpty()) {
+                append(" · ")
+                append(item.lastModifiedText)
+            }
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -513,14 +587,13 @@ private fun FileRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (!item.isDirectory) {
-                Text(
-                    text = item.sizeText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-            }
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
         if (!isSelectionMode) {
             IconButton(
