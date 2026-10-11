@@ -5,22 +5,27 @@ import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.ertyu.engine.ArchiveEngine
+import com.ertyu.engine.BookmarkStore
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
 import com.ertyu.engine.FolderSizeCalculator
-import com.ertyu.engine.SearchEngine
-import com.ertyu.model.ArchiveFormat
+import com.ertyu.model.ApkBrowserState
+import com.ertyu.model.ApkInfoState
+import com.ertyu.model.BookmarkPanelState
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
 import com.ertyu.model.FolderSizeState
+import com.ertyu.model.HexViewerState
 import com.ertyu.model.ImageViewerState
+import com.ertyu.model.InstallState
+import com.ertyu.model.InstalledAppsState
 import com.ertyu.model.PanelState
 import com.ertyu.model.SearchState
 import com.ertyu.model.SortMode
 import com.ertyu.model.ZipProgress
 import com.ertyu.model.ZipPrompt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,45 +33,153 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.RandomAccessFile
+
+internal val TEXT_FILE_EXTS = setOf(
+    "txt", "md", "json", "xml", "kt", "java", "kts",
+    "gradle", "properties", "yml", "yaml", "html", "css", "js",
+    "log", "ini", "conf", "cfg", "sh", "bat"
+)
+
+internal val IMAGE_FILE_EXTS = setOf(
+    "jpg", "jpeg", "png", "gif", "bmp", "webp"
+)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val engine: FileEngine = DirectFileEngine()
+    internal val engine: FileEngine = DirectFileEngine()
 
-    private val _leftPanel = MutableStateFlow(PanelState())
+    // ==================== 面板 / 查看器 ====================
+
+    internal val _leftPanel = MutableStateFlow(PanelState())
     val leftPanel: StateFlow<PanelState> = _leftPanel.asStateFlow()
 
-    private val _rightPanel = MutableStateFlow(PanelState())
+    internal val _rightPanel = MutableStateFlow(PanelState())
     val rightPanel: StateFlow<PanelState> = _rightPanel.asStateFlow()
 
-    private val _editor = MutableStateFlow(EditorState())
+    internal val _editor = MutableStateFlow(EditorState())
     val editor: StateFlow<EditorState> = _editor.asStateFlow()
 
-    private val _imageViewer = MutableStateFlow(ImageViewerState())
+    internal val _imageViewer = MutableStateFlow(ImageViewerState())
     val imageViewer: StateFlow<ImageViewerState> = _imageViewer.asStateFlow()
 
-    private val _zipProgress = MutableStateFlow(ZipProgress())
+    internal val _hexViewerState = MutableStateFlow(HexViewerState())
+    val hexViewerState: StateFlow<HexViewerState> =
+        _hexViewerState.asStateFlow()
+
+    // ==================== 压缩 ====================
+
+    internal val _zipProgress = MutableStateFlow(ZipProgress())
     val zipProgress: StateFlow<ZipProgress> = _zipProgress.asStateFlow()
 
-    private val _zipPrompt = MutableStateFlow(ZipPrompt())
+    internal val _zipPrompt = MutableStateFlow(ZipPrompt())
     val zipPrompt: StateFlow<ZipPrompt> = _zipPrompt.asStateFlow()
 
-    private val _compressPromptVisible = MutableStateFlow(false)
-    val compressPromptVisible: StateFlow<Boolean> = _compressPromptVisible.asStateFlow()
+    internal val _compressPromptVisible = MutableStateFlow(false)
+    val compressPromptVisible: StateFlow<Boolean> =
+        _compressPromptVisible.asStateFlow()
+    internal val _compressPanelIsLeft = MutableStateFlow(true)
 
-    private val _compressPanelIsLeft = MutableStateFlow(true)
+    // ==================== 属性 ====================
 
-    private val _folderSizeState = MutableStateFlow(FolderSizeState())
-    val folderSizeState: StateFlow<FolderSizeState> = _folderSizeState.asStateFlow()
+    internal val _folderSizeState = MutableStateFlow(FolderSizeState())
+    val folderSizeState: StateFlow<FolderSizeState> =
+        _folderSizeState.asStateFlow()
 
-    private val _searchState = MutableStateFlow(SearchState())
+    // ==================== 搜索 / 书签 ====================
+
+    internal val _searchState = MutableStateFlow(SearchState())
     val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
 
-    private var folderSizeJob: Job? = null
-    private var searchJob: Job? = null
+    internal val _bookmarkPanelState = MutableStateFlow(BookmarkPanelState())
+    val bookmarkPanelState: StateFlow<BookmarkPanelState> =
+        _bookmarkPanelState.asStateFlow()
 
-    private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
+    // ==================== APK ====================
+
+    internal val _apkInfoState = MutableStateFlow(ApkInfoState())
+    val apkInfoState: StateFlow<ApkInfoState> = _apkInfoState.asStateFlow()
+
+    internal val _apkBrowserState = MutableStateFlow(ApkBrowserState())
+    val apkBrowserState: StateFlow<ApkBrowserState> =
+        _apkBrowserState.asStateFlow()
+
+    internal val _pendingInstall = MutableStateFlow<File?>(null)
+    val pendingInstall: StateFlow<File?> = _pendingInstall.asStateFlow()
+
+    internal val _installState = MutableStateFlow(InstallState())
+    val installState: StateFlow<InstallState> = _installState.asStateFlow()
+
+    // ==================== 已安装应用 ====================
+
+    internal val _installedAppsState = MutableStateFlow(InstalledAppsState())
+    val installedAppsState: StateFlow<InstalledAppsState> =
+        _installedAppsState.asStateFlow()
+
+    // ==================== 提示 ====================
+
+    internal val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast.asStateFlow()
+
+    // ==================== FilePanel 弹窗状态 ====================
+
+    internal val _newFilePrompt = MutableStateFlow(false)
+    val newFilePrompt: StateFlow<Boolean> = _newFilePrompt.asStateFlow()
+    internal val _newFilePanelIsLeft = MutableStateFlow(true)
+
+    internal val _newFolderDialogVisible = MutableStateFlow(false)
+    val newFolderDialogVisible: StateFlow<Boolean> =
+        _newFolderDialogVisible.asStateFlow()
+    internal val _newFolderDialogIsLeft = MutableStateFlow(true)
+    val newFolderDialogIsLeft: StateFlow<Boolean> =
+        _newFolderDialogIsLeft.asStateFlow()
+
+    internal val _jumpDialogVisible = MutableStateFlow(false)
+    val jumpDialogVisible: StateFlow<Boolean> = _jumpDialogVisible.asStateFlow()
+    internal val _jumpDialogIsLeft = MutableStateFlow(true)
+    val jumpDialogIsLeft: StateFlow<Boolean> = _jumpDialogIsLeft.asStateFlow()
+
+    internal val _sortDialogVisible = MutableStateFlow(false)
+    val sortDialogVisible: StateFlow<Boolean> = _sortDialogVisible.asStateFlow()
+    internal val _sortDialogIsLeft = MutableStateFlow(true)
+    val sortDialogIsLeft: StateFlow<Boolean> = _sortDialogIsLeft.asStateFlow()
+
+    internal val _actionDialogTarget = MutableStateFlow<FileItem?>(null)
+    val actionDialogTarget: StateFlow<FileItem?> =
+        _actionDialogTarget.asStateFlow()
+    internal val _actionDialogIsLeft = MutableStateFlow(true)
+    val actionDialogIsLeft: StateFlow<Boolean> =
+        _actionDialogIsLeft.asStateFlow()
+
+    internal val _infoDialogTarget = MutableStateFlow<FileItem?>(null)
+    val infoDialogTarget: StateFlow<FileItem?> =
+        _infoDialogTarget.asStateFlow()
+
+    internal val _renameDialogTarget = MutableStateFlow<FileItem?>(null)
+    val renameDialogTarget: StateFlow<FileItem?> =
+        _renameDialogTarget.asStateFlow()
+    internal val _renameDialogIsLeft = MutableStateFlow(true)
+    val renameDialogIsLeft: StateFlow<Boolean> =
+        _renameDialogIsLeft.asStateFlow()
+
+    // ==================== Jobs ====================
+
+    internal var folderSizeJob: Job? = null
+    internal var searchJob: Job? = null
+    internal var installJob: Job? = null
+    internal var appsJob: Job? = null
+    internal var apkBrowserSourceIsLeft = true
+
+    private val hexLoadChunk = 64 * 1024
+    private var hexFile: File? = null
+    private var hexLoadedBytes = 0
+
+    internal fun flowOf(isLeft: Boolean) =
+        if (isLeft) _leftPanel else _rightPanel
+
+    // ==================== 初始化 ====================
 
     fun initDefaultDirs() {
         val root = Uri.fromFile(Environment.getExternalStorageDirectory())
@@ -76,6 +189,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             openDirectory(false, root)
         }
     }
+
+    // ==================== 浏览 ====================
 
     fun openDirectory(isLeft: Boolean, uri: Uri) {
         val flow = flowOf(isLeft)
@@ -100,6 +215,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         canGoUp = parent != null
                     )
                 }
+                uri.path?.let { p ->
+                    val f = File(p)
+                    if (f.isDirectory) {
+                        BookmarkStore.addRecent(getApplication(), f)
+                    }
+                }
             } catch (e: Exception) {
                 flow.update { it.copy(isLoading = false, error = e.message) }
             }
@@ -111,39 +232,54 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         sort: SortMode,
         showHidden: Boolean
     ): List<FileItem> {
-        val filtered = if (showHidden) raw else raw.filter { !it.name.startsWith(".") }
-        val comparator = when (sort) {
+        val filtered = if (showHidden) raw
+        else raw.filter { !it.name.startsWith(".") }
+
+        val cmp: Comparator<FileItem> = when (sort) {
             SortMode.NAME_ASC ->
-                compareBy<FileItem> { !it.isDirectory }.thenBy { it.name.lowercase() }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenBy { it.name.lowercase() }
             SortMode.NAME_DESC ->
-                compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.name.lowercase() }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenByDescending { it.name.lowercase() }
             SortMode.SIZE_ASC ->
                 compareBy<FileItem> { !it.isDirectory }.thenBy { it.size }
             SortMode.SIZE_DESC ->
-                compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.size }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenByDescending { it.size }
             SortMode.TIME_ASC ->
-                compareBy<FileItem> { !it.isDirectory }.thenBy { it.lastModified }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenBy { it.lastModified }
             SortMode.TIME_DESC ->
-                compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.lastModified }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenByDescending { it.lastModified }
             SortMode.TYPE_ASC ->
                 compareBy<FileItem> { !it.isDirectory }
                     .thenBy { it.name.substringAfterLast('.', "").lowercase() }
             SortMode.TYPE_DESC ->
                 compareBy<FileItem> { !it.isDirectory }
-                    .thenByDescending { it.name.substringAfterLast('.', "").lowercase() }
+                    .thenByDescending {
+                        it.name.substringAfterLast('.', "").lowercase()
+                    }
         }
-        return filtered.sortedWith(comparator)
+        return filtered.sortedWith(cmp)
     }
 
     fun setSortMode(isLeft: Boolean, mode: SortMode) {
         flowOf(isLeft).update {
-            it.copy(sortMode = mode, items = process(it.rawItems, mode, it.showHidden))
+            it.copy(
+                sortMode = mode,
+                items = process(it.rawItems, mode, it.showHidden)
+            )
         }
     }
 
     fun setShowHidden(isLeft: Boolean, show: Boolean) {
         flowOf(isLeft).update {
-            it.copy(showHidden = show, items = process(it.rawItems, it.sortMode, show))
+            it.copy(
+                showHidden = show,
+                items = process(it.rawItems, it.sortMode, show)
+            )
         }
     }
 
@@ -152,11 +288,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun goUp(isLeft: Boolean) {
-        val flow = flowOf(isLeft)
-        val current = flow.value.currentUri ?: return
+        val current = flowOf(isLeft).value.currentUri ?: return
         val parent = engine.getParent(current) ?: return
         openDirectory(isLeft, parent)
     }
+
+    // ==================== 基础文件操作 ====================
 
     fun delete(isLeft: Boolean, item: FileItem) {
         viewModelScope.launch {
@@ -197,7 +334,95 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ================= 多选 =================
+    // ==================== 新建文件 ====================
+
+    fun openNewFilePrompt(isLeft: Boolean) {
+        _newFilePanelIsLeft.value = isLeft
+        _newFilePrompt.value = true
+    }
+
+    fun dismissNewFilePrompt() {
+        _newFilePrompt.value = false
+    }
+
+    fun createFile(name: String) {
+        _newFilePrompt.value = false
+        val isLeft = _newFilePanelIsLeft.value
+        val dir = flowOf(isLeft).value.currentUri?.path?.let(::File) ?: return
+        viewModelScope.launch {
+            try {
+                val f = File(dir, name)
+                if (f.exists()) {
+                    _toast.value = "文件已存在"
+                    return@launch
+                }
+                f.parentFile?.mkdirs()
+                f.createNewFile()
+                _toast.value = "已创建：${f.name}"
+                refresh(isLeft)
+            } catch (e: Exception) {
+                _toast.value = "创建失败：${e.message}"
+            }
+        }
+    }
+
+    // ==================== FilePanel 弹窗控制 ====================
+
+    fun openNewFolderDialog(isLeft: Boolean) {
+        _newFolderDialogIsLeft.value = isLeft
+        _newFolderDialogVisible.value = true
+    }
+
+    fun dismissNewFolderDialog() {
+        _newFolderDialogVisible.value = false
+    }
+
+    fun openJumpDialog(isLeft: Boolean) {
+        _jumpDialogIsLeft.value = isLeft
+        _jumpDialogVisible.value = true
+    }
+
+    fun dismissJumpDialog() {
+        _jumpDialogVisible.value = false
+    }
+
+    fun openSortDialog(isLeft: Boolean) {
+        _sortDialogIsLeft.value = isLeft
+        _sortDialogVisible.value = true
+    }
+
+    fun dismissSortDialog() {
+        _sortDialogVisible.value = false
+    }
+
+    fun openActionDialog(isLeft: Boolean, item: FileItem) {
+        _actionDialogIsLeft.value = isLeft
+        _actionDialogTarget.value = item
+    }
+
+    fun dismissActionDialog() {
+        _actionDialogTarget.value = null
+    }
+
+    fun openInfoDialog(item: FileItem) {
+        _infoDialogTarget.value = item
+    }
+
+    fun dismissInfoDialog() {
+        _infoDialogTarget.value = null
+        resetFolderSize()
+    }
+
+    fun openRenameDialog(isLeft: Boolean, item: FileItem) {
+        _renameDialogIsLeft.value = isLeft
+        _renameDialogTarget.value = item
+    }
+
+    fun dismissRenameDialog() {
+        _renameDialogTarget.value = null
+    }
+
+    // ==================== 多选 ====================
 
     fun enterSelection(isLeft: Boolean, uriString: String) {
         flowOf(isLeft).update {
@@ -209,7 +434,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         flowOf(isLeft).update { state ->
             val set = state.selectedUris.toMutableSet()
             if (!set.add(uriString)) set.remove(uriString)
-            state.copy(selectedUris = set, isSelectionMode = set.isNotEmpty())
+            state.copy(
+                selectedUris = set,
+                isSelectionMode = set.isNotEmpty()
+            )
         }
     }
 
@@ -230,7 +458,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun batchDelete(isLeft: Boolean) {
         val state = flowOf(isLeft).value
-        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+        val targets = state.items.filter {
+            state.selectedUris.contains(it.uriString)
+        }
         viewModelScope.launch {
             targets.forEach { engine.delete(it.uri) }
             clearSelection(isLeft)
@@ -241,7 +471,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun batchCopy(fromLeft: Boolean) {
         val state = flowOf(fromLeft).value
         val target = flowOf(!fromLeft).value.currentUri ?: return
-        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+        val targets = state.items.filter {
+            state.selectedUris.contains(it.uriString)
+        }
         viewModelScope.launch {
             targets.forEach { engine.copy(it.uri, target) }
             clearSelection(fromLeft)
@@ -252,7 +484,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun batchMove(fromLeft: Boolean) {
         val state = flowOf(fromLeft).value
         val target = flowOf(!fromLeft).value.currentUri ?: return
-        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+        val targets = state.items.filter {
+            state.selectedUris.contains(it.uriString)
+        }
         viewModelScope.launch {
             targets.forEach { engine.move(it.uri, target) }
             clearSelection(fromLeft)
@@ -261,14 +495,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ================= 打开文件 =================
+    // ==================== 打开文件 ====================
 
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
         when {
-            ArchiveFormat.isArchive(item.name) -> _zipPrompt.value = ZipPrompt(item)
-            ext in TEXT_EXTS -> openInEditor(item)
-            ext in IMAGE_EXTS -> openInImageViewer(item)
+            ext == "apk" -> openApkInfo(item)
+            com.ertyu.model.ArchiveFormat.isArchive(item.name) ->
+                _zipPrompt.value = ZipPrompt(item)
+            ext in TEXT_FILE_EXTS -> openInEditor(item)
+            ext in IMAGE_FILE_EXTS -> openInImageViewer(item)
         }
     }
 
@@ -290,7 +526,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (text == null) {
                     s.copy(isLoading = false, error = "无法读取文件")
                 } else {
-                    s.copy(content = text, originalContent = text, isLoading = false)
+                    s.copy(
+                        content = text,
+                        originalContent = text,
+                        isLoading = false
+                    )
                 }
             }
         }
@@ -327,167 +567,87 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _imageViewer.value = ImageViewerState()
     }
 
-    // ================= 解压 =================
+    // ==================== HEX 查看器 ====================
 
-    fun dismissZipPrompt() {
-        _zipPrompt.value = ZipPrompt()
+    fun openHexViewer(item: FileItem) {
+        val file = item.uri.path?.let(::File) ?: run {
+            _toast.value = "无效路径"
+            return
+        }
+        if (!file.exists() || !file.isFile) {
+            _toast.value = "文件不存在"
+            return
+        }
+        hexFile = file
+        hexLoadedBytes = 0
+        _hexViewerState.value = HexViewerState(
+            visible = true,
+            filePath = file.absolutePath,
+            fileName = file.name,
+            fileSize = file.length(),
+            isLoading = true
+        )
+        loadHexChunk()
     }
 
-    fun extractZipHere(isLeft: Boolean, item: FileItem) {
-        _zipPrompt.value = ZipPrompt()
-        val currentDir = flowOf(isLeft).value.currentUri?.path?.let { File(it) } ?: return
-        val archiveFile = item.uri.path?.let { File(it) } ?: return
-        val baseName = archiveBaseName(archiveFile.name)
-        val targetDir = File(currentDir, baseName)
+    fun loadMoreHex() {
+        if (hexFile == null) return
+        _hexViewerState.update { it.copy(isLoading = true) }
+        loadHexChunk()
+    }
 
+    private fun loadHexChunk() {
+        val file = hexFile ?: return
         viewModelScope.launch {
-            _zipProgress.value = ZipProgress(
-                visible = true,
-                title = "解压中",
-                message = archiveFile.name
-            )
-            val result = ArchiveEngine.extract(archiveFile, targetDir) { cur, total ->
-                _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
+            try {
+                val chunk = withContext(Dispatchers.IO) {
+                    RandomAccessFile(file, "r").use { raf ->
+                        val remaining = (file.length() - hexLoadedBytes)
+                            .coerceAtMost(hexLoadChunk.toLong())
+                        if (remaining <= 0) return@withContext ByteArray(0)
+                        raf.seek(hexLoadedBytes.toLong())
+                        val buf = ByteArray(remaining.toInt())
+                        raf.readFully(buf)
+                        buf
+                    }
+                }
+
+                val oldBytes = _hexViewerState.value.bytes
+                val newBytes = oldBytes + chunk
+                hexLoadedBytes += chunk.size
+
+                _hexViewerState.update {
+                    it.copy(
+                        bytes = newBytes,
+                        loadedBytes = hexLoadedBytes,
+                        isLoading = false,
+                        error = null
+                    )
+                }
+            } catch (e: Exception) {
+                _hexViewerState.update {
+                    it.copy(isLoading = false, error = e.message ?: "读取失败")
+                }
             }
-            result.onSuccess {
-                _zipProgress.value = _zipProgress.value.copy(
-                    done = true,
-                    message = "解压完成：${targetDir.name}"
-                )
-            }.onFailure { e ->
-                _zipProgress.value = _zipProgress.value.copy(
-                    error = e.message ?: "解压失败"
-                )
-            }
-            refresh(isLeft)
         }
     }
 
-    fun extractZipToOtherPanel(isLeft: Boolean, item: FileItem) {
-        _zipPrompt.value = ZipPrompt()
-        val targetDir = flowOf(!isLeft).value.currentUri?.path?.let { File(it) } ?: return
-        val archiveFile = item.uri.path?.let { File(it) } ?: return
-        val baseName = archiveBaseName(archiveFile.name)
-        val finalDir = File(targetDir, baseName)
-
-        viewModelScope.launch {
-            _zipProgress.value = ZipProgress(
-                visible = true,
-                title = "解压中",
-                message = archiveFile.name
-            )
-            val result = ArchiveEngine.extract(archiveFile, finalDir) { cur, total ->
-                _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
-            }
-            result.onSuccess {
-                _zipProgress.value = _zipProgress.value.copy(
-                    done = true,
-                    message = "解压完成：${finalDir.name}"
-                )
-            }.onFailure { e ->
-                _zipProgress.value = _zipProgress.value.copy(
-                    error = e.message ?: "解压失败"
-                )
-            }
-            openDirectory(!isLeft, Uri.fromFile(targetDir))
-        }
+    fun closeHexViewer() {
+        hexFile = null
+        hexLoadedBytes = 0
+        _hexViewerState.value = HexViewerState()
     }
 
-    private fun archiveBaseName(fileName: String): String {
-        val lower = fileName.lowercase()
-        return when {
-            lower.endsWith(".tar.gz") -> fileName.dropLast(7)
-            lower.endsWith(".tar.bz2") -> fileName.dropLast(8)
-            lower.endsWith(".tar.xz") -> fileName.dropLast(7)
-            lower.endsWith(".tar.zst") -> fileName.dropLast(8)
-            lower.endsWith(".tar") -> fileName.dropLast(4)
-            lower.endsWith(".tgz") -> fileName.dropLast(4)
-            lower.endsWith(".tbz2") -> fileName.dropLast(5)
-            lower.endsWith(".tbz") -> fileName.dropLast(4)
-            lower.endsWith(".txz") -> fileName.dropLast(4)
-            lower.endsWith(".tzst") -> fileName.dropLast(5)
-            else -> fileName.substringBeforeLast('.', fileName)
-        }
-    }
-
-    // ================= 压缩 =================
-
-    fun requestCompress(isLeft: Boolean) {
-        val state = flowOf(isLeft).value
-        if (state.selectedUris.isEmpty()) return
-        _compressPanelIsLeft.value = isLeft
-        _compressPromptVisible.value = true
-    }
-
-    fun dismissCompressPrompt() {
-        _compressPromptVisible.value = false
-    }
-
-    fun compressWithFormat(format: ArchiveFormat) {
-        _compressPromptVisible.value = false
-        if (!format.canCompress) return
-        val isLeft = _compressPanelIsLeft.value
-        val state = flowOf(isLeft).value
-        val currentDir = state.currentUri?.path?.let { File(it) } ?: return
-        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
-        if (targets.isEmpty()) return
-
-        val sources = targets.mapNotNull { it.uri.path?.let(::File) }
-        if (sources.isEmpty()) return
-
-        val ext = when (format) {
-            ArchiveFormat.ZIP -> ".zip"
-            ArchiveFormat.TAR -> ".tar"
-            ArchiveFormat.TAR_GZ -> ".tar.gz"
-            else -> ".zip"
-        }
-
-        val fileName = if (sources.size == 1) {
-            val n = sources[0].name
-            val base = if (n.contains('.')) n.substringBeforeLast('.') else n
-            "$base$ext"
-        } else {
-            "archive_${System.currentTimeMillis()}$ext"
-        }
-        val targetFile = File(currentDir, fileName)
-
-        viewModelScope.launch {
-            _zipProgress.value = ZipProgress(
-                visible = true,
-                title = "压缩中",
-                message = fileName
-            )
-            val result = ArchiveEngine.compress(sources, targetFile, format) { cur, total ->
-                _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
-            }
-            result.onSuccess {
-                _zipProgress.value = _zipProgress.value.copy(
-                    done = true,
-                    message = "压缩完成：$fileName"
-                )
-            }.onFailure { e ->
-                _zipProgress.value = _zipProgress.value.copy(
-                    error = e.message ?: "压缩失败"
-                )
-            }
-            clearSelection(isLeft)
-            refresh(isLeft)
-        }
-    }
-
-    fun dismissZipProgress() {
-        _zipProgress.value = ZipProgress()
-    }
-
-    // ================= 文件夹大小 =================
+    // ==================== 文件夹大小 ====================
 
     fun calculateFolderSize(item: FileItem) {
         folderSizeJob?.cancel()
-        val folder = item.uri.path?.let { File(it) } ?: return
+        val folder = item.uri.path?.let(::File) ?: return
         _folderSizeState.value = FolderSizeState(isCalculating = true)
         folderSizeJob = viewModelScope.launch {
             try {
-                val (bytes, count) = FolderSizeCalculator.calculate(folder) { scanned, totalBytes ->
+                val (bytes, count) = FolderSizeCalculator.calculate(folder) {
+                        scanned, totalBytes ->
                     _folderSizeState.value = FolderSizeState(
                         isCalculating = true,
                         scanned = scanned,
@@ -522,96 +682,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _folderSizeState.value = FolderSizeState()
     }
 
-    // ================= 搜索 =================
-
-    fun openSearch(isLeft: Boolean) {
-        val rootPath = flowOf(isLeft).value.currentUri?.path ?: return
-        _searchState.value = SearchState(
-            visible = true,
-            sourceIsLeft = isLeft,
-            rootPath = rootPath
-        )
-    }
-
-    fun closeSearch() {
-        searchJob?.cancel()
-        searchJob = null
-        _searchState.value = SearchState()
-    }
-
-    fun updateSearchQuery(q: String) {
-        _searchState.update { it.copy(query = q) }
-    }
-
-    fun startSearch() {
-        val state = _searchState.value
-        if (state.query.isBlank()) return
-        searchJob?.cancel()
-        _searchState.update {
-            it.copy(
-                isSearching = true,
-                results = emptyList(),
-                scannedDirs = 0,
-                scannedFiles = 0,
-                error = null,
-                truncated = false
-            )
-        }
-
-        searchJob = viewModelScope.launch {
-            try {
-                val root = File(state.rootPath)
-                val (results, truncated) = SearchEngine.search(root, state.query) { dirs, files, list ->
-                    _searchState.update {
-                        it.copy(scannedDirs = dirs, scannedFiles = files, results = list)
-                    }
-                }
-                _searchState.update {
-                    it.copy(isSearching = false, results = results, truncated = truncated)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _searchState.update { it.copy(isSearching = false, error = e.message) }
-            }
-        }
-    }
-
-    fun cancelSearch() {
-        searchJob?.cancel()
-        searchJob = null
-        _searchState.update { it.copy(isSearching = false) }
-    }
-
-    /** 点击搜索结果：目录 → 源面板进入；文件 → 直接打开 */
-    fun handleSearchResultClick(item: FileItem) {
-        val isLeft = _searchState.value.sourceIsLeft
-        if (item.isDirectory) {
-            val uri = item.uri
-            closeSearch()
-            openDirectory(isLeft, uri)
-        } else {
-            openFile(item)
-        }
-    }
-
-    /** 长按搜索结果：定位到所在目录 */
-    fun revealInPanel(item: FileItem) {
-        val isLeft = _searchState.value.sourceIsLeft
-        val parent = item.uri.path?.let { File(it).parentFile } ?: return
-        if (!parent.exists()) return
-        closeSearch()
-        openDirectory(isLeft, Uri.fromFile(parent))
-    }
-
-    companion object {
-        private val TEXT_EXTS = setOf(
-            "txt", "md", "json", "xml", "kt", "java", "kts",
-            "gradle", "properties", "yml", "yaml", "html", "css", "js",
-            "log", "ini", "conf", "cfg", "sh", "bat"
-        )
-        private val IMAGE_EXTS = setOf(
-            "jpg", "jpeg", "png", "gif", "bmp", "webp"
-        )
+    fun clearToast() {
+        _toast.value = null
     }
 }

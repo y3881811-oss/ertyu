@@ -19,9 +19,9 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // 保留 native lib（zstd-jni 需要）
+        // 只保留 32 位（armeabi-v7a）+ 64 位（arm64-v8a）
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
     }
 
@@ -60,10 +60,20 @@ android {
                 "META-INF/DEPENDENCIES",
                 "META-INF/LICENSE",
                 "META-INF/LICENSE.txt",
+                "META-INF/LICENSE.md",
                 "META-INF/NOTICE",
                 "META-INF/NOTICE.txt",
-                "META-INF/INDEX.LIST"
+                "META-INF/NOTICE.md",
+                "META-INF/INDEX.LIST",
+                "META-INF/*.kotlin_module",
+                "META-INF/versions/**",
+                "kotlin/**",
+                "DebugProbesKt.bin",
+                "kotlin-tooling-metadata.json"
             )
+        }
+        jniLibs {
+            useLegacyPackaging = false
         }
     }
 
@@ -93,7 +103,6 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
 
-    // 压缩格式支持
     implementation(libs.commons.compress)
     implementation(libs.xz)
     implementation(libs.zstd.jni)
