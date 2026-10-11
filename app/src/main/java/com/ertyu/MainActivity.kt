@@ -2,6 +2,7 @@ package com.ertyu
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -19,7 +20,11 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
@@ -87,9 +92,33 @@ fun AppRoot(vm: MainViewModel) {
 
 @Composable
 fun MainScreen(vm: MainViewModel) {
-    Row(modifier = Modifier.fillMaxSize()) {
-        FilePanel(isLeft = true, vm = vm, modifier = Modifier.weight(1f))
-        VerticalDivider()
-        FilePanel(isLeft = false, vm = vm, modifier = Modifier.weight(1f))
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isWide = configuration.screenWidthDp >= 600
+
+    if (isLandscape || isWide) {
+        // 横屏或平板：双面板
+        Row(modifier = Modifier.fillMaxSize()) {
+            FilePanel(
+                isLeft = true,
+                vm = vm,
+                modifier = Modifier.weight(1f)
+            )
+            VerticalDivider()
+            FilePanel(
+                isLeft = false,
+                vm = vm,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    } else {
+        // 竖屏手机：单面板 + 可切换
+        var activeLeft by remember { mutableStateOf(true) }
+        FilePanel(
+            isLeft = activeLeft,
+            vm = vm,
+            onSwitchPanel = { activeLeft = !activeLeft },
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
