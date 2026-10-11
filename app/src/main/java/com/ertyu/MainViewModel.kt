@@ -5,11 +5,13 @@ import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ertyu.engine.ApkInspector
 import com.ertyu.engine.ArchiveEngine
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
 import com.ertyu.engine.FolderSizeCalculator
 import com.ertyu.engine.SearchEngine
+import com.ertyu.model.ApkInfoState
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
@@ -62,6 +64,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _searchState = MutableStateFlow(SearchState())
     val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
+
+    private val _apkInfoState = MutableStateFlow(ApkInfoState())
+    val apkInfoState: StateFlow<ApkInfoState> = _apkInfoState.asStateFlow()
 
     private var folderSizeJob: Job? = null
     private var searchJob: Job? = null
@@ -266,6 +271,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
         when {
+            ext == "apk" -> openApkInfo(item)
             ArchiveFormat.isArchive(item.name) -> _zipPrompt.value = ZipPrompt(item)
             ext in TEXT_EXTS -> openInEditor(item)
             ext in IMAGE_EXTS -> openInImageViewer(item)
@@ -325,6 +331,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeImageViewer() {
         _imageViewer.value = ImageViewerState()
+    }
+
+    // ================= APK 信息 =================
+
+    private fun openApkInfo(item: FileItem) {
+        _apkInfoState.value = ApkInfoState(
+            visible = true,
+            isLoading = true,
+            fileName = item.name
+        )
+        val apkFile = item.uri.path?.let(::File)
+        if (apkFile == null) {
+            _apkInfoState.value = ApkInfoState(
+                visible = true,
+                isLoading = false,
+                fileName = item.name,
+                error = "无效路径"
+            )
+            return
+        }
+        viewModelScope.launch {
+            val result = ApkInspector.inspect(getApplication(), apkFile)
+            result.onSuccess { info ->
+                _apkInfoState.update {
+                    it.copy(isLoading = false, info = info)
+                }
+            }.onFailure { e ->
+                _apkInfoState.update {
+                    it.copy(isLoading = false, error = e.message ?: "解析失败")
+                }
+            }
+        }
+    }
+
+    fun closeApkInfo() {
+        _apkInfoState.value = ApkInfoState()
     }
 
     // ================= 解压 =================
@@ -583,7 +625,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _searchState.update { it.copy(isSearching = false) }
     }
 
-    /** 点击搜索结果：目录 → 源面板进入；文件 → 直接打开 */
     fun handleSearchResultClick(item: FileItem) {
         val isLeft = _searchState.value.sourceIsLeft
         if (item.isDirectory) {
@@ -595,7 +636,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 长按搜索结果：定位到所在目录 */
     fun revealInPanel(item: FileItem) {
         val isLeft = _searchState.value.sourceIsLeft
         val parent = item.uri.path?.let { File(it).parentFile } ?: return
