@@ -27,11 +27,37 @@ jobs:
           java-version: '17'
 
       # android-actions/setup-android@v3.2.1
-      # packages: '' 跳过默认包安装，避免 sdkmanager 因找不到旧 tools 包而失败
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
         with:
           packages: ''
+
+      # actions/cache@v4.2.0
+      - name: Restore keystore cache
+        id: keystore-cache
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: keystore/mtfm.jks
+          key: mtfm-keystore-v1
+
+      - name: Generate keystore (首次运行)
+        if: steps.keystore-cache.outputs.cache-hit != 'true'
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          mkdir -p keystore
+          keytool -genkeypair \
+            -keystore keystore/mtfm.jks \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -dname "CN=MTFM, OU=Dev, O=MTFM, L=City, S=State, C=CN"
+          echo "✅ 已生成新 keystore"
 
       # gradle/actions/setup-gradle@v4.4.2
       - name: Setup Gradle
@@ -50,6 +76,10 @@ jobs:
           echo "版本号: ${TAG}"
 
       - name: Build Debug APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle assembleDebug --no-daemon
 
       - name: Rename APK
@@ -70,12 +100,12 @@ jobs:
 
             - **构建时间**：${{ steps.version.outputs.date }}
             - **提交**：${{ github.sha }}
-            - **类型**：Debug APK
+            - **签名**：固定签名（支持覆盖安装）
 
             ### 安装说明
             1. 下载下方 APK 文件
             2. 在 Android 9 设备上允许「未知来源」安装
-            3. 安装前请先卸载旧版本（签名相同可覆盖）
+            3. **可直接覆盖安装旧版本，无需卸载**
           files: release/*.apk
           draft: false
           prerelease: false
