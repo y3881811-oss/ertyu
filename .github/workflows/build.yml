@@ -1,14 +1,10 @@
 name: Scheduled Release
 
 on:
-  # 定时触发：每天 UTC 03:00（北京时间 11:00）
   schedule:
     - cron: '0 3 * * *'
-
-  # 手动触发（方便测试，不用等到点）
   workflow_dispatch:
 
-# 需要写权限才能创建 Release
 permissions:
   contents: write
 
@@ -17,26 +13,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # actions/checkout@v4.2.2
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
 
+      # actions/setup-java@v4.7.0
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12
         with:
           distribution: temurin
           java-version: '17'
 
+      # android-actions/setup-android@v3.2.1
+      # packages: '' 跳过默认包安装，避免 sdkmanager 因找不到旧 tools 包而失败
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          packages: ''
 
+      # gradle/actions/setup-gradle@v4.4.2
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@8379f6a1328ee0e06e2bb424dadb7b159856a326
         with:
           gradle-version: '8.9'
 
-      # 生成版本号：基于日期，如 2026.10.11
       - name: Generate version
         id: version
         run: |
@@ -57,8 +59,9 @@ jobs:
           cp "$SRC" "release/MTFM-${{ steps.version.outputs.tag }}.apk"
           ls -lh release/
 
+      # softprops/action-gh-release@v2.2.2
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: "MTFM ${{ steps.version.outputs.tag }}"
@@ -79,9 +82,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 可选：同时上传为 Artifact，方便调试
+      # actions/upload-artifact@v4.6.2
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: MTFM-apk
           path: release/*.apk
