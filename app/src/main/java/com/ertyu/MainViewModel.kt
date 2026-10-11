@@ -7,6 +7,7 @@ import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.ApkInspector
+import com.ertyu.engine.ApkInstaller
 import com.ertyu.engine.ArchiveEngine
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
@@ -73,6 +74,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
+
+    // 需要申请"安装未知应用"权限的待安装文件
+    private val _pendingInstall = MutableStateFlow<File?>(null)
+    val pendingInstall: StateFlow<File?> = _pendingInstall.asStateFlow()
 
     private var folderSizeJob: Job? = null
     private var searchJob: Job? = null
@@ -333,6 +338,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeImageViewer() {
         _imageViewer.value = ImageViewerState()
+    }
+
+    // ================= APK 安装 =================
+
+    fun installApk(item: FileItem) {
+        val apkFile = item.uri.path?.let(::File) ?: run {
+            _toast.value = "无效的 APK 路径"
+            return
+        }
+        tryInstall(apkFile)
+    }
+
+    fun installApkFromInfo(info: ApkInfo) {
+        val apkFile = File(info.filePath)
+        tryInstall(apkFile)
+    }
+
+    private fun tryInstall(apkFile: File) {
+        val result = ApkInstaller.install(getApplication(), apkFile)
+        when (result) {
+            is ApkInstaller.Result.Success -> {
+                // 系统安装器已弹出，无需提示
+            }
+            is ApkInstaller.Result.NeedInstallPermission -> {
+                _pendingInstall.value = apkFile
+                _toast.value = "请先允许本应用安装未知应用"
+            }
+            is ApkInstaller.Result.Failure -> {
+                _toast.value = result.message
+            }
+        }
+    }
+
+    fun dismissInstallPermissionPrompt() {
+        _pendingInstall.value = null
+    }
+
+    /**
+     * 用户在权限对话框里点了"去授权" → 打开系统设置页。
+     * 用户从设置页返回后，UI 会再次弹对话框让用户点"重试安装"。
+     */
+    fun openInstallPermissionSettingsAndClear() {
+        _pendingInstall.value = null
     }
 
     // ================= APK 信息 =================
