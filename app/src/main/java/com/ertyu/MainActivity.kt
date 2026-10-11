@@ -7,14 +7,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 
@@ -33,7 +34,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            val dark = isSystemInDarkTheme()
+            MaterialTheme(
+                colorScheme = if (dark) darkColorScheme() else lightColorScheme()
+            ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     MainScreen(vm)
                 }
@@ -60,25 +64,16 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainScreen(vm: MainViewModel) {
-    val left by vm.leftPanel.collectAsState()
-    val right by vm.rightPanel.collectAsState()
-
     Row(modifier = Modifier.fillMaxSize()) {
         FilePanel(
-            state = left,
-            onOpen = { vm.openDirectory(true, it) },
-            onUp = { vm.goUp(true) },
-            onDelete = { vm.delete(true, it) },
-            onCopy = { vm.copyToOtherPanel(true, it) },
+            isLeft = true,
+            vm = vm,
             modifier = Modifier.weight(1f)
         )
         VerticalDivider()
         FilePanel(
-            state = right,
-            onOpen = { vm.openDirectory(false, it) },
-            onUp = { vm.goUp(false) },
-            onDelete = { vm.delete(false, it) },
-            onCopy = { vm.copyToOtherPanel(false, it) },
+            isLeft = false,
+            vm = vm,
             modifier = Modifier.weight(1f)
         )
     }
