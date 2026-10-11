@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -39,7 +41,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -64,6 +65,7 @@ import java.io.File
 fun FilePanel(
     isLeft: Boolean,
     vm: MainViewModel,
+    onSwitchPanel: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
@@ -90,12 +92,14 @@ fun FilePanel(
                 path = state.currentUri?.path ?: "未选择目录",
                 canGoUp = state.canGoUp,
                 showHidden = state.showHidden,
+                showSwitch = onSwitchPanel != null,
                 onUp = { vm.goUp(isLeft) },
                 onPathClick = { showJumpDialog = true },
                 onNewFolder = { showNewFolderDialog = true },
                 onSort = { showSortDialog = true },
                 onToggleHidden = { vm.setShowHidden(isLeft, !state.showHidden) },
-                onRefresh = { vm.refresh(isLeft) }
+                onRefresh = { vm.refresh(isLeft) },
+                onSwitchPanel = { onSwitchPanel?.invoke() }
             )
         }
         HorizontalDivider()
@@ -132,6 +136,7 @@ fun FilePanel(
                         },
                         onRename = { renameTarget = item },
                         onCopy = { vm.copyToOtherPanel(isLeft, item) },
+                        onMove = { vm.moveToOtherPanel(isLeft, item) },
                         onDelete = { vm.delete(isLeft, item) }
                     )
                 }
@@ -204,19 +209,21 @@ private fun NormalToolbar(
     path: String,
     canGoUp: Boolean,
     showHidden: Boolean,
+    showSwitch: Boolean,
     onUp: () -> Unit,
     onPathClick: () -> Unit,
     onNewFolder: () -> Unit,
     onSort: () -> Unit,
     onToggleHidden: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onSwitchPanel: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp),
+            .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onUp, enabled = canGoUp) {
@@ -231,6 +238,11 @@ private fun NormalToolbar(
                 .weight(1f)
                 .clickable { onPathClick() }
         )
+        if (showSwitch) {
+            IconButton(onClick = onSwitchPanel) {
+                Icon(Icons.Default.SwapHoriz, contentDescription = "切换面板")
+            }
+        }
         Box {
             IconButton(onClick = { menuExpanded = true }) {
                 Icon(Icons.Default.MoreVert, contentDescription = "菜单")
@@ -295,7 +307,7 @@ private fun SelectionToolbar(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(4.dp),
+            .padding(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onClear) {
@@ -321,7 +333,7 @@ private fun SelectionToolbar(
     }
 }
 
-// ==================== 文件行 ====================
+// ==================== 文件行（关键修复） ====================
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -333,43 +345,90 @@ private fun FileRow(
     onLongClick: () -> Unit,
     onRename: () -> Unit,
     onCopy: () -> Unit,
+    onMove: () -> Unit,
     onDelete: () -> Unit
 ) {
     val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    var menuExpanded by remember { mutableStateOf(false) }
 
-    ListItem(
-        headlineContent = {
-            Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        },
-        supportingContent = {
-            if (!item.isDirectory) Text(formatSize(item.size))
-        },
-        leadingContent = {
-            Icon(
-                imageVector = if (item.isDirectory) Icons.Default.Folder
-                else Icons.Default.InsertDriveFile,
-                contentDescription = null
-            )
-        },
-        trailingContent = {
-            if (!isSelectionMode) {
-                Row {
-                    IconButton(onClick = onRename) {
-                        Icon(Icons.Default.Edit, contentDescription = "重命名")
-                    }
-                    IconButton(onClick = onCopy) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "复制到另一侧")
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "删除")
-                    }
-                }
-            }
-        },
+    Row(
         modifier = Modifier
+            .fillMaxWidth()
             .background(bg)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-    )
+            .padding(start = 12.dp, end = 0.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (item.isDirectory) Icons.Default.Folder
+            else Icons.Default.InsertDriveFile,
+            contentDescription = null,
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!item.isDirectory) {
+                Text(
+                    text = formatSize(item.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (!isSelectionMode) {
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("重命名") },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) },
+                        onClick = {
+                            menuExpanded = false
+                            onRename()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("复制到另一侧") },
+                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                        onClick = {
+                            menuExpanded = false
+                            onCopy()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("移动到另一侧") },
+                        leadingIcon = { Icon(Icons.Default.DriveFileMove, null) },
+                        onClick = {
+                            menuExpanded = false
+                            onMove()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("删除") },
+                        leadingIcon = { Icon(Icons.Default.Delete, null) },
+                        onClick = {
+                            menuExpanded = false
+                            onDelete()
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
 
 // ==================== 对话框 ====================
