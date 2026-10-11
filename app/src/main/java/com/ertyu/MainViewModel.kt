@@ -7,7 +7,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
+import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
+import com.ertyu.model.ImageViewerState
 import com.ertyu.model.PanelState
 import com.ertyu.model.SortMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +28,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _rightPanel = MutableStateFlow(PanelState())
     val rightPanel: StateFlow<PanelState> = _rightPanel.asStateFlow()
 
+    private val _editor = MutableStateFlow(EditorState())
+    val editor: StateFlow<EditorState> = _editor.asStateFlow()
+
+    private val _imageViewer = MutableStateFlow(ImageViewerState())
+    val imageViewer: StateFlow<ImageViewerState> = _imageViewer.asStateFlow()
+
     private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
     fun initDefaultDirs() {
@@ -33,6 +41,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         openDirectory(true, root)
         openDirectory(false, root)
     }
+
+    // ================= 面板 =================
 
     fun openDirectory(isLeft: Boolean, uri: Uri) {
         val flow = flowOf(isLeft)
@@ -166,10 +176,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         flowOf(isLeft).update { state ->
             val set = state.selectedUris.toMutableSet()
             if (!set.add(uriString)) set.remove(uriString)
-            state.copy(
-                selectedUris = set,
-                isSelectionMode = set.isNotEmpty()
-            )
+            state.copy(selectedUris = set, isSelectionMode = set.isNotEmpty())
         }
     }
 
@@ -219,5 +226,82 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             refresh(fromLeft)
             openDirectory(!fromLeft, target)
         }
+    }
+
+    // ================= 文件打开（路由） =================
+
+    fun openFile(item: FileItem) {
+        val ext = item.name.substringAfterLast('.', "").lowercase()
+        when {
+            ext in TEXT_EXTS -> openInEditor(item)
+            ext in IMAGE_EXTS -> openInImageViewer(item)
+            else -> { /* 暂不支持 */ }
+        }
+    }
+
+    private fun openInEditor(item: FileItem) {
+        _editor.update {
+            it.copy(
+                isOpen = true,
+                uri = item.uri,
+                fileName = item.name,
+                content = "",
+                originalContent = "",
+                isLoading = true,
+                error = null
+            )
+        }
+        viewModelScope.launch {
+            val text = engine.readText(item.uri)
+            _editor.update { s ->
+                if (text == null) {
+                    s.copy(isLoading = false, error = "无法读取文件")
+                } else {
+                    s.copy(content = text, originalContent = text, isLoading = false)
+                }
+            }
+        }
+    }
+
+    private fun openInImageViewer(item: FileItem) {
+        _imageViewer.update {
+            it.copy(isOpen = true, uri = item.uri, fileName = item.name)
+        }
+    }
+
+    fun updateEditorContent(text: String) {
+        _editor.update { it.copy(content = text) }
+    }
+
+    fun saveEditor() {
+        val s = _editor.value
+        val uri = s.uri ?: return
+        viewModelScope.launch {
+            val ok = engine.writeText(uri, s.content)
+            if (ok) {
+                _editor.update { it.copy(originalContent = it.content) }
+            } else {
+                _editor.update { it.copy(error = "保存失败") }
+            }
+        }
+    }
+
+    fun closeEditor() {
+        _editor.value = EditorState()
+    }
+
+    fun closeImageViewer() {
+        _imageViewer.value = ImageViewerState()
+    }
+
+    companion object {
+        private val TEXT_EXTS = setOf(
+            "txt", "md", "json", "xml", "kt", "java", "kts",
+            "gradle", "properties", "yml", "yaml", "html", "css", "js",
+            "log", "ini", "conf", "cfg", "sh", "bat"
+        )
+        private val IMAGE_EXTS = setOf(
+            "jpg", "jpeg", "png", "gif", "bmp", "webp"
+        )
     }
 }
