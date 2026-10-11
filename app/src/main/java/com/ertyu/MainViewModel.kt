@@ -7,17 +7,21 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
+import com.ertyu.engine.ZipEngine
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
 import com.ertyu.model.ImageViewerState
 import com.ertyu.model.PanelState
 import com.ertyu.model.SortMode
+import com.ertyu.model.ZipProgress
+import com.ertyu.model.ZipPrompt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -35,13 +39,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _imageViewer = MutableStateFlow(ImageViewerState())
     val imageViewer: StateFlow<ImageViewerState> = _imageViewer.asStateFlow()
 
+    private val _zipProgress = MutableStateFlow(ZipProgress())
+    val zipProgress: StateFlow<ZipProgress> = _zipProgress.asStateFlow()
+
+    private val _zipPrompt = MutableStateFlow(ZipPrompt())
+    val zipPrompt: StateFlow<ZipPrompt> = _zipPrompt.asStateFlow()
+
     private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
     fun initDefaultDirs() {
         val root = Uri.fromFile(Environment.getExternalStorageDirectory())
-        // 先加载左面板，尽快显示内容
         openDirectory(true, root)
-        // 右面板延后，避免同时两次磁盘 IO 卡住启动
         viewModelScope.launch {
             delay(150)
             openDirectory(false, root)
@@ -168,6 +176,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ================= 多选 =================
+
     fun enterSelection(isLeft: Boolean, uriString: String) {
         flowOf(isLeft).update {
             it.copy(selectedUris = setOf(uriString), isSelectionMode = true)
@@ -230,9 +240,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ================= 打开文件 =================
+
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
         when {
+            ext == "zip" -> _zipPrompt.value = ZipPrompt(item)
             ext in TEXT_EXTS -> openInEditor(item)
             ext in IMAGE_EXTS -> openInImageViewer(item)
         }
@@ -291,6 +304,119 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeImageViewer() {
         _imageViewer.value = ImageViewerState()
+    }
+
+    // ================= ZIP =================
+
+    fun dismissZipPrompt() {
+        _zipPrompt.value = ZipPrompt()
+    }
+
+    /** 解压 zip 到当前目录下与 zip 同名的文件夹 */
+    fun extractZipHere(isLeft: Boolean, item: FileItem) {
+        _zipPrompt.value = ZipPrompt()
+        val currentDir = flowOf(isLeft).value.currentUri?.path?.let { File(it) } ?: return
+        val zipFile = item.uri.path?.let { File(it) } ?: return
+        val targetDir = File(currentDir, zipFile.nameWithoutExtension)
+
+        viewModelScope.launch {
+            _zipProgress.value = ZipProgress(
+                visible = true,
+                title = "解压中",
+                message = zipFile.name
+            )
+            val result = ZipEngine.extract(zipFile, targetDir) { cur, total ->
+                _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
+            }
+            result.onSuccess {
+                _zipProgress.value = _zipProgress.value.copy(
+                    done = true,
+                    message = "解压完成：${targetDir.name}"
+                )
+            }.onFailure { e ->
+                _zipProgress.value = _zipProgress.value.copy(
+                    error = e.message ?: "解压失败"
+                )
+            }
+            refresh(isLeft)
+        }
+    }
+
+    /** 解压 zip 到另一侧面板所在目录 */
+    fun extractZipToOtherPanel(isLeft: Boolean, item: FileItem) {
+        _zipPrompt.value = ZipPrompt()
+        val targetDir = flowOf(!isLeft).value.currentUri?.path?.let { File(it) } ?: return
+        val zipFile = item.uri.path?.let { File(it) } ?: return
+        val finalDir = File(targetDir, zipFile.nameWithoutExtension)
+
+        viewModelScope.launch {
+            _zipProgress.value = ZipProgress(
+                visible = true,
+                title = "解压中",
+                message = zipFile.name
+            )
+            val result = ZipEngine.extract(zipFile, finalDir) { cur, total ->
+                _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
+            }
+            result.onSuccess {
+                _zipProgress.value = _zipProgress.value.copy(
+                    done = true,
+                    message = "解压完成：${finalDir.name}"
+                )
+            }.onFailure { e ->
+                _zipProgress.value = _zipProgress.value.copy(
+                    error = e.message ?: "解压失败"
+                )
+            }
+            openDirectory(!isLeft, Uri.fromFile(targetDir))
+        }
+    }
+
+    /** 把当前选中的文件/文件夹压缩为 ZIP */
+    fun compressSelection(isLeft: Boolean) {
+        val state = flowOf(isLeft).value
+        val currentDir = state.currentUri?.path?.let { File(it) } ?: return
+        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+        if (targets.isEmpty()) return
+
+        val sources = targets.mapNotNull { it.uri.path?.let(::File) }
+        if (sources.isEmpty()) return
+
+        val zipName = if (sources.size == 1) {
+            val n = sources[0].name
+            val base = if (n.contains('.')) n.substringBeforeLast('.') else n
+            "$base.zip"
+        } else {
+            "archive_${System.currentTimeMillis()}.zip"
+        }
+        val targetZip = File(currentDir, zipName)
+
+        viewModelScope.launch {
+            _zipProgress.value = ZipProgress(
+                visible = true,
+                title = "压缩中",
+                message = zipName
+            )
+            val result = ZipEngine.compress(sources, targetZip) { cur, total ->
+                _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
+            }
+            result.onSuccess {
+                _zipProgress.value = _zipProgress.value.copy(
+                    done = true,
+                    message = "压缩完成：$zipName"
+                )
+            }.onFailure { e ->
+                _zipProgress.value = _zipProgress.value.copy(
+                    error = e.message ?: "压缩失败"
+                )
+            }
+            clearSelection(isLeft)
+            refresh(isLeft)
+        }
+    }
+
+    fun dismissZipProgress() {
+        _zipProgress.value = ZipProgress()
     }
 
     companion object {
