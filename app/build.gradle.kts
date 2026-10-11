@@ -4,10 +4,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// 从环境变量读取签名信息（由 GitHub Actions 注入）
-val keystorePassword: String = System.getenv("KEYSTORE_PASSWORD") ?: "mtfm123456"
-val keyAlias: String = System.getenv("KEY_ALIAS") ?: "mtfm"
-val keyPassword: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
+// 变量名改成 storePass / aliasName / keyPass，避免与 signingConfig 属性重名
+val storePass: String = System.getenv("KEYSTORE_PASSWORD") ?: "mtfm123456"
+val aliasName: String = System.getenv("KEY_ALIAS") ?: "mtfm"
+val keyPass: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
 
 android {
     namespace = "com.ertyu"
@@ -24,9 +24,9 @@ android {
     signingConfigs {
         create("mtfm") {
             storeFile = rootProject.file("keystore/mtfm.jks")
-            storePassword = keystorePassword
-            this.keyAlias = keyAlias
-            keyPassword = keyPassword
+            storePassword = storePass
+            keyAlias = aliasName
+            keyPassword = keyPass
         }
     }
 
