@@ -23,6 +23,7 @@ import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
 import com.ertyu.model.FolderSizeState
 import com.ertyu.model.ImageViewerState
+import com.ertyu.model.InstallState
 import com.ertyu.model.PanelState
 import com.ertyu.model.SearchState
 import com.ertyu.model.SortMode
@@ -84,10 +85,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _pendingInstall = MutableStateFlow<File?>(null)
     val pendingInstall: StateFlow<File?> = _pendingInstall.asStateFlow()
 
+    private val _installState = MutableStateFlow(InstallState())
+    val installState: StateFlow<InstallState> = _installState.asStateFlow()
+
     private var folderSizeJob: Job? = null
     private var searchJob: Job? = null
+    private var installJob: Job? = null
 
-    // 记录当前浏览 APK 的路径 + 来源面板，用于提取文件
     private var apkBrowserSourceIsLeft = true
 
     private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
@@ -410,25 +414,65 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _toast.value = "无效的 APK 路径"
             return
         }
-        tryInstall(apkFile)
+        startInstall(apkFile)
     }
 
     fun installApkFromInfo(info: ApkInfo) {
-        tryInstall(File(info.filePath))
+        startInstall(File(info.filePath))
     }
 
-    private fun tryInstall(apkFile: File) {
-        val result = ApkInstaller.install(getApplication(), apkFile)
-        when (result) {
-            is ApkInstaller.Result.Success -> { /* 系统安装器已弹出 */ }
-            is ApkInstaller.Result.NeedInstallPermission -> {
-                _pendingInstall.value = apkFile
-                _toast.value = "请先允许本应用安装未知应用"
+    private fun startInstall(apkFile: File) {
+        installJob?.cancel()
+        _installState.value = InstallState(
+            visible = true,
+            fileName = apkFile.name,
+            stage = "准备中…"
+        )
+        installJob = viewModelScope.launch {
+            val result = ApkInstaller.install(
+                context = getApplication(),
+                apkFile = apkFile
+            ) { copied, total ->
+                _installState.update {
+                    it.copy(
+                        stage = if (total > 0 && copied >= total)
+                            "提交安装…" else "复制中…",
+                        copied = copied,
+                        total = total
+                    )
+                }
             }
-            is ApkInstaller.Result.Failure -> {
-                _toast.value = result.message
+
+            when (result) {
+                is ApkInstaller.Result.Success -> {
+                    _installState.update {
+                        it.copy(
+                            stage = "已提交，请在弹出的系统界面确认",
+                            copied = it.total
+                        )
+                    }
+                    // 延迟自动关闭进度框，让用户看到结果
+                    delay(1200)
+                    _installState.value = InstallState()
+                }
+                is ApkInstaller.Result.NeedInstallPermission -> {
+                    _installState.value = InstallState()
+                    _pendingInstall.value = apkFile
+                    _toast.value = "请先允许本应用安装未知应用"
+                }
+                is ApkInstaller.Result.Failure -> {
+                    _installState.update {
+                        it.copy(stage = "失败", error = result.message)
+                    }
+                }
             }
         }
+    }
+
+    fun dismissInstallProgress() {
+        installJob?.cancel()
+        installJob = null
+        _installState.value = InstallState()
     }
 
     fun dismissInstallPermissionPrompt() {
