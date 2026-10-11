@@ -60,7 +60,6 @@ import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 import java.io.File
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FilePanel(
     isLeft: Boolean,
@@ -122,6 +121,8 @@ fun FilePanel(
                                 vm.toggleSelection(isLeft, item.uri.toString())
                             } else if (item.isDirectory) {
                                 vm.openDirectory(isLeft, item.uri)
+                            } else {
+                                vm.openFile(item)
                             }
                         },
                         onLongClick = {
@@ -258,7 +259,8 @@ private fun NormalToolbar(
                     text = { Text(if (showHidden) "隐藏隐藏文件" else "显示隐藏文件") },
                     leadingIcon = {
                         Icon(
-                            if (showHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            if (showHidden) Icons.Default.VisibilityOff
+                            else Icons.Default.Visibility,
                             null
                         )
                     },
