@@ -31,7 +31,6 @@ object ApkInspector {
                 val app: ApplicationInfo = info.applicationInfo
                     ?: throw IllegalArgumentException("APK 缺少 application 信息")
 
-                // 必须手动设置，才能正确读取 label / icon
                 app.sourceDir = apkFile.absolutePath
                 app.publicSourceDir = apkFile.absolutePath
 
@@ -58,6 +57,10 @@ object ApkInspector {
 
                 val size = apkFile.length()
 
+                val signature = ApkSignatureInspector
+                    .inspect(context, apkFile)
+                    .getOrNull()
+
                 ApkInfo(
                     filePath = apkFile.absolutePath,
                     fileName = apkFile.name,
@@ -75,7 +78,8 @@ object ApkInspector {
                     receiverCount = info.receivers?.size ?: 0,
                     providerCount = info.providers?.size ?: 0,
                     isDebug = (app.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0,
-                    icon = icon
+                    icon = icon,
+                    signature = signature
                 )
             }
         }
