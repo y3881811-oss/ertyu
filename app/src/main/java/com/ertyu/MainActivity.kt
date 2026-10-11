@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -16,6 +17,8 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 
@@ -39,7 +42,7 @@ class MainActivity : ComponentActivity() {
                 colorScheme = if (dark) darkColorScheme() else lightColorScheme()
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    MainScreen(vm)
+                    AppRoot(vm)
                 }
             }
         }
@@ -63,18 +66,30 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun AppRoot(vm: MainViewModel) {
+    val editor by vm.editor.collectAsState()
+    val imageViewer by vm.imageViewer.collectAsState()
+
+    when {
+        editor.isOpen -> {
+            BackHandler { vm.closeEditor() }
+            EditorScreen(vm)
+        }
+        imageViewer.isOpen -> {
+            BackHandler { vm.closeImageViewer() }
+            ImageViewerScreen(vm)
+        }
+        else -> {
+            MainScreen(vm)
+        }
+    }
+}
+
+@Composable
 fun MainScreen(vm: MainViewModel) {
     Row(modifier = Modifier.fillMaxSize()) {
-        FilePanel(
-            isLeft = true,
-            vm = vm,
-            modifier = Modifier.weight(1f)
-        )
+        FilePanel(isLeft = true, vm = vm, modifier = Modifier.weight(1f))
         VerticalDivider()
-        FilePanel(
-            isLeft = false,
-            vm = vm,
-            modifier = Modifier.weight(1f)
-        )
+        FilePanel(isLeft = false, vm = vm, modifier = Modifier.weight(1f))
     }
 }
