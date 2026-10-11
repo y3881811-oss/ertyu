@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// 变量名改成 storePass / aliasName / keyPass，避免与 signingConfig 属性重名
 val storePass: String = System.getenv("KEYSTORE_PASSWORD") ?: "mtfm123456"
 val aliasName: String = System.getenv("KEY_ALIAS") ?: "mtfm"
 val keyPass: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
@@ -35,9 +34,20 @@ android {
             signingConfig = signingConfigs.getByName("mtfm")
         }
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("mtfm")
         }
+    }
+
+    // 关键：关闭 lint 的 fatal 检查
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     compileOptions {

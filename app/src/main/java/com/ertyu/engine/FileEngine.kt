@@ -12,4 +12,8 @@ interface FileEngine {
     suspend fun move(source: Uri, targetDir: Uri): Boolean
     fun getParent(uri: Uri): Uri?
     fun getDisplayName(uri: Uri): String
+
+    // 新增：文本读写
+    suspend fun readText(uri: Uri): String?
+    suspend fun writeText(uri: Uri, content: String): Boolean
 }

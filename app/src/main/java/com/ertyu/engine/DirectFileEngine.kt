@@ -18,16 +18,36 @@ class DirectFileEngine : FileEngine {
         val dir = uri.toFileOrNull()?.takeIf { it.isDirectory }
             ?: return@withContext emptyList()
 
-        dir.listFiles()?.map { file ->
-            FileItem(
-                name = file.name,
-                uri = Uri.fromFile(file),
-                isDirectory = file.isDirectory,
-                size = if (file.isFile) file.length() else 0L,
-                lastModified = file.lastModified(),
-                mimeType = null
+        val children = dir.listFiles() ?: return@withContext emptyList()
+        val result = ArrayList<FileItem>(children.size)
+        for (file in children) {
+            val isDir = file.isDirectory
+            val size = if (isDir) 0L else file.length()
+            val childUri = Uri.fromFile(file)
+            result.add(
+                FileItem(
+                    name = file.name,
+                    uri = childUri,
+                    isDirectory = isDir,
+                    size = size,
+                    lastModified = file.lastModified(),
+                    mimeType = null,
+                    uriString = childUri.toString(),
+                    sizeText = if (isDir) "" else formatSize(size)
+                )
             )
-        } ?: emptyList()
+        }
+        result
+    }
+
+    private fun formatSize(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val kb = bytes / 1024.0
+        if (kb < 1024) return String.format("%.1f KB", kb)
+        val mb = kb / 1024.0
+        if (mb < 1024) return String.format("%.1f MB", mb)
+        val gb = mb / 1024.0
+        return String.format("%.2f GB", gb)
     }
 
     override suspend fun delete(uri: Uri): Boolean = withContext(Dispatchers.IO) {
@@ -81,4 +101,19 @@ class DirectFileEngine : FileEngine {
 
     override fun getDisplayName(uri: Uri): String =
         uri.toFileOrNull()?.name ?: uri.lastPathSegment ?: ""
+
+    override suspend fun readText(uri: Uri): String? = withContext(Dispatchers.IO) {
+        val file = uri.toFileOrNull() ?: return@withContext null
+        if (!file.isFile) return@withContext null
+        runCatching { file.readText(Charsets.UTF_8) }.getOrNull()
+    }
+
+    override suspend fun writeText(uri: Uri, content: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val file = uri.toFileOrNull() ?: return@withContext false
+            runCatching {
+                file.parentFile?.mkdirs()
+                file.writeText(content, Charsets.UTF_8)
+            }.isSuccess
+        }
 }

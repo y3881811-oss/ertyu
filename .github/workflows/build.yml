@@ -13,13 +13,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # actions/checkout@v4.2.2
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
 
-      # actions/setup-java@v4.7.0
       - name: Set up JDK 17
         uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12
         with:
@@ -30,7 +28,6 @@ jobs:
         run: |
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
 
-      # actions/cache@v4.2.0
       - name: Restore keystore cache
         id: keystore-cache
         uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
@@ -57,7 +54,6 @@ jobs:
             -dname "CN=MTFM, OU=Dev, O=MTFM, L=City, S=State, C=CN"
           echo "✅ 已生成新 keystore"
 
-      # gradle/actions/setup-gradle@v4.4.2
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@8379f6a1328ee0e06e2bb424dadb7b159856a326
         with:
@@ -73,21 +69,20 @@ jobs:
           echo "date=${DATE}" >> $GITHUB_OUTPUT
           echo "版本号: ${TAG}"
 
-      - name: Build Debug APK
+      - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleRelease --no-daemon
 
       - name: Rename APK
         run: |
           mkdir -p release
-          SRC=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          SRC=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           cp "$SRC" "release/MTFM-${{ steps.version.outputs.tag }}.apk"
           ls -lh release/
 
-      # softprops/action-gh-release@v2.2.2
       - name: Create Release
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         with:
@@ -98,19 +93,18 @@ jobs:
 
             - **构建时间**：${{ steps.version.outputs.date }}
             - **提交**：${{ github.sha }}
-            - **签名**：固定签名（支持覆盖安装）
+            - **类型**：Release APK（R8 优化）
 
             ### 安装说明
             1. 下载下方 APK 文件
             2. 在 Android 9 设备上允许「未知来源」安装
-            3. **可直接覆盖安装旧版本，无需卸载**
+            3. 可直接覆盖安装旧版本
           files: release/*.apk
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # actions/upload-artifact@v4.6.2
       - name: Upload Artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

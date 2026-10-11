@@ -7,29 +7,34 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -39,7 +44,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -54,17 +58,38 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 import java.io.File
 
-@OptIn(ExperimentalFoundationApi::class)
+// ==================== 顶层图标缓存 ====================
+
+private val IconFolder: ImageVector = Icons.Default.Folder
+private val IconFile: ImageVector = Icons.AutoMirrored.Filled.InsertDriveFile
+private val IconMore: ImageVector = Icons.Default.MoreVert
+private val IconUp: ImageVector = Icons.Default.ArrowUpward
+private val IconSwap: ImageVector = Icons.Default.SwapHoriz
+private val IconClose: ImageVector = Icons.Default.Close
+private val IconSelectAll: ImageVector = Icons.Default.SelectAll
+private val IconCopy: ImageVector = Icons.Default.ContentCopy
+private val IconMove: ImageVector = Icons.AutoMirrored.Filled.DriveFileMove
+private val IconDelete: ImageVector = Icons.Default.Delete
+private val IconNewFolder: ImageVector = Icons.Default.CreateNewFolder
+private val IconSort: ImageVector = Icons.AutoMirrored.Filled.Sort
+private val IconRefresh: ImageVector = Icons.Default.Refresh
+private val IconEdit: ImageVector = Icons.Default.Edit
+private val IconVisibility: ImageVector = Icons.Default.Visibility
+private val IconVisibilityOff: ImageVector = Icons.Default.VisibilityOff
+private val IconZip: ImageVector = Icons.Default.FolderZip
+
 @Composable
 fun FilePanel(
     isLeft: Boolean,
     vm: MainViewModel,
+    onSwitchPanel: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
@@ -74,6 +99,7 @@ fun FilePanel(
     var showJumpDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<FileItem?>(null) }
+    var actionTarget by remember { mutableStateOf<FileItem?>(null) }
 
     Column(modifier = modifier.fillMaxHeight()) {
 
@@ -84,58 +110,119 @@ fun FilePanel(
                 onSelectAll = { vm.selectAll(isLeft) },
                 onCopy = { vm.batchCopy(isLeft) },
                 onMove = { vm.batchMove(isLeft) },
-                onDelete = { vm.batchDelete(isLeft) }
+                onDelete = { vm.batchDelete(isLeft) },
+                onZip = { vm.compressSelection(isLeft) }
             )
         } else {
             NormalToolbar(
                 path = state.currentUri?.path ?: "未选择目录",
                 canGoUp = state.canGoUp,
                 showHidden = state.showHidden,
+                showSwitch = onSwitchPanel != null,
                 onUp = { vm.goUp(isLeft) },
                 onPathClick = { showJumpDialog = true },
                 onNewFolder = { showNewFolderDialog = true },
                 onSort = { showSortDialog = true },
                 onToggleHidden = { vm.setShowHidden(isLeft, !state.showHidden) },
-                onRefresh = { vm.refresh(isLeft) }
+                onRefresh = { vm.refresh(isLeft) },
+                onSwitchPanel = { onSwitchPanel?.invoke() }
             )
         }
         HorizontalDivider()
 
         when {
-            state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            state.isLoading -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator()
             }
-            state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            state.error != null -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 Text("错误: ${state.error}")
             }
-            state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            state.items.isEmpty() -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(if (state.showHidden) "空目录" else "空目录（可尝试显示隐藏文件）")
             }
-            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(state.items, key = { it.uri.toString() }) { item ->
+            else -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                items(
+                    items = state.items,
+                    key = { it.uriString },
+                    contentType = { if (it.isDirectory) "dir" else "file" }
+                ) { item ->
+                    val isSelected = state.selectedUris.contains(item.uriString)
                     FileRow(
                         item = item,
-                        isSelected = state.selectedUris.contains(item.uri.toString()),
+                        isSelected = isSelected,
                         isSelectionMode = state.isSelectionMode,
                         onClick = {
                             if (state.isSelectionMode) {
-                                vm.toggleSelection(isLeft, item.uri.toString())
+                                vm.toggleSelection(isLeft, item.uriString)
                             } else if (item.isDirectory) {
                                 vm.openDirectory(isLeft, item.uri)
+                            } else {
+                                vm.openFile(item)
                             }
                         },
                         onLongClick = {
                             if (!state.isSelectionMode) {
-                                vm.enterSelection(isLeft, item.uri.toString())
+                                actionTarget = item
                             }
                         },
-                        onRename = { renameTarget = item },
-                        onCopy = { vm.copyToOtherPanel(isLeft, item) },
-                        onDelete = { vm.delete(isLeft, item) }
+                        onMoreClick = { actionTarget = item }
                     )
                 }
             }
         }
+    }
+
+    actionTarget?.let { target ->
+        FileActionDialog(
+            item = target,
+            isZip = target.name.substringAfterLast('.', "").lowercase() == "zip",
+            onDismiss = { actionTarget = null },
+            onRename = {
+                actionTarget = null
+                renameTarget = target
+            },
+            onCopy = {
+                actionTarget = null
+                vm.copyToOtherPanel(isLeft, target)
+            },
+            onMove = {
+                actionTarget = null
+                vm.moveToOtherPanel(isLeft, target)
+            },
+            onDelete = {
+                actionTarget = null
+                vm.delete(isLeft, target)
+            },
+            onSelect = {
+                actionTarget = null
+                vm.enterSelection(isLeft, target.uriString)
+            },
+            onExtractHere = {
+                actionTarget = null
+                vm.extractZipHere(isLeft, target)
+            },
+            onExtractOther = {
+                actionTarget = null
+                vm.extractZipToOtherPanel(isLeft, target)
+            },
+            onZipThis = {
+                actionTarget = null
+                vm.enterSelection(isLeft, target.uriString)
+                vm.compressSelection(isLeft)
+            }
+        )
     }
 
     if (showSortDialog) {
@@ -196,6 +283,64 @@ fun FilePanel(
     }
 }
 
+// ==================== 文件操作菜单 ====================
+
+@Composable
+private fun FileActionDialog(
+    item: FileItem,
+    isZip: Boolean,
+    onDismiss: () -> Unit,
+    onRename: () -> Unit,
+    onCopy: () -> Unit,
+    onMove: () -> Unit,
+    onDelete: () -> Unit,
+    onSelect: () -> Unit,
+    onExtractHere: () -> Unit,
+    onExtractOther: () -> Unit,
+    onZipThis: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            Column {
+                if (isZip) {
+                    ActionItem("解压到当前目录", IconZip, onExtractHere)
+                    ActionItem("解压到另一侧", IconZip, onExtractOther)
+                }
+                ActionItem("压缩为 ZIP", IconZip, onZipThis)
+                ActionItem("重命名", IconEdit, onRename)
+                ActionItem("复制到另一侧", IconCopy, onCopy)
+                ActionItem("移动到另一侧", IconMove, onMove)
+                ActionItem("删除", IconDelete, onDelete)
+                ActionItem("多选", IconSelectAll, onSelect)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+@Composable
+private fun ActionItem(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null)
+        Spacer(Modifier.width(16.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
 // ==================== 顶部工具栏 ====================
 
 @Composable
@@ -203,23 +348,26 @@ private fun NormalToolbar(
     path: String,
     canGoUp: Boolean,
     showHidden: Boolean,
+    showSwitch: Boolean,
     onUp: () -> Unit,
     onPathClick: () -> Unit,
     onNewFolder: () -> Unit,
     onSort: () -> Unit,
     onToggleHidden: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onSwitchPanel: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp),
+            .height(48.dp)
+            .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onUp, enabled = canGoUp) {
-            Icon(Icons.Default.ArrowUpward, contentDescription = "上级")
+            Icon(IconUp, contentDescription = "上级")
         }
         Text(
             text = path,
@@ -230,9 +378,14 @@ private fun NormalToolbar(
                 .weight(1f)
                 .clickable { onPathClick() }
         )
+        if (showSwitch) {
+            IconButton(onClick = onSwitchPanel) {
+                Icon(IconSwap, contentDescription = "切换面板")
+            }
+        }
         Box {
             IconButton(onClick = { menuExpanded = true }) {
-                Icon(Icons.Default.MoreVert, contentDescription = "菜单")
+                Icon(IconMore, contentDescription = "菜单")
             }
             DropdownMenu(
                 expanded = menuExpanded,
@@ -240,7 +393,7 @@ private fun NormalToolbar(
             ) {
                 DropdownMenuItem(
                     text = { Text("新建文件夹") },
-                    leadingIcon = { Icon(Icons.Default.CreateNewFolder, null) },
+                    leadingIcon = { Icon(IconNewFolder, null) },
                     onClick = {
                         menuExpanded = false
                         onNewFolder()
@@ -248,7 +401,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("排序方式") },
-                    leadingIcon = { Icon(Icons.Default.Sort, null) },
+                    leadingIcon = { Icon(IconSort, null) },
                     onClick = {
                         menuExpanded = false
                         onSort()
@@ -258,7 +411,7 @@ private fun NormalToolbar(
                     text = { Text(if (showHidden) "隐藏隐藏文件" else "显示隐藏文件") },
                     leadingIcon = {
                         Icon(
-                            if (showHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            if (showHidden) IconVisibilityOff else IconVisibility,
                             null
                         )
                     },
@@ -269,7 +422,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("刷新") },
-                    leadingIcon = { Icon(Icons.Default.Refresh, null) },
+                    leadingIcon = { Icon(IconRefresh, null) },
                     onClick = {
                         menuExpanded = false
                         onRefresh()
@@ -287,17 +440,19 @@ private fun SelectionToolbar(
     onSelectAll: () -> Unit,
     onCopy: () -> Unit,
     onMove: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onZip: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(48.dp)
             .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(4.dp),
+            .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onClear) {
-            Icon(Icons.Default.Close, contentDescription = "取消")
+            Icon(IconClose, contentDescription = "取消")
         }
         Text(
             text = "已选 $count 项",
@@ -305,16 +460,19 @@ private fun SelectionToolbar(
             modifier = Modifier.weight(1f)
         )
         IconButton(onClick = onSelectAll) {
-            Icon(Icons.Default.SelectAll, contentDescription = "全选")
+            Icon(IconSelectAll, contentDescription = "全选")
+        }
+        IconButton(onClick = onZip) {
+            Icon(IconZip, contentDescription = "压缩")
         }
         IconButton(onClick = onCopy) {
-            Icon(Icons.Default.ContentCopy, contentDescription = "复制到另一侧")
+            Icon(IconCopy, contentDescription = "复制到另一侧")
         }
         IconButton(onClick = onMove) {
-            Icon(Icons.Default.DriveFileMove, contentDescription = "移动到另一侧")
+            Icon(IconMove, contentDescription = "移动到另一侧")
         }
         IconButton(onClick = onDelete) {
-            Icon(Icons.Default.Delete, contentDescription = "删除")
+            Icon(IconDelete, contentDescription = "删除")
         }
     }
 }
@@ -329,45 +487,50 @@ private fun FileRow(
     isSelectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onRename: () -> Unit,
-    onCopy: () -> Unit,
-    onDelete: () -> Unit
+    onMoreClick: () -> Unit
 ) {
     val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
 
-    ListItem(
-        headlineContent = {
-            Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        },
-        supportingContent = {
-            if (!item.isDirectory) Text(formatSize(item.size))
-        },
-        leadingContent = {
-            Icon(
-                imageVector = if (item.isDirectory) Icons.Default.Folder
-                else Icons.Default.InsertDriveFile,
-                contentDescription = null
-            )
-        },
-        trailingContent = {
-            if (!isSelectionMode) {
-                Row {
-                    IconButton(onClick = onRename) {
-                        Icon(Icons.Default.Edit, contentDescription = "重命名")
-                    }
-                    IconButton(onClick = onCopy) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "复制到另一侧")
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "删除")
-                    }
-                }
-            }
-        },
+    Row(
         modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
             .background(bg)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-    )
+            .padding(start = 12.dp, end = 0.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (item.isDirectory) IconFolder else IconFile,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!item.isDirectory) {
+                Text(
+                    text = item.sizeText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+        if (!isSelectionMode) {
+            IconButton(
+                onClick = onMoreClick,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(IconMore, contentDescription = "更多")
+            }
+        }
+    }
 }
 
 // ==================== 对话框 ====================
@@ -435,16 +598,4 @@ private fun SortDialog(
             TextButton(onClick = onDismiss) { Text("关闭") }
         }
     )
-}
-
-// ==================== 工具 ====================
-
-private fun formatSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format("%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format("%.2f GB", gb)
 }
