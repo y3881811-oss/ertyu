@@ -5,9 +5,11 @@ import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ertyu.engine.ArchiveEngine
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
 import com.ertyu.engine.ZipEngine
+import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
 import com.ertyu.model.ImageViewerState
@@ -245,7 +247,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
         when {
-            ext == "zip" -> _zipPrompt.value = ZipPrompt(item)
+            // 任何压缩包格式，弹解压对话框
+            ArchiveFormat.isArchive(item.name) -> _zipPrompt.value = ZipPrompt(item)
             ext in TEXT_EXTS -> openInEditor(item)
             ext in IMAGE_EXTS -> openInImageViewer(item)
         }
@@ -306,26 +309,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _imageViewer.value = ImageViewerState()
     }
 
-    // ================= ZIP =================
+    // ================= 压缩包 =================
 
     fun dismissZipPrompt() {
         _zipPrompt.value = ZipPrompt()
     }
 
-    /** 解压 zip 到当前目录下与 zip 同名的文件夹 */
     fun extractZipHere(isLeft: Boolean, item: FileItem) {
         _zipPrompt.value = ZipPrompt()
         val currentDir = flowOf(isLeft).value.currentUri?.path?.let { File(it) } ?: return
-        val zipFile = item.uri.path?.let { File(it) } ?: return
-        val targetDir = File(currentDir, zipFile.nameWithoutExtension)
+        val archiveFile = item.uri.path?.let { File(it) } ?: return
+        // 去掉扩展名作为目录名
+        val baseName = archiveBaseName(archiveFile.name)
+        val targetDir = File(currentDir, baseName)
 
         viewModelScope.launch {
             _zipProgress.value = ZipProgress(
                 visible = true,
                 title = "解压中",
-                message = zipFile.name
+                message = archiveFile.name
             )
-            val result = ZipEngine.extract(zipFile, targetDir) { cur, total ->
+            val result = ArchiveEngine.extract(archiveFile, targetDir) { cur, total ->
                 _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
             }
             result.onSuccess {
@@ -342,20 +346,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 解压 zip 到另一侧面板所在目录 */
     fun extractZipToOtherPanel(isLeft: Boolean, item: FileItem) {
         _zipPrompt.value = ZipPrompt()
         val targetDir = flowOf(!isLeft).value.currentUri?.path?.let { File(it) } ?: return
-        val zipFile = item.uri.path?.let { File(it) } ?: return
-        val finalDir = File(targetDir, zipFile.nameWithoutExtension)
+        val archiveFile = item.uri.path?.let { File(it) } ?: return
+        val baseName = archiveBaseName(archiveFile.name)
+        val finalDir = File(targetDir, baseName)
 
         viewModelScope.launch {
             _zipProgress.value = ZipProgress(
                 visible = true,
                 title = "解压中",
-                message = zipFile.name
+                message = archiveFile.name
             )
-            val result = ZipEngine.extract(zipFile, finalDir) { cur, total ->
+            val result = ArchiveEngine.extract(archiveFile, finalDir) { cur, total ->
                 _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
             }
             result.onSuccess {
@@ -369,6 +373,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             openDirectory(!isLeft, Uri.fromFile(targetDir))
+        }
+    }
+
+    /** 根据压缩包名推断解压后的目录名 */
+    private fun archiveBaseName(fileName: String): String {
+        val lower = fileName.lowercase()
+        return when {
+            lower.endsWith(".tar.gz") -> fileName.dropLast(7)
+            lower.endsWith(".tar.bz2") -> fileName.dropLast(8)
+            lower.endsWith(".tar.xz") -> fileName.dropLast(7)
+            lower.endsWith(".tar.zst") -> fileName.dropLast(8)
+            lower.endsWith(".tar") -> fileName.dropLast(4)
+            lower.endsWith(".tgz") -> fileName.dropLast(4)
+            lower.endsWith(".tbz2") -> fileName.dropLast(5)
+            lower.endsWith(".tbz") -> fileName.dropLast(4)
+            lower.endsWith(".txz") -> fileName.dropLast(4)
+            lower.endsWith(".tzst") -> fileName.dropLast(5)
+            else -> fileName.substringBeforeLast('.', fileName)
         }
     }
 
