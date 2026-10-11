@@ -90,6 +90,7 @@ fun AppRoot(vm: MainViewModel) {
     val zipProgress by vm.zipProgress.collectAsState()
     val searchState by vm.searchState.collectAsState()
     val apkState by vm.apkInfoState.collectAsState()
+    val apkBrowserState by vm.apkBrowserState.collectAsState()
     val pendingInstall by vm.pendingInstall.collectAsState()
 
     val context = LocalContext.current
@@ -131,7 +132,6 @@ fun AppRoot(vm: MainViewModel) {
                 Column {
                     Text(zipProgress.message, maxLines = 2)
                     Spacer(Modifier.height(8.dp))
-
                     if (zipProgress.total > 0) {
                         LinearProgressIndicator(
                             progress = {
@@ -144,7 +144,6 @@ fun AppRoot(vm: MainViewModel) {
                     } else if (zipProgress.current > 0) {
                         Text("已处理 ${zipProgress.current} 项")
                     }
-
                     zipProgress.error?.let {
                         Spacer(Modifier.height(8.dp))
                         Text("错误: $it", color = MaterialTheme.colorScheme.error)
@@ -161,7 +160,6 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // 安装权限引导
     if (pendingInstall != null) {
         AlertDialog(
             onDismissRequest = { vm.dismissInstallPermissionPrompt() },
@@ -199,6 +197,10 @@ fun AppRoot(vm: MainViewModel) {
         apkState.visible -> {
             BackHandler { vm.closeApkInfo() }
             ApkInfoScreen(vm)
+        }
+        apkBrowserState.visible -> {
+            BackHandler { vm.closeApkBrowser() }
+            ApkBrowserScreen(vm)
         }
         else -> {
             MainScreen(vm)
