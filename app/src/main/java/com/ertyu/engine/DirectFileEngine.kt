@@ -30,6 +30,8 @@ class DirectFileEngine : FileEngine {
             val size = if (isDir) 0L else file.length()
             val childUri = Uri.fromFile(file)
             val lastMod = file.lastModified()
+            // 目录：统计子项数（一次轻量 listFiles，不再递归）
+            val childCount = if (isDir) (file.listFiles()?.size ?: 0) else -1
             result.add(
                 FileItem(
                     name = file.name,
@@ -43,7 +45,8 @@ class DirectFileEngine : FileEngine {
                     sizeText = if (isDir) "" else formatSize(size),
                     typeText = guessType(file),
                     lastModifiedText = if (lastMod > 0)
-                        dateFormat.format(Date(lastMod)) else "未知"
+                        dateFormat.format(Date(lastMod)) else "未知",
+                    childCount = childCount
                 )
             )
         }
@@ -70,7 +73,11 @@ class DirectFileEngine : FileEngine {
             "jpg", "jpeg", "png", "gif", "bmp", "webp" -> "图片"
             "mp3", "wav", "flac", "ogg", "m4a", "aac" -> "音频"
             "mp4", "mkv", "avi", "mov", "webm", "flv" -> "视频"
-            "zip", "rar", "7z", "tar", "gz", "bz2" -> "压缩包"
+            "zip" -> "ZIP 压缩包"
+            "rar" -> "RAR 压缩包"
+            "7z" -> "7Z 压缩包"
+            "tar" -> "TAR 归档"
+            "gz" -> "GZ 压缩"
             "apk" -> "Android 应用"
             "pdf" -> "PDF 文档"
             "doc", "docx" -> "Word 文档"
