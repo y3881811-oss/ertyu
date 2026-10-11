@@ -12,6 +12,7 @@ import com.ertyu.model.FileItem
 import com.ertyu.model.ImageViewerState
 import com.ertyu.model.PanelState
 import com.ertyu.model.SortMode
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,11 +39,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun initDefaultDirs() {
         val root = Uri.fromFile(Environment.getExternalStorageDirectory())
+        // 先加载左面板，尽快显示内容
         openDirectory(true, root)
-        openDirectory(false, root)
+        // 右面板延后，避免同时两次磁盘 IO 卡住启动
+        viewModelScope.launch {
+            delay(150)
+            openDirectory(false, root)
+        }
     }
-
-    // ================= 面板 =================
 
     fun openDirectory(isLeft: Boolean, uri: Uri) {
         val flow = flowOf(isLeft)
@@ -164,8 +168,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ================= 多选 =================
-
     fun enterSelection(isLeft: Boolean, uriString: String) {
         flowOf(isLeft).update {
             it.copy(selectedUris = setOf(uriString), isSelectionMode = true)
@@ -183,7 +185,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun selectAll(isLeft: Boolean) {
         flowOf(isLeft).update { state ->
             state.copy(
-                selectedUris = state.items.map { it.uri.toString() }.toSet(),
+                selectedUris = state.items.map { it.uriString }.toSet(),
                 isSelectionMode = true
             )
         }
@@ -197,7 +199,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun batchDelete(isLeft: Boolean) {
         val state = flowOf(isLeft).value
-        val targets = state.items.filter { state.selectedUris.contains(it.uri.toString()) }
+        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
         viewModelScope.launch {
             targets.forEach { engine.delete(it.uri) }
             clearSelection(isLeft)
@@ -208,7 +210,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun batchCopy(fromLeft: Boolean) {
         val state = flowOf(fromLeft).value
         val target = flowOf(!fromLeft).value.currentUri ?: return
-        val targets = state.items.filter { state.selectedUris.contains(it.uri.toString()) }
+        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
         viewModelScope.launch {
             targets.forEach { engine.copy(it.uri, target) }
             clearSelection(fromLeft)
@@ -219,7 +221,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun batchMove(fromLeft: Boolean) {
         val state = flowOf(fromLeft).value
         val target = flowOf(!fromLeft).value.currentUri ?: return
-        val targets = state.items.filter { state.selectedUris.contains(it.uri.toString()) }
+        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
         viewModelScope.launch {
             targets.forEach { engine.move(it.uri, target) }
             clearSelection(fromLeft)
@@ -228,14 +230,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ================= 文件打开（路由） =================
-
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
         when {
             ext in TEXT_EXTS -> openInEditor(item)
             ext in IMAGE_EXTS -> openInImageViewer(item)
-            else -> { /* 暂不支持 */ }
         }
     }
 
