@@ -5,8 +5,13 @@ import com.ertyu.model.FileItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class DirectFileEngine : FileEngine {
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
     private fun Uri.toFileOrNull(): File? = when (scheme) {
         "file" -> path?.let(::File)
@@ -24,20 +29,57 @@ class DirectFileEngine : FileEngine {
             val isDir = file.isDirectory
             val size = if (isDir) 0L else file.length()
             val childUri = Uri.fromFile(file)
+            val lastMod = file.lastModified()
             result.add(
                 FileItem(
                     name = file.name,
                     uri = childUri,
                     isDirectory = isDir,
                     size = size,
-                    lastModified = file.lastModified(),
+                    lastModified = lastMod,
                     mimeType = null,
                     uriString = childUri.toString(),
-                    sizeText = if (isDir) "" else formatSize(size)
+                    path = file.absolutePath,
+                    sizeText = if (isDir) "" else formatSize(size),
+                    typeText = guessType(file),
+                    lastModifiedText = if (lastMod > 0)
+                        dateFormat.format(Date(lastMod)) else "未知"
                 )
             )
         }
         result
+    }
+
+    private fun guessType(file: File): String {
+        if (file.isDirectory) return "文件夹"
+        val ext = file.name.substringAfterLast('.', "").lowercase()
+        return when (ext) {
+            "txt", "log", "ini", "conf", "cfg" -> "文本"
+            "md" -> "Markdown"
+            "json" -> "JSON"
+            "xml" -> "XML"
+            "html", "htm" -> "网页"
+            "css" -> "样式表"
+            "js" -> "JavaScript"
+            "kt", "kts" -> "Kotlin 代码"
+            "java" -> "Java 代码"
+            "gradle" -> "Gradle 脚本"
+            "properties" -> "属性文件"
+            "yml", "yaml" -> "YAML"
+            "sh", "bat" -> "脚本"
+            "jpg", "jpeg", "png", "gif", "bmp", "webp" -> "图片"
+            "mp3", "wav", "flac", "ogg", "m4a", "aac" -> "音频"
+            "mp4", "mkv", "avi", "mov", "webm", "flv" -> "视频"
+            "zip", "rar", "7z", "tar", "gz", "bz2" -> "压缩包"
+            "apk" -> "Android 应用"
+            "pdf" -> "PDF 文档"
+            "doc", "docx" -> "Word 文档"
+            "xls", "xlsx" -> "Excel 表格"
+            "ppt", "pptx" -> "PowerPoint"
+            "ttf", "otf" -> "字体"
+            "db", "sqlite" -> "数据库"
+            else -> if (ext.isEmpty()) "文件" else "$ext 文件"
+        }
     }
 
     private fun formatSize(bytes: Long): String {
