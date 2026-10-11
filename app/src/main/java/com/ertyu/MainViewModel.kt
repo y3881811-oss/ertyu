@@ -605,7 +605,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val remaining = (file.length() - hexLoadedBytes)
                             .coerceAtMost(hexLoadChunk.toLong())
                         if (remaining <= 0) return@withContext ByteArray(0)
-                        raf.seek(hexLoadedBytes)
+                        raf.seek(hexLoadedBytes.toLong())
                         val buf = ByteArray(remaining.toInt())
                         raf.readFully(buf)
                         buf
