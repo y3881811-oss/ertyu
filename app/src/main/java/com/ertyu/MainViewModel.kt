@@ -8,14 +8,18 @@ import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.ArchiveEngine
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
+import com.ertyu.engine.FolderSizeCalculator
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
+import com.ertyu.model.FolderSizeState
 import com.ertyu.model.ImageViewerState
 import com.ertyu.model.PanelState
 import com.ertyu.model.SortMode
 import com.ertyu.model.ZipProgress
 import com.ertyu.model.ZipPrompt
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,12 +50,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _zipPrompt = MutableStateFlow(ZipPrompt())
     val zipPrompt: StateFlow<ZipPrompt> = _zipPrompt.asStateFlow()
 
-    // 压缩格式选择对话框是否显示
     private val _compressPromptVisible = MutableStateFlow(false)
     val compressPromptVisible: StateFlow<Boolean> = _compressPromptVisible.asStateFlow()
 
-    // 压缩时使用哪个面板的选中项
     private val _compressPanelIsLeft = MutableStateFlow(true)
+
+    // 文件夹大小计算状态
+    private val _folderSizeState = MutableStateFlow(FolderSizeState())
+    val folderSizeState: StateFlow<FolderSizeState> = _folderSizeState.asStateFlow()
+
+    private var folderSizeJob: Job? = null
 
     private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
@@ -399,7 +407,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ================= 压缩 =================
 
-    /** 用户点了"压缩"，弹出格式选择对话框 */
     fun requestCompress(isLeft: Boolean) {
         val state = flowOf(isLeft).value
         if (state.selectedUris.isEmpty()) return
@@ -411,7 +418,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _compressPromptVisible.value = false
     }
 
-    /** 用户在格式对话框里选了某个格式 */
     fun compressWithFormat(format: ArchiveFormat) {
         _compressPromptVisible.value = false
         if (!format.canCompress) return
@@ -466,6 +472,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissZipProgress() {
         _zipProgress.value = ZipProgress()
+    }
+
+    // ================= 文件夹大小计算 =================
+
+    fun calculateFolderSize(item: FileItem) {
+        folderSizeJob?.cancel()
+        val folder = item.uri.path?.let { File(it) } ?: return
+        _folderSizeState.value = FolderSizeState(isCalculating = true)
+        folderSizeJob = viewModelScope.launch {
+            try {
+                val (bytes, count) = FolderSizeCalculator.calculate(folder) { scanned, totalBytes ->
+                    _folderSizeState.value = FolderSizeState(
+                        isCalculating = true,
+                        scanned = scanned,
+                        totalBytes = totalBytes
+                    )
+                }
+                _folderSizeState.value = FolderSizeState(
+                    isCalculating = false,
+                    scanned = count,
+                    totalBytes = bytes,
+                    done = true
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _folderSizeState.value = FolderSizeState(
+                    error = e.message ?: "计算失败"
+                )
+            }
+        }
+    }
+
+    fun cancelFolderSize() {
+        folderSizeJob?.cancel()
+        folderSizeJob = null
+        _folderSizeState.value = FolderSizeState()
+    }
+
+    fun resetFolderSize() {
+        folderSizeJob?.cancel()
+        folderSizeJob = null
+        _folderSizeState.value = FolderSizeState()
     }
 
     companion object {
