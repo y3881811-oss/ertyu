@@ -33,8 +33,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.ertyu.engine.ApkInstaller
 import com.ertyu.model.ArchiveFormat
 
 class MainActivity : ComponentActivity() {
@@ -88,6 +90,9 @@ fun AppRoot(vm: MainViewModel) {
     val zipProgress by vm.zipProgress.collectAsState()
     val searchState by vm.searchState.collectAsState()
     val apkState by vm.apkInfoState.collectAsState()
+    val pendingInstall by vm.pendingInstall.collectAsState()
+
+    val context = LocalContext.current
 
     zipPrompt.item?.let { item ->
         val format = ArchiveFormat.detect(item.name)
@@ -151,6 +156,28 @@ fun AppRoot(vm: MainViewModel) {
                     TextButton(onClick = { vm.dismissZipProgress() }) {
                         Text(if (zipProgress.error != null) "关闭" else "完成")
                     }
+                }
+            }
+        )
+    }
+
+    // 安装权限引导
+    if (pendingInstall != null) {
+        AlertDialog(
+            onDismissRequest = { vm.dismissInstallPermissionPrompt() },
+            title = { Text("需要安装权限") },
+            text = {
+                Text("本应用需要「安装未知应用」权限才能安装 APK。\n\n点击「去授权」后，在系统设置里开启本应用的开关，返回后再次点击安装即可。")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    ApkInstaller.openInstallPermissionSettings(context)
+                    vm.dismissInstallPermissionPrompt()
+                }) { Text("去授权") }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissInstallPermissionPrompt() }) {
+                    Text("取消")
                 }
             }
         )
