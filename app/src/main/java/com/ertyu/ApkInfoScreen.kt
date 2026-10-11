@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,30 +30,61 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import com.ertyu.model.ApkInfo
+import com.ertyu.model.ApkSignature
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ApkInfoScreen(vm: MainViewModel) {
     val state by vm.apkInfoState.collectAsState()
+    val toast by vm.toast.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(toast) {
+        toast?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            vm.clearToast()
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = {
+                    Text(
+                        state.fileName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { vm.closeApkInfo() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回"
+                        )
+                    }
+                },
+                actions = {
+                    if (state.info?.icon != null) {
+                        IconButton(onClick = {
+                            state.info?.let { vm.saveApkIcon(it) }
+                        }) {
+                            Icon(Icons.Default.Save, contentDescription = "保存图标")
+                        }
                     }
                 }
             )
@@ -74,7 +106,10 @@ fun ApkInfoScreen(vm: MainViewModel) {
                     Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("错误: ${state.error}", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        "错误: ${state.error}",
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
                 state.info != null -> ApkInfoContent(state.info!!)
             }
@@ -112,7 +147,7 @@ private fun ApkInfoContent(info: ApkInfo) {
                 }
             }
             Spacer(Modifier.width(16.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = info.label,
                     style = MaterialTheme.typography.titleLarge,
@@ -138,7 +173,6 @@ private fun ApkInfoContent(info: ApkInfo) {
 
         Spacer(Modifier.height(20.dp))
 
-        // 基本信息卡片
         InfoCard("基本信息") {
             InfoLine("版本名", info.versionName)
             InfoLine("版本号", info.versionCode.toString())
@@ -148,15 +182,19 @@ private fun ApkInfoContent(info: ApkInfo) {
 
         Spacer(Modifier.height(12.dp))
 
-        // SDK 信息
         InfoCard("SDK 信息") {
-            InfoLine("最低版本", "Android ${apiToVersion(info.minSdk)}（API ${info.minSdk}）")
-            InfoLine("目标版本", "Android ${apiToVersion(info.targetSdk)}（API ${info.targetSdk}）")
+            InfoLine(
+                "最低版本",
+                "Android ${apiToVersion(info.minSdk)}（API ${info.minSdk}）"
+            )
+            InfoLine(
+                "目标版本",
+                "Android ${apiToVersion(info.targetSdk)}（API ${info.targetSdk}）"
+            )
         }
 
         Spacer(Modifier.height(12.dp))
 
-        // 组件统计
         InfoCard("组件") {
             InfoLine("Activity", "${info.activityCount} 个")
             InfoLine("Service", "${info.serviceCount} 个")
@@ -166,7 +204,10 @@ private fun ApkInfoContent(info: ApkInfo) {
 
         Spacer(Modifier.height(12.dp))
 
-        // 权限
+        SignatureCard(info.signature)
+
+        Spacer(Modifier.height(12.dp))
+
         InfoCard("权限（${info.permissions.size}）") {
             if (info.permissions.isEmpty()) {
                 Text(
@@ -188,7 +229,6 @@ private fun ApkInfoContent(info: ApkInfo) {
 
         Spacer(Modifier.height(12.dp))
 
-        // 路径
         InfoCard("路径") {
             Text(
                 text = info.filePath,
@@ -198,6 +238,68 @@ private fun ApkInfoContent(info: ApkInfo) {
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SignatureCard(sig: ApkSignature?) {
+    InfoCard("签名") {
+        if (sig == null) {
+            Text(
+                "无法读取签名信息",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error
+            )
+            return@InfoCard
+        }
+
+        InfoLine("签名方案", sig.schemeText)
+
+        if (sig.signers.isEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "未找到签名证书",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            sig.signers.forEachIndexed { index, signer ->
+                Spacer(Modifier.height(10.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "证书 #${index + 1}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(6.dp))
+                MonospaceBlock("主题", signer.subject)
+                MonospaceBlock("颁发者", signer.issuer)
+                MonospaceBlock("序列号", signer.serialNumber)
+                MonospaceBlock("有效期", "${signer.validFrom} ~ ${signer.validTo}")
+                Spacer(Modifier.height(6.dp))
+                MonospaceBlock("MD5", signer.md5)
+                MonospaceBlock("SHA-1", signer.sha1)
+                MonospaceBlock("SHA-256", signer.sha256)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonospaceBlock(label: String, value: String) {
+    Column(modifier = Modifier.padding(vertical = 2.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace
+        )
     }
 }
 
