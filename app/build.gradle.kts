@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// 变量名改成 storePass / aliasName / keyPass，避免与 signingConfig 属性重名
 val storePass: String = System.getenv("KEYSTORE_PASSWORD") ?: "mtfm123456"
 val aliasName: String = System.getenv("KEY_ALIAS") ?: "mtfm"
 val keyPass: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
@@ -35,7 +34,13 @@ android {
             signingConfig = signingConfigs.getByName("mtfm")
         }
         getByName("release") {
-            isMinifyEnabled = false
+            // 关键：开启 R8 优化，Compose 在 Release 下性能提升明显
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("mtfm")
         }
     }
