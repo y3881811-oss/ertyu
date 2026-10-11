@@ -1,6 +1,7 @@
 package com.ertyu
 
 import android.app.Application
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
@@ -11,6 +12,7 @@ import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
 import com.ertyu.engine.FolderSizeCalculator
 import com.ertyu.engine.SearchEngine
+import com.ertyu.model.ApkInfo
 import com.ertyu.model.ApkInfoState
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.EditorState
@@ -31,6 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FileOutputStream
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -67,6 +70,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _apkInfoState = MutableStateFlow(ApkInfoState())
     val apkInfoState: StateFlow<ApkInfoState> = _apkInfoState.asStateFlow()
+
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast.asStateFlow()
 
     private var folderSizeJob: Job? = null
     private var searchJob: Job? = null
@@ -202,8 +208,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ================= 多选 =================
-
     fun enterSelection(isLeft: Boolean, uriString: String) {
         flowOf(isLeft).update {
             it.copy(selectedUris = setOf(uriString), isSelectionMode = true)
@@ -265,8 +269,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             openDirectory(!fromLeft, target)
         }
     }
-
-    // ================= 打开文件 =================
 
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
@@ -369,6 +371,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _apkInfoState.value = ApkInfoState()
     }
 
+    fun saveApkIcon(info: ApkInfo) {
+        viewModelScope.launch {
+            try {
+                val icon = info.icon ?: run {
+                    _toast.value = "无图标可保存"
+                    return@launch
+                }
+                val parentDir = File(info.filePath).parentFile ?: run {
+                    _toast.value = "无法确定目录"
+                    return@launch
+                }
+                val safeLabel = info.label.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                val outFile = File(parentDir, "${safeLabel}_${info.packageName}.png")
+                FileOutputStream(outFile).use { out ->
+                    icon.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+                _toast.value = "图标已保存：${outFile.name}"
+            } catch (e: Exception) {
+                _toast.value = "保存失败：${e.message}"
+            }
+        }
+    }
+
+    fun clearToast() {
+        _toast.value = null
+    }
+
     // ================= 解压 =================
 
     fun dismissZipPrompt() {
@@ -451,8 +480,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             else -> fileName.substringBeforeLast('.', fileName)
         }
     }
-
-    // ================= 压缩 =================
 
     fun requestCompress(isLeft: Boolean) {
         val state = flowOf(isLeft).value
