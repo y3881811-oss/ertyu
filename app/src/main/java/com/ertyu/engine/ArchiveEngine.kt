@@ -5,23 +5,32 @@ import com.github.junrar.Junrar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
 import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 /**
- * 统一处理 zip / tar / tar.gz / tar.bz2 / tar.xz / tar.zst / 7z / rar
- * 等压缩格式的解压（zip 走 ZipEngine，更快）。
+ * 统一处理 zip / tar / tar.gz / tar.bz2 / tar.xz / tar.zst / 7z / rar 等格式。
+ * - 解压：全部支持
+ * - 压缩：ZIP / TAR / TAR.GZ
  */
 object ArchiveEngine {
 
     private const val BUF_SIZE = 16 * 1024
+
+    // ==================== 解压 ====================
 
     suspend fun extract(
         archiveFile: File,
@@ -100,7 +109,104 @@ object ArchiveEngine {
         }
     }
 
-    // ==================== tar ====================
+    // ==================== 压缩 ====================
+
+    suspend fun compress(
+        sources: List<File>,
+        targetFile: File,
+        format: ArchiveFormat,
+        onProgress: (Int, Int) -> Unit = { _, _ -> }
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            // 收集所有条目
+            val entries = mutableListOf<Pair<File, String>>()
+            sources.forEach { src -> collect(src, src.name, entries) }
+            if (entries.isEmpty()) throw IllegalArgumentException("没有可压缩的内容")
+
+            val total = entries.size
+            onProgress(0, total)
+
+            when (format) {
+                ArchiveFormat.ZIP ->
+                    compressZip(entries, targetFile, onProgress)
+                ArchiveFormat.TAR ->
+                    compressTar(entries, targetFile, null, onProgress)
+                ArchiveFormat.TAR_GZ ->
+                    compressTar(entries, targetFile, "gz", onProgress)
+                else ->
+                    throw IllegalArgumentException("不支持压缩为 ${format.label}（仅支持 ZIP / TAR / TAR.GZ）")
+            }
+        }
+    }
+
+    private fun compressZip(
+        entries: List<Pair<File, String>>,
+        target: File,
+        onProgress: (Int, Int) -> Unit
+    ) {
+        ZipOutputStream(BufferedOutputStream(target.outputStream())).use { zos ->
+            zos.setLevel(6)
+            var current = 0
+            for ((file, name) in entries) {
+                val entryName = if (file.isDirectory) "$name/" else name
+                val entry = ZipEntry(entryName)
+                zos.putNextEntry(entry)
+                if (file.isFile) {
+                    BufferedInputStream(file.inputStream()).use { input ->
+                        input.copyTo(zos, BUF_SIZE)
+                    }
+                }
+                zos.closeEntry()
+                current++
+                onProgress(current, entries.size)
+            }
+        }
+    }
+
+    private fun compressTar(
+        entries: List<Pair<File, String>>,
+        target: File,
+        compressor: String?,
+        onProgress: (Int, Int) -> Unit
+    ) {
+        val base: OutputStream = BufferedOutputStream(target.outputStream())
+        val out: OutputStream = when (compressor) {
+            null -> base
+            "gz" -> GzipCompressorOutputStream(base)
+            else -> throw IllegalArgumentException("未知压缩器: $compressor")
+        }
+        TarArchiveOutputStream(out).use { tar ->
+            tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
+            tar.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX)
+            var current = 0
+            for ((file, name) in entries) {
+                val entryName = if (file.isDirectory) "$name/" else name
+                val entry = TarArchiveEntry(file, entryName)
+                tar.putArchiveEntry(entry)
+                if (file.isFile) {
+                    BufferedInputStream(file.inputStream()).use { input ->
+                        input.copyTo(tar, BUF_SIZE)
+                    }
+                }
+                tar.closeArchiveEntry()
+                current++
+                onProgress(current, entries.size)
+            }
+        }
+    }
+
+    private fun collect(file: File, entryName: String, out: MutableList<Pair<File, String>>) {
+        if (file.isDirectory) {
+            out.add(file to entryName)
+            file.listFiles()?.forEach { child ->
+                collect(child, "$entryName/${child.name}", out)
+            }
+        } else {
+            out.add(file to entryName)
+        }
+    }
+
+    // ==================== tar 解压辅助 ====================
 
     private fun openTar(archiveFile: File, compressor: String?): TarArchiveInputStream {
         val base: InputStream = BufferedInputStream(archiveFile.inputStream())
@@ -142,8 +248,6 @@ object ArchiveEngine {
             entry = tar.nextEntry
         }
     }
-
-    // ==================== 单文件压缩流（.gz / .bz2 / .xz / .zst） ====================
 
     private fun writeSingleStream(input: InputStream, outFile: File) {
         outFile.parentFile?.mkdirs()
@@ -196,7 +300,6 @@ object ArchiveEngine {
         targetDir: File,
         canonicalTarget: String
     ) {
-        // junrar 的 Junrar.extract 会自行遍历，这里只做目标目录检查
         if (!targetDir.canonicalPath.startsWith(canonicalTarget)) {
             throw SecurityException("非法目标路径")
         }
