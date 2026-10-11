@@ -11,6 +11,10 @@ data class FileItem(
     val size: Long = 0,
     val lastModified: Long = 0,
     val mimeType: String? = null,
+    // 以下字段在 engine 读取时预计算，UI 直接用
     val uriString: String = uri.toString(),
-    val sizeText: String = ""
+    val path: String = "",
+    val sizeText: String = "",
+    val typeText: String = "",
+    val lastModifiedText: String = ""
 )
