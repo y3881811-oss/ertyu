@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.ArchiveEngine
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
-import com.ertyu.engine.ZipEngine
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
@@ -46,6 +45,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _zipPrompt = MutableStateFlow(ZipPrompt())
     val zipPrompt: StateFlow<ZipPrompt> = _zipPrompt.asStateFlow()
+
+    // 压缩格式选择对话框是否显示
+    private val _compressPromptVisible = MutableStateFlow(false)
+    val compressPromptVisible: StateFlow<Boolean> = _compressPromptVisible.asStateFlow()
+
+    // 压缩时使用哪个面板的选中项
+    private val _compressPanelIsLeft = MutableStateFlow(true)
 
     private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
@@ -247,7 +253,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
         when {
-            // 任何压缩包格式，弹解压对话框
             ArchiveFormat.isArchive(item.name) -> _zipPrompt.value = ZipPrompt(item)
             ext in TEXT_EXTS -> openInEditor(item)
             ext in IMAGE_EXTS -> openInImageViewer(item)
@@ -309,7 +314,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _imageViewer.value = ImageViewerState()
     }
 
-    // ================= 压缩包 =================
+    // ================= 解压 =================
 
     fun dismissZipPrompt() {
         _zipPrompt.value = ZipPrompt()
@@ -319,7 +324,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _zipPrompt.value = ZipPrompt()
         val currentDir = flowOf(isLeft).value.currentUri?.path?.let { File(it) } ?: return
         val archiveFile = item.uri.path?.let { File(it) } ?: return
-        // 去掉扩展名作为目录名
         val baseName = archiveBaseName(archiveFile.name)
         val targetDir = File(currentDir, baseName)
 
@@ -376,7 +380,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 根据压缩包名推断解压后的目录名 */
     private fun archiveBaseName(fileName: String): String {
         val lower = fileName.lowercase()
         return when {
@@ -394,8 +397,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 把当前选中的文件/文件夹压缩为 ZIP */
-    fun compressSelection(isLeft: Boolean) {
+    // ================= 压缩 =================
+
+    /** 用户点了"压缩"，弹出格式选择对话框 */
+    fun requestCompress(isLeft: Boolean) {
+        val state = flowOf(isLeft).value
+        if (state.selectedUris.isEmpty()) return
+        _compressPanelIsLeft.value = isLeft
+        _compressPromptVisible.value = true
+    }
+
+    fun dismissCompressPrompt() {
+        _compressPromptVisible.value = false
+    }
+
+    /** 用户在格式对话框里选了某个格式 */
+    fun compressWithFormat(format: ArchiveFormat) {
+        _compressPromptVisible.value = false
+        if (!format.canCompress) return
+        val isLeft = _compressPanelIsLeft.value
         val state = flowOf(isLeft).value
         val currentDir = state.currentUri?.path?.let { File(it) } ?: return
         val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
@@ -404,28 +424,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val sources = targets.mapNotNull { it.uri.path?.let(::File) }
         if (sources.isEmpty()) return
 
-        val zipName = if (sources.size == 1) {
+        val ext = when (format) {
+            ArchiveFormat.ZIP -> ".zip"
+            ArchiveFormat.TAR -> ".tar"
+            ArchiveFormat.TAR_GZ -> ".tar.gz"
+            else -> ".zip"
+        }
+
+        val fileName = if (sources.size == 1) {
             val n = sources[0].name
             val base = if (n.contains('.')) n.substringBeforeLast('.') else n
-            "$base.zip"
+            "$base$ext"
         } else {
-            "archive_${System.currentTimeMillis()}.zip"
+            "archive_${System.currentTimeMillis()}$ext"
         }
-        val targetZip = File(currentDir, zipName)
+        val targetFile = File(currentDir, fileName)
 
         viewModelScope.launch {
             _zipProgress.value = ZipProgress(
                 visible = true,
                 title = "压缩中",
-                message = zipName
+                message = fileName
             )
-            val result = ZipEngine.compress(sources, targetZip) { cur, total ->
+            val result = ArchiveEngine.compress(sources, targetFile, format) { cur, total ->
                 _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
             }
             result.onSuccess {
                 _zipProgress.value = _zipProgress.value.copy(
                     done = true,
-                    message = "压缩完成：$zipName"
+                    message = "压缩完成：$fileName"
                 )
             }.onFailure { e ->
                 _zipProgress.value = _zipProgress.value.copy(
