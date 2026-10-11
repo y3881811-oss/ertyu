@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
@@ -99,6 +100,7 @@ private val IconSearch: ImageVector = Icons.Default.Search
 private val IconInstall: ImageVector = Icons.Default.InstallMobile
 private val IconBrowse: ImageVector = Icons.Default.FolderOpen
 private val IconBookmark: ImageVector = Icons.Default.Bookmark
+private val IconAndroid: ImageVector = Icons.Default.Android
 
 @Composable
 fun FilePanel(
@@ -146,7 +148,8 @@ fun FilePanel(
                 onSwitchPanel = { onSwitchPanel?.invoke() },
                 onSearch = { vm.openSearch(isLeft) },
                 onAddBookmark = { vm.addBookmark(isLeft) },
-                onOpenBookmarks = { vm.openBookmarkPanel(isLeft) }
+                onOpenBookmarks = { vm.openBookmarkPanel(isLeft) },
+                onInstalledApps = { vm.openInstalledApps() }
             )
         }
         HorizontalDivider()
@@ -168,7 +171,10 @@ fun FilePanel(
                 Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(if (state.showHidden) "空目录" else "空目录（可尝试显示隐藏文件）")
+                Text(
+                    if (state.showHidden) "空目录"
+                    else "空目录（可尝试显示隐藏文件）"
+                )
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -207,7 +213,8 @@ fun FilePanel(
 
     actionTarget?.let { target ->
         val format = ArchiveFormat.detect(target.name)
-        val isApk = target.name.substringAfterLast('.', "").lowercase() == "apk"
+        val isApk = target.name.substringAfterLast('.', "")
+            .lowercase() == "apk"
         FileActionDialog(
             item = target,
             archiveFormat = format,
@@ -349,7 +356,7 @@ private fun CompressFormatDialog(
             Column {
                 CompressFormatItem(
                     label = "ZIP",
-                    desc = ".zip（兼容性最好，Windows/手机通用）",
+                    desc = ".zip（兼容性最好）",
                     format = ArchiveFormat.ZIP,
                     onSelect = onSelect
                 )
@@ -361,7 +368,7 @@ private fun CompressFormatDialog(
                 )
                 CompressFormatItem(
                     label = "TAR.GZ",
-                    desc = ".tar.gz（Linux 常见，压缩率高）",
+                    desc = ".tar.gz（Linux 常见）",
                     format = ArchiveFormat.TAR_GZ,
                     onSelect = onSelect
                 )
@@ -412,7 +419,9 @@ private fun FileInfoDialog(
         onDismissRequest = onDismiss,
         title = { Text("文件属性") },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 InfoRow("名称", item.name)
                 InfoRow("类型", item.typeText)
 
@@ -428,7 +437,8 @@ private fun FileInfoDialog(
                         sizeState.done -> {
                             InfoRow(
                                 "总大小",
-                                "${formatSize(sizeState.totalBytes)}（${sizeState.scanned} 个文件）"
+                                "${formatSize(sizeState.totalBytes)}" +
+                                        "（${sizeState.scanned} 个文件）"
                             )
                         }
                         sizeState.isCalculating -> {
@@ -439,16 +449,21 @@ private fun FileInfoDialog(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(Modifier.height(4.dp))
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "已扫描 ${sizeState.scanned} 个文件 · ${formatSize(sizeState.totalBytes)}",
+                                "已扫描 ${sizeState.scanned} 个文件 · " +
+                                        formatSize(sizeState.totalBytes),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         else -> {
-                            TextButton(onClick = { vm.calculateFolderSize(item) }) {
+                            TextButton(
+                                onClick = { vm.calculateFolderSize(item) }
+                            ) {
                                 Text("计算总大小")
                             }
                         }
@@ -521,9 +536,17 @@ private fun FileActionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        title = {
+            Text(
+                item.name,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 if (isApk) {
                     ActionItem("安装", IconInstall, onInstall)
                     ActionItem("浏览内部", IconBrowse, onBrowseApk)
@@ -586,7 +609,8 @@ private fun NormalToolbar(
     onSwitchPanel: () -> Unit,
     onSearch: () -> Unit,
     onAddBookmark: () -> Unit,
-    onOpenBookmarks: () -> Unit
+    onOpenBookmarks: () -> Unit,
+    onInstalledApps: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -647,6 +671,14 @@ private fun NormalToolbar(
                     }
                 )
                 DropdownMenuItem(
+                    text = { Text("已安装应用") },
+                    leadingIcon = { Icon(IconAndroid, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onInstalledApps()
+                    }
+                )
+                DropdownMenuItem(
                     text = { Text("新建文件夹") },
                     leadingIcon = { Icon(IconNewFolder, null) },
                     onClick = {
@@ -671,10 +703,13 @@ private fun NormalToolbar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text(if (showHidden) "隐藏隐藏文件" else "显示隐藏文件") },
+                    text = {
+                        Text(if (showHidden) "隐藏隐藏文件" else "显示隐藏文件")
+                    },
                     leadingIcon = {
                         Icon(
-                            if (showHidden) IconVisibilityOff else IconVisibility,
+                            if (showHidden) IconVisibilityOff
+                            else IconVisibility,
                             null
                         )
                     },
@@ -750,9 +785,15 @@ private fun FileRow(
     onLongClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
-    val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+    else Color.Transparent
 
-    val subtitle = remember(item.uriString, item.sizeText, item.typeText, item.lastModifiedText) {
+    val subtitle = remember(
+        item.uriString,
+        item.sizeText,
+        item.typeText,
+        item.lastModifiedText
+    ) {
         buildString {
             append(item.typeText)
             if (!item.isDirectory && item.sizeText.isNotEmpty()) {
@@ -823,37 +864,4 @@ private fun TextInputDialog(
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text(placeholder) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(text) }) { Text("确定") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
-    )
-}
-
-@Composable
-private fun SortDialog(
-    current: SortMode,
-    onSelect: (SortMode) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("排序方式") },
-        text = {
-            Column {
-                SortMode.entries.forEach { mode ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(mode) }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                 
+  
