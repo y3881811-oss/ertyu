@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
@@ -95,6 +96,7 @@ private val IconZip: ImageVector = Icons.Default.FolderZip
 private val IconInfo: ImageVector = Icons.Default.Info
 private val IconSearch: ImageVector = Icons.Default.Search
 private val IconInstall: ImageVector = Icons.Default.InstallMobile
+private val IconBrowse: ImageVector = Icons.Default.FolderOpen
 
 @Composable
 fun FilePanel(
@@ -246,6 +248,10 @@ fun FilePanel(
             onInstall = {
                 actionTarget = null
                 vm.installApk(target)
+            },
+            onBrowseApk = {
+                actionTarget = null
+                vm.openApkBrowser(isLeft, target)
             }
         )
     }
@@ -326,6 +332,8 @@ fun FilePanel(
     }
 }
 
+// ==================== 压缩格式选择对话框 ====================
+
 @Composable
 private fun CompressFormatDialog(
     onSelect: (ArchiveFormat) -> Unit,
@@ -389,6 +397,8 @@ private fun CompressFormatItem(
     }
 }
 
+// ==================== 文件详情对话框 ====================
+
 @Composable
 private fun FileInfoDialog(
     item: FileItem,
@@ -428,9 +438,7 @@ private fun FileInfoDialog(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(Modifier.height(4.dp))
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 "已扫描 ${sizeState.scanned} 个文件 · ${formatSize(sizeState.totalBytes)}",
@@ -492,6 +500,8 @@ private fun formatSize(bytes: Long): String {
     return String.format("%.2f GB", gb)
 }
 
+// ==================== 文件操作菜单 ====================
+
 @Composable
 private fun FileActionDialog(
     item: FileItem,
@@ -507,7 +517,8 @@ private fun FileActionDialog(
     onExtractOther: () -> Unit,
     onZipThis: () -> Unit,
     onInfo: () -> Unit,
-    onInstall: () -> Unit
+    onInstall: () -> Unit,
+    onBrowseApk: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -516,6 +527,7 @@ private fun FileActionDialog(
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 if (isApk) {
                     ActionItem("安装", IconInstall, onInstall)
+                    ActionItem("浏览内部", IconBrowse, onBrowseApk)
                 }
                 if (archiveFormat != null) {
                     ActionItem(
@@ -558,6 +570,8 @@ private fun ActionItem(
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
+
+// ==================== 顶部工具栏 ====================
 
 @Composable
 private fun NormalToolbar(
@@ -702,6 +716,8 @@ private fun SelectionToolbar(
     }
 }
 
+// ==================== 文件行 ====================
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
@@ -768,6 +784,8 @@ private fun FileRow(
         }
     }
 }
+
+// ==================== 通用对话框 ====================
 
 @Composable
 private fun TextInputDialog(
