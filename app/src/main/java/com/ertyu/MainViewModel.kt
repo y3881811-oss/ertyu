@@ -9,6 +9,7 @@ import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
 import com.ertyu.model.FileItem
 import com.ertyu.model.PanelState
+import com.ertyu.model.SortMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +26,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _rightPanel = MutableStateFlow(PanelState())
     val rightPanel: StateFlow<PanelState> = _rightPanel.asStateFlow()
 
-    /** 初始化默认目录：两侧面板都打开外部存储根目录 */
+    private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
+
     fun initDefaultDirs() {
         val root = Uri.fromFile(Environment.getExternalStorageDirectory())
         openDirectory(true, root)
@@ -33,16 +35,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openDirectory(isLeft: Boolean, uri: Uri) {
-        val flow = if (isLeft) _leftPanel else _rightPanel
-        flow.update { it.copy(isLoading = true, error = null) }
+        val flow = flowOf(isLeft)
+        flow.update {
+            it.copy(
+                isLoading = true,
+                error = null,
+                selectedUris = emptySet(),
+                isSelectionMode = false
+            )
+        }
         viewModelScope.launch {
             try {
-                val items = engine.list(uri)
+                val all = engine.list(uri)
                 val parent = engine.getParent(uri)
-                flow.update {
-                    it.copy(
+                flow.update { state ->
+                    state.copy(
                         currentUri = uri,
-                        items = items,
+                        rawItems = all,
+                        items = process(all, state.sortMode, state.showHidden),
                         isLoading = false,
                         canGoUp = parent != null
                     )
@@ -53,24 +63,67 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private fun process(
+        raw: List<FileItem>,
+        sort: SortMode,
+        showHidden: Boolean
+    ): List<FileItem> {
+        val filtered = if (showHidden) raw else raw.filter { !it.name.startsWith(".") }
+        val comparator = when (sort) {
+            SortMode.NAME_ASC ->
+                compareBy<FileItem> { !it.isDirectory }.thenBy { it.name.lowercase() }
+            SortMode.NAME_DESC ->
+                compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.name.lowercase() }
+            SortMode.SIZE_ASC ->
+                compareBy<FileItem> { !it.isDirectory }.thenBy { it.size }
+            SortMode.SIZE_DESC ->
+                compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.size }
+            SortMode.TIME_ASC ->
+                compareBy<FileItem> { !it.isDirectory }.thenBy { it.lastModified }
+            SortMode.TIME_DESC ->
+                compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.lastModified }
+            SortMode.TYPE_ASC ->
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenBy { it.name.substringAfterLast('.', "").lowercase() }
+            SortMode.TYPE_DESC ->
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenByDescending { it.name.substringAfterLast('.', "").lowercase() }
+        }
+        return filtered.sortedWith(comparator)
+    }
+
+    fun setSortMode(isLeft: Boolean, mode: SortMode) {
+        flowOf(isLeft).update {
+            it.copy(sortMode = mode, items = process(it.rawItems, mode, it.showHidden))
+        }
+    }
+
+    fun setShowHidden(isLeft: Boolean, show: Boolean) {
+        flowOf(isLeft).update {
+            it.copy(showHidden = show, items = process(it.rawItems, it.sortMode, show))
+        }
+    }
+
+    fun refresh(isLeft: Boolean) {
+        flowOf(isLeft).value.currentUri?.let { openDirectory(isLeft, it) }
+    }
+
     fun goUp(isLeft: Boolean) {
-        val flow = if (isLeft) _leftPanel else _rightPanel
+        val flow = flowOf(isLeft)
         val current = flow.value.currentUri ?: return
         val parent = engine.getParent(current) ?: return
         openDirectory(isLeft, parent)
     }
 
     fun delete(isLeft: Boolean, item: FileItem) {
-        val flow = if (isLeft) _leftPanel else _rightPanel
         viewModelScope.launch {
             engine.delete(item.uri)
-            flow.value.currentUri?.let { openDirectory(isLeft, it) }
+            refresh(isLeft)
         }
     }
 
     fun copyToOtherPanel(fromLeft: Boolean, item: FileItem) {
-        val targetFlow = if (fromLeft) _rightPanel else _leftPanel
-        val targetUri = targetFlow.value.currentUri ?: return
+        val targetUri = flowOf(!fromLeft).value.currentUri ?: return
         viewModelScope.launch {
             engine.copy(item.uri, targetUri)
             openDirectory(!fromLeft, targetUri)
@@ -78,32 +131,93 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun moveToOtherPanel(fromLeft: Boolean, item: FileItem) {
-        val targetFlow = if (fromLeft) _rightPanel else _leftPanel
-        val targetUri = targetFlow.value.currentUri ?: return
+        val targetUri = flowOf(!fromLeft).value.currentUri ?: return
         viewModelScope.launch {
             engine.move(item.uri, targetUri)
-            // 刷新目标面板
+            refresh(fromLeft)
             openDirectory(!fromLeft, targetUri)
-            // 刷新源面板
-            val srcFlow = if (fromLeft) _leftPanel else _rightPanel
-            srcFlow.value.currentUri?.let { openDirectory(fromLeft, it) }
         }
     }
 
     fun createDirectory(isLeft: Boolean, name: String) {
-        val flow = if (isLeft) _leftPanel else _rightPanel
-        val current = flow.value.currentUri ?: return
+        val current = flowOf(isLeft).value.currentUri ?: return
         viewModelScope.launch {
             engine.createDirectory(current, name)
-            openDirectory(isLeft, current)
+            refresh(isLeft)
         }
     }
 
     fun rename(isLeft: Boolean, item: FileItem, newName: String) {
-        val flow = if (isLeft) _leftPanel else _rightPanel
         viewModelScope.launch {
             engine.rename(item.uri, newName)
-            flow.value.currentUri?.let { openDirectory(isLeft, it) }
+            refresh(isLeft)
+        }
+    }
+
+    // ================= 多选 =================
+
+    fun enterSelection(isLeft: Boolean, uriString: String) {
+        flowOf(isLeft).update {
+            it.copy(selectedUris = setOf(uriString), isSelectionMode = true)
+        }
+    }
+
+    fun toggleSelection(isLeft: Boolean, uriString: String) {
+        flowOf(isLeft).update { state ->
+            val set = state.selectedUris.toMutableSet()
+            if (!set.add(uriString)) set.remove(uriString)
+            state.copy(
+                selectedUris = set,
+                isSelectionMode = set.isNotEmpty()
+            )
+        }
+    }
+
+    fun selectAll(isLeft: Boolean) {
+        flowOf(isLeft).update { state ->
+            state.copy(
+                selectedUris = state.items.map { it.uri.toString() }.toSet(),
+                isSelectionMode = true
+            )
+        }
+    }
+
+    fun clearSelection(isLeft: Boolean) {
+        flowOf(isLeft).update {
+            it.copy(selectedUris = emptySet(), isSelectionMode = false)
+        }
+    }
+
+    fun batchDelete(isLeft: Boolean) {
+        val state = flowOf(isLeft).value
+        val targets = state.items.filter { state.selectedUris.contains(it.uri.toString()) }
+        viewModelScope.launch {
+            targets.forEach { engine.delete(it.uri) }
+            clearSelection(isLeft)
+            refresh(isLeft)
+        }
+    }
+
+    fun batchCopy(fromLeft: Boolean) {
+        val state = flowOf(fromLeft).value
+        val target = flowOf(!fromLeft).value.currentUri ?: return
+        val targets = state.items.filter { state.selectedUris.contains(it.uri.toString()) }
+        viewModelScope.launch {
+            targets.forEach { engine.copy(it.uri, target) }
+            clearSelection(fromLeft)
+            openDirectory(!fromLeft, target)
+        }
+    }
+
+    fun batchMove(fromLeft: Boolean) {
+        val state = flowOf(fromLeft).value
+        val target = flowOf(!fromLeft).value.currentUri ?: return
+        val targets = state.items.filter { state.selectedUris.contains(it.uri.toString()) }
+        viewModelScope.launch {
+            targets.forEach { engine.move(it.uri, target) }
+            clearSelection(fromLeft)
+            refresh(fromLeft)
+            openDirectory(!fromLeft, target)
         }
     }
 }
