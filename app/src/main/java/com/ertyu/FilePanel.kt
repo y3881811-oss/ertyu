@@ -77,32 +77,30 @@ import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 import java.io.File
 
-// ==================== 顶层图标缓存 ====================
-
-private val IconFolder: ImageVector = Icons.Default.Folder
-private val IconFile: ImageVector = Icons.AutoMirrored.Filled.InsertDriveFile
-private val IconMore: ImageVector = Icons.Default.MoreVert
-private val IconUp: ImageVector = Icons.Default.ArrowUpward
-private val IconSwap: ImageVector = Icons.Default.SwapHoriz
-private val IconClose: ImageVector = Icons.Default.Close
-private val IconSelectAll: ImageVector = Icons.Default.SelectAll
-private val IconCopy: ImageVector = Icons.Default.ContentCopy
-private val IconMove: ImageVector = Icons.AutoMirrored.Filled.DriveFileMove
-private val IconDelete: ImageVector = Icons.Default.Delete
-private val IconNewFolder: ImageVector = Icons.Default.CreateNewFolder
-private val IconNewFile: ImageVector = Icons.Default.Add
-private val IconSort: ImageVector = Icons.AutoMirrored.Filled.Sort
-private val IconRefresh: ImageVector = Icons.Default.Refresh
-private val IconEdit: ImageVector = Icons.Default.Edit
-private val IconVisibility: ImageVector = Icons.Default.Visibility
-private val IconVisibilityOff: ImageVector = Icons.Default.VisibilityOff
-private val IconZip: ImageVector = Icons.Default.FolderZip
-private val IconInfo: ImageVector = Icons.Default.Info
-private val IconSearch: ImageVector = Icons.Default.Search
-private val IconInstall: ImageVector = Icons.Default.InstallMobile
-private val IconBrowse: ImageVector = Icons.Default.FolderOpen
-private val IconBookmark: ImageVector = Icons.Default.Bookmark
-private val IconAndroid: ImageVector = Icons.Default.Android
+private val ICON_FOLDER: ImageVector = Icons.Default.Folder
+private val ICON_FILE: ImageVector = Icons.AutoMirrored.Filled.InsertDriveFile
+private val ICON_MORE: ImageVector = Icons.Default.MoreVert
+private val ICON_UP: ImageVector = Icons.Default.ArrowUpward
+private val ICON_SWAP: ImageVector = Icons.Default.SwapHoriz
+private val ICON_CLOSE: ImageVector = Icons.Default.Close
+private val ICON_SELECT_ALL: ImageVector = Icons.Default.SelectAll
+private val ICON_COPY: ImageVector = Icons.Default.ContentCopy
+private val ICON_MOVE: ImageVector = Icons.AutoMirrored.Filled.DriveFileMove
+private val ICON_DELETE: ImageVector = Icons.Default.Delete
+private val ICON_NEW_FOLDER: ImageVector = Icons.Default.CreateNewFolder
+private val ICON_NEW_FILE: ImageVector = Icons.Default.Add
+private val ICON_SORT: ImageVector = Icons.AutoMirrored.Filled.Sort
+private val ICON_REFRESH: ImageVector = Icons.Default.Refresh
+private val ICON_EDIT: ImageVector = Icons.Default.Edit
+private val ICON_VISIBILITY: ImageVector = Icons.Default.Visibility
+private val ICON_VISIBILITY_OFF: ImageVector = Icons.Default.VisibilityOff
+private val ICON_ZIP: ImageVector = Icons.Default.FolderZip
+private val ICON_INFO: ImageVector = Icons.Default.Info
+private val ICON_SEARCH: ImageVector = Icons.Default.Search
+private val ICON_INSTALL: ImageVector = Icons.Default.InstallMobile
+private val ICON_BROWSE: ImageVector = Icons.Default.FolderOpen
+private val ICON_BOOKMARK: ImageVector = Icons.Default.Bookmark
+private val ICON_ANDROID: ImageVector = Icons.Default.Android
 
 @Composable
 fun FilePanel(
@@ -113,7 +111,7 @@ fun FilePanel(
 ) {
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
     val state by panelFlow.collectAsState()
-    val compressPromptVisible by vm.compressPromptVisible.collectAsState()
+    val compressVisible by vm.compressPromptVisible.collectAsState()
 
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var showJumpDialog by remember { mutableStateOf(false) }
@@ -123,7 +121,6 @@ fun FilePanel(
     var infoTarget by remember { mutableStateOf<FileItem?>(null) }
 
     Column(modifier = modifier.fillMaxHeight()) {
-
         if (state.isSelectionMode) {
             SelectionToolbar(
                 count = state.selectedUris.size,
@@ -213,8 +210,6 @@ fun FilePanel(
         }
     }
 
-    // ============ 文件操作菜单 ============
-
     actionTarget?.let { target ->
         val format = ArchiveFormat.detect(target.name)
         val isApk = target.name.substringAfterLast('.', "")
@@ -272,8 +267,6 @@ fun FilePanel(
         )
     }
 
-    // ============ 属性对话框 ============
-
     infoTarget?.let { target ->
         FileInfoDialog(
             item = target,
@@ -285,16 +278,12 @@ fun FilePanel(
         )
     }
 
-    // ============ 压缩格式选择 ============
-
-    if (compressPromptVisible) {
+    if (compressVisible) {
         CompressFormatDialog(
             onSelect = { format -> vm.compressWithFormat(format) },
             onDismiss = { vm.dismissCompressPrompt() }
         )
     }
-
-    // ============ 排序对话框 ============
 
     if (showSortDialog) {
         SortDialog(
@@ -306,8 +295,6 @@ fun FilePanel(
             onDismiss = { showSortDialog = false }
         )
     }
-
-    // ============ 新建文件夹对话框 ============
 
     if (showNewFolderDialog) {
         TextInputDialog(
@@ -321,8 +308,6 @@ fun FilePanel(
             onDismiss = { showNewFolderDialog = false }
         )
     }
-
-    // ============ 跳转路径对话框 ============
 
     if (showJumpDialog) {
         TextInputDialog(
@@ -342,8 +327,6 @@ fun FilePanel(
         )
     }
 
-    // ============ 重命名对话框 ============
-
     renameTarget?.let { target ->
         TextInputDialog(
             title = "重命名",
@@ -360,262 +343,7 @@ fun FilePanel(
     }
 }
 
-// ==================== 压缩格式选择对话框 ====================
-
-@Composable
-private fun CompressFormatDialog(
-    onSelect: (ArchiveFormat) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("选择压缩格式") },
-        text = {
-            Column {
-                CompressFormatItem(
-                    label = "ZIP",
-                    desc = ".zip（兼容性最好，Windows/手机通用）",
-                    format = ArchiveFormat.ZIP,
-                    onSelect = onSelect
-                )
-                CompressFormatItem(
-                    label = "TAR",
-                    desc = ".tar（不压缩，仅打包）",
-                    format = ArchiveFormat.TAR,
-                    onSelect = onSelect
-                )
-                CompressFormatItem(
-                    label = "TAR.GZ",
-                    desc = ".tar.gz（Linux 常见，压缩率高）",
-                    format = ArchiveFormat.TAR_GZ,
-                    onSelect = onSelect
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
-    )
-}
-
-@Composable
-private fun CompressFormatItem(
-    label: String,
-    desc: String,
-    format: ArchiveFormat,
-    onSelect: (ArchiveFormat) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onSelect(format) }
-            .padding(vertical = 12.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(IconZip, contentDescription = null)
-        Spacer(Modifier.width(16.dp))
-        Column {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                desc,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-// ==================== 文件详情对话框 ====================
-
-@Composable
-private fun FileInfoDialog(
-    item: FileItem,
-    vm: MainViewModel,
-    onDismiss: () -> Unit
-) {
-    val sizeState by vm.folderSizeState.collectAsState()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("文件属性") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                InfoRow("名称", item.name)
-                InfoRow("类型", item.typeText)
-
-                if (item.isDirectory) {
-                    val countText = if (item.childCount >= 0)
-                        "目录（包含 ${item.childCount} 项）" else "目录"
-                    InfoRow("内容", countText)
-
-                    when {
-                        sizeState.error != null -> {
-                            InfoRow("总大小", "计算失败：${sizeState.error}")
-                        }
-                        sizeState.done -> {
-                            InfoRow(
-                                "总大小",
-                                "${formatSize(sizeState.totalBytes)}" +
-                                        "（${sizeState.scanned} 个文件）"
-                            )
-                        }
-                        sizeState.isCalculating -> {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "正在计算…",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "已扫描 ${sizeState.scanned} 个文件 · " +
-                                        formatSize(sizeState.totalBytes),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        else -> {
-                            TextButton(
-                                onClick = { vm.calculateFolderSize(item) }
-                            ) {
-                                Text("计算总大小")
-                            }
-                        }
-                    }
-                } else {
-                    InfoRow("大小", "${item.sizeText}（${item.size} 字节）")
-                }
-
-                InfoRow("修改时间", item.lastModifiedText)
-                InfoRow("路径", item.path)
-
-                if (sizeState.isCalculating) {
-                    Spacer(Modifier.height(4.dp))
-                    TextButton(onClick = { vm.cancelFolderSize() }) {
-                        Text("取消计算")
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        }
-    )
-}
-
-@Composable
-private fun InfoRow(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace
-        )
-    }
-}
-
-private fun formatSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format("%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format("%.2f GB", gb)
-}
-
-// ==================== 文件操作菜单 ====================
-
-@Composable
-private fun FileActionDialog(
-    item: FileItem,
-    archiveFormat: ArchiveFormat?,
-    isApk: Boolean,
-    onDismiss: () -> Unit,
-    onRename: () -> Unit,
-    onCopy: () -> Unit,
-    onMove: () -> Unit,
-    onDelete: () -> Unit,
-    onSelect: () -> Unit,
-    onExtractHere: () -> Unit,
-    onExtractOther: () -> Unit,
-    onZipThis: () -> Unit,
-    onInfo: () -> Unit,
-    onInstall: () -> Unit,
-    onBrowseApk: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                item.name,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                if (isApk) {
-                    ActionItem("安装", IconInstall, onInstall)
-                    ActionItem("浏览内部", IconBrowse, onBrowseApk)
-                }
-                if (archiveFormat != null) {
-                    ActionItem(
-                        "解压到当前目录（${archiveFormat.label}）",
-                        IconZip,
-                        onExtractHere
-                    )
-                    ActionItem("解压到另一侧", IconZip, onExtractOther)
-                }
-                ActionItem("压缩为…", IconZip, onZipThis)
-                ActionItem("属性", IconInfo, onInfo)
-                ActionItem("重命名", IconEdit, onRename)
-                ActionItem("复制到另一侧", IconCopy, onCopy)
-                ActionItem("移动到另一侧", IconMove, onMove)
-                ActionItem("删除", IconDelete, onDelete)
-                ActionItem("多选", IconSelectAll, onSelect)
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
-    )
-}
-
-@Composable
-private fun ActionItem(
-    label: String,
-    icon: ImageVector,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null)
-        Spacer(Modifier.width(16.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-// ==================== 顶部工具栏 ====================
+// ==================== 顶部工具栏（普通模式） ====================
 
 @Composable
 private fun NormalToolbar(
@@ -646,7 +374,7 @@ private fun NormalToolbar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onUp, enabled = canGoUp) {
-            Icon(IconUp, contentDescription = "上级")
+            Icon(ICON_UP, contentDescription = "上级")
         }
         Text(
             text = path,
@@ -659,12 +387,12 @@ private fun NormalToolbar(
         )
         if (showSwitch) {
             IconButton(onClick = onSwitchPanel) {
-                Icon(IconSwap, contentDescription = "切换面板")
+                Icon(ICON_SWAP, contentDescription = "切换面板")
             }
         }
         Box {
             IconButton(onClick = { menuExpanded = true }) {
-                Icon(IconMore, contentDescription = "菜单")
+                Icon(ICON_MORE, contentDescription = "菜单")
             }
             DropdownMenu(
                 expanded = menuExpanded,
@@ -672,7 +400,7 @@ private fun NormalToolbar(
             ) {
                 DropdownMenuItem(
                     text = { Text("搜索") },
-                    leadingIcon = { Icon(IconSearch, null) },
+                    leadingIcon = { Icon(ICON_SEARCH, null) },
                     onClick = {
                         menuExpanded = false
                         onSearch()
@@ -680,7 +408,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("书签") },
-                    leadingIcon = { Icon(IconBookmark, null) },
+                    leadingIcon = { Icon(ICON_BOOKMARK, null) },
                     onClick = {
                         menuExpanded = false
                         onOpenBookmarks()
@@ -688,7 +416,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("添加到书签") },
-                    leadingIcon = { Icon(IconBookmark, null) },
+                    leadingIcon = { Icon(ICON_BOOKMARK, null) },
                     onClick = {
                         menuExpanded = false
                         onAddBookmark()
@@ -696,7 +424,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("已安装应用") },
-                    leadingIcon = { Icon(IconAndroid, null) },
+                    leadingIcon = { Icon(ICON_ANDROID, null) },
                     onClick = {
                         menuExpanded = false
                         onInstalledApps()
@@ -704,7 +432,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("新建文件夹") },
-                    leadingIcon = { Icon(IconNewFolder, null) },
+                    leadingIcon = { Icon(ICON_NEW_FOLDER, null) },
                     onClick = {
                         menuExpanded = false
                         onNewFolder()
@@ -712,7 +440,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("新建文件") },
-                    leadingIcon = { Icon(IconNewFile, null) },
+                    leadingIcon = { Icon(ICON_NEW_FILE, null) },
                     onClick = {
                         menuExpanded = false
                         onNewFile()
@@ -720,7 +448,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("排序方式") },
-                    leadingIcon = { Icon(IconSort, null) },
+                    leadingIcon = { Icon(ICON_SORT, null) },
                     onClick = {
                         menuExpanded = false
                         onSort()
@@ -732,8 +460,8 @@ private fun NormalToolbar(
                     },
                     leadingIcon = {
                         Icon(
-                            if (showHidden) IconVisibilityOff
-                            else IconVisibility,
+                            if (showHidden) ICON_VISIBILITY_OFF
+                            else ICON_VISIBILITY,
                             null
                         )
                     },
@@ -744,7 +472,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("刷新") },
-                    leadingIcon = { Icon(IconRefresh, null) },
+                    leadingIcon = { Icon(ICON_REFRESH, null) },
                     onClick = {
                         menuExpanded = false
                         onRefresh()
@@ -754,6 +482,8 @@ private fun NormalToolbar(
         }
     }
 }
+
+// ==================== 顶部工具栏（多选模式） ====================
 
 @Composable
 private fun SelectionToolbar(
@@ -774,7 +504,7 @@ private fun SelectionToolbar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onClear) {
-            Icon(IconClose, contentDescription = "取消")
+            Icon(ICON_CLOSE, contentDescription = "取消")
         }
         Text(
             text = "已选 $count 项",
@@ -782,19 +512,19 @@ private fun SelectionToolbar(
             modifier = Modifier.weight(1f)
         )
         IconButton(onClick = onSelectAll) {
-            Icon(IconSelectAll, contentDescription = "全选")
+            Icon(ICON_SELECT_ALL, contentDescription = "全选")
         }
         IconButton(onClick = onZip) {
-            Icon(IconZip, contentDescription = "压缩")
+            Icon(ICON_ZIP, contentDescription = "压缩")
         }
         IconButton(onClick = onCopy) {
-            Icon(IconCopy, contentDescription = "复制到另一侧")
+            Icon(ICON_COPY, contentDescription = "复制")
         }
         IconButton(onClick = onMove) {
-            Icon(IconMove, contentDescription = "移动到另一侧")
+            Icon(ICON_MOVE, contentDescription = "移动")
         }
         IconButton(onClick = onDelete) {
-            Icon(IconDelete, contentDescription = "删除")
+            Icon(ICON_DELETE, contentDescription = "删除")
         }
     }
 }
@@ -843,7 +573,7 @@ private fun FileRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = if (item.isDirectory) IconFolder else IconFile,
+            imageVector = if (item.isDirectory) ICON_FOLDER else ICON_FILE,
             contentDescription = null,
             modifier = Modifier.size(24.dp)
         )
@@ -865,4 +595,270 @@ private fun FileRow(
         }
         if (!isSelectionMode) {
             IconButton(
-       
+                onClick = onMoreClick,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(ICON_MORE, contentDescription = "更多")
+            }
+        }
+    }
+}
+
+// ==================== 文件操作对话框 ====================
+
+@Composable
+private fun FileActionDialog(
+    item: FileItem,
+    archiveFormat: ArchiveFormat?,
+    isApk: Boolean,
+    onDismiss: () -> Unit,
+    onRename: () -> Unit,
+    onCopy: () -> Unit,
+    onMove: () -> Unit,
+    onDelete: () -> Unit,
+    onSelect: () -> Unit,
+    onExtractHere: () -> Unit,
+    onExtractOther: () -> Unit,
+    onZipThis: () -> Unit,
+    onInfo: () -> Unit,
+    onInstall: () -> Unit,
+    onBrowseApk: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                if (isApk) {
+                    ActionRow("安装", ICON_INSTALL, onInstall)
+                    ActionRow("浏览内部", ICON_BROWSE, onBrowseApk)
+                }
+                if (archiveFormat != null) {
+                    ActionRow(
+                        "解压到当前目录（${archiveFormat.label}）",
+                        ICON_ZIP,
+                        onExtractHere
+                    )
+                    ActionRow("解压到另一侧", ICON_ZIP, onExtractOther)
+                }
+                ActionRow("压缩为…", ICON_ZIP, onZipThis)
+                ActionRow("属性", ICON_INFO, onInfo)
+                ActionRow("重命名", ICON_EDIT, onRename)
+                ActionRow("复制到另一侧", ICON_COPY, onCopy)
+                ActionRow("移动到另一侧", ICON_MOVE, onMove)
+                ActionRow("删除", ICON_DELETE, onDelete)
+                ActionRow("多选", ICON_SELECT_ALL, onSelect)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+@Composable
+private fun ActionRow(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null)
+        Spacer(Modifier.width(16.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+// ==================== 文件属性对话框 ====================
+
+@Composable
+private fun FileInfoDialog(
+    item: FileItem,
+    vm: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    val sizeState by vm.folderSizeState.collectAsState()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("文件属性") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                InfoBlock("名称", item.name)
+                InfoBlock("类型", item.typeText)
+
+                if (item.isDirectory) {
+                    val countText = if (item.childCount >= 0)
+                        "目录（包含 ${item.childCount} 项）" else "目录"
+                    InfoBlock("内容", countText)
+
+                    when {
+                        sizeState.error != null -> {
+                            InfoBlock("总大小", "计算失败：${sizeState.error}")
+                        }
+                        sizeState.done -> {
+                            InfoBlock(
+                                "总大小",
+                                "${formatBytes(sizeState.totalBytes)}" +
+                                        "（${sizeState.scanned} 个文件）"
+                            )
+                        }
+                        sizeState.isCalculating -> {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "正在计算…",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "已扫描 ${sizeState.scanned} 个文件 · " +
+                                        formatBytes(sizeState.totalBytes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        else -> {
+                            TextButton(
+                                onClick = { vm.calculateFolderSize(item) }
+                            ) {
+                                Text("计算总大小")
+                            }
+                        }
+                    }
+                } else {
+                    InfoBlock("大小", "${item.sizeText}（${item.size} 字节）")
+                }
+
+                InfoBlock("修改时间", item.lastModifiedText)
+                InfoBlock("路径", item.path)
+
+                if (sizeState.isCalculating) {
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(onClick = { vm.cancelFolderSize() }) {
+                        Text("取消计算")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
+}
+
+@Composable
+private fun InfoBlock(label: String, value: String) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024) return String.format("%.1f KB", kb)
+    val mb = kb / 1024.0
+    if (mb < 1024) return String.format("%.1f MB", mb)
+    val gb = mb / 1024.0
+    return String.format("%.2f GB", gb)
+}
+
+// ==================== 压缩格式对话框 ====================
+
+@Composable
+private fun CompressFormatDialog(
+    onSelect: (ArchiveFormat) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择压缩格式") },
+        text = {
+            Column {
+                FormatRow(
+                    "ZIP", ".zip（兼容性最好）",
+                    ArchiveFormat.ZIP, onSelect
+                )
+                FormatRow(
+                    "TAR", ".tar（不压缩，仅打包）",
+                    ArchiveFormat.TAR, onSelect
+                )
+                FormatRow(
+                    "TAR.GZ", ".tar.gz（Linux 常见）",
+                    ArchiveFormat.TAR_GZ, onSelect
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+@Composable
+private fun FormatRow(
+    label: String,
+    desc: String,
+    format: ArchiveFormat,
+    onSelect: (ArchiveFormat) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect(format) }
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(ICON_ZIP, contentDescription = null)
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                desc,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+// ==================== 排序对话框 ====================
+
+@Composable
+private fun SortDialog(
+    current: SortMode,
+    onSelect: (SortMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("排序方式") },
+        text = {
+            Column {
+                SortMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+               
