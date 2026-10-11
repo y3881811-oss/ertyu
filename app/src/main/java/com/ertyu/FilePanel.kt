@@ -25,7 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -74,8 +76,6 @@ import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 import java.io.File
 
-// ==================== 顶层图标缓存 ====================
-
 private val IconFolder: ImageVector = Icons.Default.Folder
 private val IconFile: ImageVector = Icons.AutoMirrored.Filled.InsertDriveFile
 private val IconMore: ImageVector = Icons.Default.MoreVert
@@ -87,6 +87,7 @@ private val IconCopy: ImageVector = Icons.Default.ContentCopy
 private val IconMove: ImageVector = Icons.AutoMirrored.Filled.DriveFileMove
 private val IconDelete: ImageVector = Icons.Default.Delete
 private val IconNewFolder: ImageVector = Icons.Default.CreateNewFolder
+private val IconNewFile: ImageVector = Icons.Default.Add
 private val IconSort: ImageVector = Icons.AutoMirrored.Filled.Sort
 private val IconRefresh: ImageVector = Icons.Default.Refresh
 private val IconEdit: ImageVector = Icons.Default.Edit
@@ -97,6 +98,7 @@ private val IconInfo: ImageVector = Icons.Default.Info
 private val IconSearch: ImageVector = Icons.Default.Search
 private val IconInstall: ImageVector = Icons.Default.InstallMobile
 private val IconBrowse: ImageVector = Icons.Default.FolderOpen
+private val IconBookmark: ImageVector = Icons.Default.Bookmark
 
 @Composable
 fun FilePanel(
@@ -137,11 +139,14 @@ fun FilePanel(
                 onUp = { vm.goUp(isLeft) },
                 onPathClick = { showJumpDialog = true },
                 onNewFolder = { showNewFolderDialog = true },
+                onNewFile = { vm.openNewFilePrompt(isLeft) },
                 onSort = { showSortDialog = true },
                 onToggleHidden = { vm.setShowHidden(isLeft, !state.showHidden) },
                 onRefresh = { vm.refresh(isLeft) },
                 onSwitchPanel = { onSwitchPanel?.invoke() },
-                onSearch = { vm.openSearch(isLeft) }
+                onSearch = { vm.openSearch(isLeft) },
+                onAddBookmark = { vm.addBookmark(isLeft) },
+                onOpenBookmarks = { vm.openBookmarkPanel(isLeft) }
             )
         }
         HorizontalDivider()
@@ -332,8 +337,6 @@ fun FilePanel(
     }
 }
 
-// ==================== 压缩格式选择对话框 ====================
-
 @Composable
 private fun CompressFormatDialog(
     onSelect: (ArchiveFormat) -> Unit,
@@ -396,8 +399,6 @@ private fun CompressFormatItem(
         }
     }
 }
-
-// ==================== 文件详情对话框 ====================
 
 @Composable
 private fun FileInfoDialog(
@@ -500,8 +501,6 @@ private fun formatSize(bytes: Long): String {
     return String.format("%.2f GB", gb)
 }
 
-// ==================== 文件操作菜单 ====================
-
 @Composable
 private fun FileActionDialog(
     item: FileItem,
@@ -571,8 +570,6 @@ private fun ActionItem(
     }
 }
 
-// ==================== 顶部工具栏 ====================
-
 @Composable
 private fun NormalToolbar(
     path: String,
@@ -582,11 +579,14 @@ private fun NormalToolbar(
     onUp: () -> Unit,
     onPathClick: () -> Unit,
     onNewFolder: () -> Unit,
+    onNewFile: () -> Unit,
     onSort: () -> Unit,
     onToggleHidden: () -> Unit,
     onRefresh: () -> Unit,
     onSwitchPanel: () -> Unit,
-    onSearch: () -> Unit
+    onSearch: () -> Unit,
+    onAddBookmark: () -> Unit,
+    onOpenBookmarks: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -631,11 +631,35 @@ private fun NormalToolbar(
                     }
                 )
                 DropdownMenuItem(
+                    text = { Text("书签") },
+                    leadingIcon = { Icon(IconBookmark, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onOpenBookmarks()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("添加到书签") },
+                    leadingIcon = { Icon(IconBookmark, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onAddBookmark()
+                    }
+                )
+                DropdownMenuItem(
                     text = { Text("新建文件夹") },
                     leadingIcon = { Icon(IconNewFolder, null) },
                     onClick = {
                         menuExpanded = false
                         onNewFolder()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("新建文件") },
+                    leadingIcon = { Icon(IconNewFile, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onNewFile()
                     }
                 )
                 DropdownMenuItem(
@@ -716,8 +740,6 @@ private fun SelectionToolbar(
     }
 }
 
-// ==================== 文件行 ====================
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
@@ -785,8 +807,6 @@ private fun FileRow(
     }
 }
 
-// ==================== 通用对话框 ====================
-
 @Composable
 private fun TextInputDialog(
     title: String,
@@ -836,18 +856,4 @@ private fun SortDialog(
                             .padding(vertical = 8.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(
-                            selected = mode == current,
-                            onClick = { onSelect(mode) }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(mode.label)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        }
-    )
-}
+                 
