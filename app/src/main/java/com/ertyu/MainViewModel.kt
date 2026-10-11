@@ -5,16 +5,23 @@ import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ertyu.engine.ArchiveEngine
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
-import com.ertyu.engine.ZipEngine
+import com.ertyu.engine.FolderSizeCalculator
+import com.ertyu.engine.SearchEngine
+import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
+import com.ertyu.model.FolderSizeState
 import com.ertyu.model.ImageViewerState
 import com.ertyu.model.PanelState
+import com.ertyu.model.SearchState
 import com.ertyu.model.SortMode
 import com.ertyu.model.ZipProgress
 import com.ertyu.model.ZipPrompt
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +51,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _zipPrompt = MutableStateFlow(ZipPrompt())
     val zipPrompt: StateFlow<ZipPrompt> = _zipPrompt.asStateFlow()
+
+    private val _compressPromptVisible = MutableStateFlow(false)
+    val compressPromptVisible: StateFlow<Boolean> = _compressPromptVisible.asStateFlow()
+
+    private val _compressPanelIsLeft = MutableStateFlow(true)
+
+    private val _folderSizeState = MutableStateFlow(FolderSizeState())
+    val folderSizeState: StateFlow<FolderSizeState> = _folderSizeState.asStateFlow()
+
+    private val _searchState = MutableStateFlow(SearchState())
+    val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
+
+    private var folderSizeJob: Job? = null
+    private var searchJob: Job? = null
 
     private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
@@ -245,7 +266,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
         when {
-            ext == "zip" -> _zipPrompt.value = ZipPrompt(item)
+            ArchiveFormat.isArchive(item.name) -> _zipPrompt.value = ZipPrompt(item)
             ext in TEXT_EXTS -> openInEditor(item)
             ext in IMAGE_EXTS -> openInImageViewer(item)
         }
@@ -306,26 +327,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _imageViewer.value = ImageViewerState()
     }
 
-    // ================= ZIP =================
+    // ================= 解压 =================
 
     fun dismissZipPrompt() {
         _zipPrompt.value = ZipPrompt()
     }
 
-    /** 解压 zip 到当前目录下与 zip 同名的文件夹 */
     fun extractZipHere(isLeft: Boolean, item: FileItem) {
         _zipPrompt.value = ZipPrompt()
         val currentDir = flowOf(isLeft).value.currentUri?.path?.let { File(it) } ?: return
-        val zipFile = item.uri.path?.let { File(it) } ?: return
-        val targetDir = File(currentDir, zipFile.nameWithoutExtension)
+        val archiveFile = item.uri.path?.let { File(it) } ?: return
+        val baseName = archiveBaseName(archiveFile.name)
+        val targetDir = File(currentDir, baseName)
 
         viewModelScope.launch {
             _zipProgress.value = ZipProgress(
                 visible = true,
                 title = "解压中",
-                message = zipFile.name
+                message = archiveFile.name
             )
-            val result = ZipEngine.extract(zipFile, targetDir) { cur, total ->
+            val result = ArchiveEngine.extract(archiveFile, targetDir) { cur, total ->
                 _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
             }
             result.onSuccess {
@@ -342,20 +363,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 解压 zip 到另一侧面板所在目录 */
     fun extractZipToOtherPanel(isLeft: Boolean, item: FileItem) {
         _zipPrompt.value = ZipPrompt()
         val targetDir = flowOf(!isLeft).value.currentUri?.path?.let { File(it) } ?: return
-        val zipFile = item.uri.path?.let { File(it) } ?: return
-        val finalDir = File(targetDir, zipFile.nameWithoutExtension)
+        val archiveFile = item.uri.path?.let { File(it) } ?: return
+        val baseName = archiveBaseName(archiveFile.name)
+        val finalDir = File(targetDir, baseName)
 
         viewModelScope.launch {
             _zipProgress.value = ZipProgress(
                 visible = true,
                 title = "解压中",
-                message = zipFile.name
+                message = archiveFile.name
             )
-            val result = ZipEngine.extract(zipFile, finalDir) { cur, total ->
+            val result = ArchiveEngine.extract(archiveFile, finalDir) { cur, total ->
                 _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
             }
             result.onSuccess {
@@ -372,8 +393,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 把当前选中的文件/文件夹压缩为 ZIP */
-    fun compressSelection(isLeft: Boolean) {
+    private fun archiveBaseName(fileName: String): String {
+        val lower = fileName.lowercase()
+        return when {
+            lower.endsWith(".tar.gz") -> fileName.dropLast(7)
+            lower.endsWith(".tar.bz2") -> fileName.dropLast(8)
+            lower.endsWith(".tar.xz") -> fileName.dropLast(7)
+            lower.endsWith(".tar.zst") -> fileName.dropLast(8)
+            lower.endsWith(".tar") -> fileName.dropLast(4)
+            lower.endsWith(".tgz") -> fileName.dropLast(4)
+            lower.endsWith(".tbz2") -> fileName.dropLast(5)
+            lower.endsWith(".tbz") -> fileName.dropLast(4)
+            lower.endsWith(".txz") -> fileName.dropLast(4)
+            lower.endsWith(".tzst") -> fileName.dropLast(5)
+            else -> fileName.substringBeforeLast('.', fileName)
+        }
+    }
+
+    // ================= 压缩 =================
+
+    fun requestCompress(isLeft: Boolean) {
+        val state = flowOf(isLeft).value
+        if (state.selectedUris.isEmpty()) return
+        _compressPanelIsLeft.value = isLeft
+        _compressPromptVisible.value = true
+    }
+
+    fun dismissCompressPrompt() {
+        _compressPromptVisible.value = false
+    }
+
+    fun compressWithFormat(format: ArchiveFormat) {
+        _compressPromptVisible.value = false
+        if (!format.canCompress) return
+        val isLeft = _compressPanelIsLeft.value
         val state = flowOf(isLeft).value
         val currentDir = state.currentUri?.path?.let { File(it) } ?: return
         val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
@@ -382,28 +435,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val sources = targets.mapNotNull { it.uri.path?.let(::File) }
         if (sources.isEmpty()) return
 
-        val zipName = if (sources.size == 1) {
+        val ext = when (format) {
+            ArchiveFormat.ZIP -> ".zip"
+            ArchiveFormat.TAR -> ".tar"
+            ArchiveFormat.TAR_GZ -> ".tar.gz"
+            else -> ".zip"
+        }
+
+        val fileName = if (sources.size == 1) {
             val n = sources[0].name
             val base = if (n.contains('.')) n.substringBeforeLast('.') else n
-            "$base.zip"
+            "$base$ext"
         } else {
-            "archive_${System.currentTimeMillis()}.zip"
+            "archive_${System.currentTimeMillis()}$ext"
         }
-        val targetZip = File(currentDir, zipName)
+        val targetFile = File(currentDir, fileName)
 
         viewModelScope.launch {
             _zipProgress.value = ZipProgress(
                 visible = true,
                 title = "压缩中",
-                message = zipName
+                message = fileName
             )
-            val result = ZipEngine.compress(sources, targetZip) { cur, total ->
+            val result = ArchiveEngine.compress(sources, targetFile, format) { cur, total ->
                 _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
             }
             result.onSuccess {
                 _zipProgress.value = _zipProgress.value.copy(
                     done = true,
-                    message = "压缩完成：$zipName"
+                    message = "压缩完成：$fileName"
                 )
             }.onFailure { e ->
                 _zipProgress.value = _zipProgress.value.copy(
@@ -417,6 +477,131 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissZipProgress() {
         _zipProgress.value = ZipProgress()
+    }
+
+    // ================= 文件夹大小 =================
+
+    fun calculateFolderSize(item: FileItem) {
+        folderSizeJob?.cancel()
+        val folder = item.uri.path?.let { File(it) } ?: return
+        _folderSizeState.value = FolderSizeState(isCalculating = true)
+        folderSizeJob = viewModelScope.launch {
+            try {
+                val (bytes, count) = FolderSizeCalculator.calculate(folder) { scanned, totalBytes ->
+                    _folderSizeState.value = FolderSizeState(
+                        isCalculating = true,
+                        scanned = scanned,
+                        totalBytes = totalBytes
+                    )
+                }
+                _folderSizeState.value = FolderSizeState(
+                    isCalculating = false,
+                    scanned = count,
+                    totalBytes = bytes,
+                    done = true
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _folderSizeState.value = FolderSizeState(
+                    error = e.message ?: "计算失败"
+                )
+            }
+        }
+    }
+
+    fun cancelFolderSize() {
+        folderSizeJob?.cancel()
+        folderSizeJob = null
+        _folderSizeState.value = FolderSizeState()
+    }
+
+    fun resetFolderSize() {
+        folderSizeJob?.cancel()
+        folderSizeJob = null
+        _folderSizeState.value = FolderSizeState()
+    }
+
+    // ================= 搜索 =================
+
+    fun openSearch(isLeft: Boolean) {
+        val rootPath = flowOf(isLeft).value.currentUri?.path ?: return
+        _searchState.value = SearchState(
+            visible = true,
+            sourceIsLeft = isLeft,
+            rootPath = rootPath
+        )
+    }
+
+    fun closeSearch() {
+        searchJob?.cancel()
+        searchJob = null
+        _searchState.value = SearchState()
+    }
+
+    fun updateSearchQuery(q: String) {
+        _searchState.update { it.copy(query = q) }
+    }
+
+    fun startSearch() {
+        val state = _searchState.value
+        if (state.query.isBlank()) return
+        searchJob?.cancel()
+        _searchState.update {
+            it.copy(
+                isSearching = true,
+                results = emptyList(),
+                scannedDirs = 0,
+                scannedFiles = 0,
+                error = null,
+                truncated = false
+            )
+        }
+
+        searchJob = viewModelScope.launch {
+            try {
+                val root = File(state.rootPath)
+                val (results, truncated) = SearchEngine.search(root, state.query) { dirs, files, list ->
+                    _searchState.update {
+                        it.copy(scannedDirs = dirs, scannedFiles = files, results = list)
+                    }
+                }
+                _searchState.update {
+                    it.copy(isSearching = false, results = results, truncated = truncated)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _searchState.update { it.copy(isSearching = false, error = e.message) }
+            }
+        }
+    }
+
+    fun cancelSearch() {
+        searchJob?.cancel()
+        searchJob = null
+        _searchState.update { it.copy(isSearching = false) }
+    }
+
+    /** 点击搜索结果：目录 → 源面板进入；文件 → 直接打开 */
+    fun handleSearchResultClick(item: FileItem) {
+        val isLeft = _searchState.value.sourceIsLeft
+        if (item.isDirectory) {
+            val uri = item.uri
+            closeSearch()
+            openDirectory(isLeft, uri)
+        } else {
+            openFile(item)
+        }
+    }
+
+    /** 长按搜索结果：定位到所在目录 */
+    fun revealInPanel(item: FileItem) {
+        val isLeft = _searchState.value.sourceIsLeft
+        val parent = item.uri.path?.let { File(it).parentFile } ?: return
+        if (!parent.exists()) return
+        closeSearch()
+        openDirectory(isLeft, Uri.fromFile(parent))
     }
 
     companion object {

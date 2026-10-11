@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.ertyu.model.ArchiveFormat
 
 class MainActivity : ComponentActivity() {
 
@@ -85,13 +86,21 @@ fun AppRoot(vm: MainViewModel) {
     val imageViewer by vm.imageViewer.collectAsState()
     val zipPrompt by vm.zipPrompt.collectAsState()
     val zipProgress by vm.zipProgress.collectAsState()
+    val searchState by vm.searchState.collectAsState()
 
-    // ZIP 选择对话框
+    // 压缩包解压位置对话框
     zipPrompt.item?.let { item ->
+        val format = ArchiveFormat.detect(item.name)
         AlertDialog(
             onDismissRequest = { vm.dismissZipPrompt() },
             title = { Text(item.name, maxLines = 2) },
-            text = { Text("选择解压位置") },
+            text = {
+                Text(
+                    if (format != null)
+                        "格式：${format.label}\n选择解压位置"
+                    else "选择解压位置"
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { vm.extractZipToOtherPanel(true, item) }) {
                     Text("解压到另一侧")
@@ -105,7 +114,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ZIP 进度对话框
+    // 进度对话框
     if (zipProgress.visible) {
         AlertDialog(
             onDismissRequest = {
@@ -117,18 +126,21 @@ fun AppRoot(vm: MainViewModel) {
             text = {
                 Column {
                     Text(zipProgress.message, maxLines = 2)
+                    Spacer(Modifier.height(8.dp))
+
                     if (zipProgress.total > 0) {
-                        Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(
                             progress = {
-                                if (zipProgress.total == 0) 0f
-                                else zipProgress.current.toFloat() / zipProgress.total
+                                zipProgress.current.toFloat() / zipProgress.total
                             },
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(4.dp))
                         Text("${zipProgress.current} / ${zipProgress.total}")
+                    } else if (zipProgress.current > 0) {
+                        Text("已处理 ${zipProgress.current} 项")
                     }
+
                     zipProgress.error?.let {
                         Spacer(Modifier.height(8.dp))
                         Text("错误: $it", color = MaterialTheme.colorScheme.error)
@@ -153,6 +165,10 @@ fun AppRoot(vm: MainViewModel) {
         imageViewer.isOpen -> {
             BackHandler { vm.closeImageViewer() }
             ImageViewerScreen(vm)
+        }
+        searchState.visible -> {
+            BackHandler { vm.closeSearch() }
+            SearchScreen(vm)
         }
         else -> {
             MainScreen(vm)

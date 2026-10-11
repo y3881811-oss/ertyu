@@ -18,6 +18,11 @@ android {
         targetSdk = 28
         versionCode = 1
         versionName = "0.1.0"
+
+        // 保留 native lib（zstd-jni 需要）
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
     }
 
     signingConfigs {
@@ -44,10 +49,22 @@ android {
         }
     }
 
-    // 关键：关闭 lint 的 fatal 检查
     lint {
         checkReleaseBuilds = false
         abortOnError = false
+    }
+
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/INDEX.LIST"
+            )
+        }
     }
 
     compileOptions {
@@ -75,4 +92,10 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
+
+    // 压缩格式支持
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
+    implementation(libs.zstd.jni)
+    implementation(libs.junrar)
 }

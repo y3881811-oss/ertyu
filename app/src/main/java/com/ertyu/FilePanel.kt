@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -31,8 +33,10 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
@@ -44,6 +48,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -59,8 +64,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 import java.io.File
@@ -84,6 +91,8 @@ private val IconEdit: ImageVector = Icons.Default.Edit
 private val IconVisibility: ImageVector = Icons.Default.Visibility
 private val IconVisibilityOff: ImageVector = Icons.Default.VisibilityOff
 private val IconZip: ImageVector = Icons.Default.FolderZip
+private val IconInfo: ImageVector = Icons.Default.Info
+private val IconSearch: ImageVector = Icons.Default.Search
 
 @Composable
 fun FilePanel(
@@ -94,12 +103,14 @@ fun FilePanel(
 ) {
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
     val state by panelFlow.collectAsState()
+    val compressPromptVisible by vm.compressPromptVisible.collectAsState()
 
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var showJumpDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<FileItem?>(null) }
     var actionTarget by remember { mutableStateOf<FileItem?>(null) }
+    var infoTarget by remember { mutableStateOf<FileItem?>(null) }
 
     Column(modifier = modifier.fillMaxHeight()) {
 
@@ -111,7 +122,7 @@ fun FilePanel(
                 onCopy = { vm.batchCopy(isLeft) },
                 onMove = { vm.batchMove(isLeft) },
                 onDelete = { vm.batchDelete(isLeft) },
-                onZip = { vm.compressSelection(isLeft) }
+                onZip = { vm.requestCompress(isLeft) }
             )
         } else {
             NormalToolbar(
@@ -125,7 +136,8 @@ fun FilePanel(
                 onSort = { showSortDialog = true },
                 onToggleHidden = { vm.setShowHidden(isLeft, !state.showHidden) },
                 onRefresh = { vm.refresh(isLeft) },
-                onSwitchPanel = { onSwitchPanel?.invoke() }
+                onSwitchPanel = { onSwitchPanel?.invoke() },
+                onSearch = { vm.openSearch(isLeft) }
             )
         }
         HorizontalDivider()
@@ -184,10 +196,13 @@ fun FilePanel(
         }
     }
 
+    // ============ 操作菜单 ============
+
     actionTarget?.let { target ->
+        val format = ArchiveFormat.detect(target.name)
         FileActionDialog(
             item = target,
-            isZip = target.name.substringAfterLast('.', "").lowercase() == "zip",
+            archiveFormat = format,
             onDismiss = { actionTarget = null },
             onRename = {
                 actionTarget = null
@@ -220,10 +235,38 @@ fun FilePanel(
             onZipThis = {
                 actionTarget = null
                 vm.enterSelection(isLeft, target.uriString)
-                vm.compressSelection(isLeft)
+                vm.requestCompress(isLeft)
+            },
+            onInfo = {
+                actionTarget = null
+                infoTarget = target
             }
         )
     }
+
+    // ============ 属性对话框 ============
+
+    infoTarget?.let { target ->
+        FileInfoDialog(
+            item = target,
+            vm = vm,
+            onDismiss = {
+                vm.resetFolderSize()
+                infoTarget = null
+            }
+        )
+    }
+
+    // ============ 压缩格式选择 ============
+
+    if (compressPromptVisible) {
+        CompressFormatDialog(
+            onSelect = { format -> vm.compressWithFormat(format) },
+            onDismiss = { vm.dismissCompressPrompt() }
+        )
+    }
+
+    // ============ 排序对话框 ============
 
     if (showSortDialog) {
         SortDialog(
@@ -235,6 +278,8 @@ fun FilePanel(
             onDismiss = { showSortDialog = false }
         )
     }
+
+    // ============ 新建文件夹对话框 ============
 
     if (showNewFolderDialog) {
         TextInputDialog(
@@ -248,6 +293,8 @@ fun FilePanel(
             onDismiss = { showNewFolderDialog = false }
         )
     }
+
+    // ============ 跳转路径对话框 ============
 
     if (showJumpDialog) {
         TextInputDialog(
@@ -267,6 +314,8 @@ fun FilePanel(
         )
     }
 
+    // ============ 重命名对话框 ============
+
     renameTarget?.let { target ->
         TextInputDialog(
             title = "重命名",
@@ -283,12 +332,182 @@ fun FilePanel(
     }
 }
 
+// ==================== 压缩格式选择对话框 ====================
+
+@Composable
+private fun CompressFormatDialog(
+    onSelect: (ArchiveFormat) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择压缩格式") },
+        text = {
+            Column {
+                CompressFormatItem(
+                    label = "ZIP",
+                    desc = ".zip（兼容性最好，Windows/手机通用）",
+                    format = ArchiveFormat.ZIP,
+                    onSelect = onSelect
+                )
+                CompressFormatItem(
+                    label = "TAR",
+                    desc = ".tar（不压缩，仅打包）",
+                    format = ArchiveFormat.TAR,
+                    onSelect = onSelect
+                )
+                CompressFormatItem(
+                    label = "TAR.GZ",
+                    desc = ".tar.gz（Linux 常见，压缩率高）",
+                    format = ArchiveFormat.TAR_GZ,
+                    onSelect = onSelect
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+@Composable
+private fun CompressFormatItem(
+    label: String,
+    desc: String,
+    format: ArchiveFormat,
+    onSelect: (ArchiveFormat) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect(format) }
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(IconZip, contentDescription = null)
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                desc,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+// ==================== 文件详情对话框 ====================
+
+@Composable
+private fun FileInfoDialog(
+    item: FileItem,
+    vm: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    val sizeState by vm.folderSizeState.collectAsState()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("文件属性") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                InfoRow("名称", item.name)
+                InfoRow("类型", item.typeText)
+
+                if (item.isDirectory) {
+                    val countText = if (item.childCount >= 0)
+                        "目录（包含 ${item.childCount} 项）" else "目录"
+                    InfoRow("内容", countText)
+
+                    when {
+                        sizeState.error != null -> {
+                            InfoRow("总大小", "计算失败：${sizeState.error}")
+                        }
+                        sizeState.done -> {
+                            InfoRow(
+                                "总大小",
+                                "${formatSize(sizeState.totalBytes)}（${sizeState.scanned} 个文件）"
+                            )
+                        }
+                        sizeState.isCalculating -> {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "正在计算…",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "已扫描 ${sizeState.scanned} 个文件 · ${formatSize(sizeState.totalBytes)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        else -> {
+                            TextButton(onClick = { vm.calculateFolderSize(item) }) {
+                                Text("计算总大小")
+                            }
+                        }
+                    }
+                } else {
+                    InfoRow("大小", "${item.sizeText}（${item.size} 字节）")
+                }
+
+                InfoRow("修改时间", item.lastModifiedText)
+                InfoRow("路径", item.path)
+
+                if (sizeState.isCalculating) {
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(onClick = { vm.cancelFolderSize() }) {
+                        Text("取消计算")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+private fun formatSize(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024) return String.format("%.1f KB", kb)
+    val mb = kb / 1024.0
+    if (mb < 1024) return String.format("%.1f MB", mb)
+    val gb = mb / 1024.0
+    return String.format("%.2f GB", gb)
+}
+
 // ==================== 文件操作菜单 ====================
 
 @Composable
 private fun FileActionDialog(
     item: FileItem,
-    isZip: Boolean,
+    archiveFormat: ArchiveFormat?,
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onCopy: () -> Unit,
@@ -297,18 +516,24 @@ private fun FileActionDialog(
     onSelect: () -> Unit,
     onExtractHere: () -> Unit,
     onExtractOther: () -> Unit,
-    onZipThis: () -> Unit
+    onZipThis: () -> Unit,
+    onInfo: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
-            Column {
-                if (isZip) {
-                    ActionItem("解压到当前目录", IconZip, onExtractHere)
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                if (archiveFormat != null) {
+                    ActionItem(
+                        "解压到当前目录（${archiveFormat.label}）",
+                        IconZip,
+                        onExtractHere
+                    )
                     ActionItem("解压到另一侧", IconZip, onExtractOther)
                 }
-                ActionItem("压缩为 ZIP", IconZip, onZipThis)
+                ActionItem("压缩为…", IconZip, onZipThis)
+                ActionItem("属性", IconInfo, onInfo)
                 ActionItem("重命名", IconEdit, onRename)
                 ActionItem("复制到另一侧", IconCopy, onCopy)
                 ActionItem("移动到另一侧", IconMove, onMove)
@@ -355,7 +580,8 @@ private fun NormalToolbar(
     onSort: () -> Unit,
     onToggleHidden: () -> Unit,
     onRefresh: () -> Unit,
-    onSwitchPanel: () -> Unit
+    onSwitchPanel: () -> Unit,
+    onSearch: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -391,6 +617,14 @@ private fun NormalToolbar(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false }
             ) {
+                DropdownMenuItem(
+                    text = { Text("搜索") },
+                    leadingIcon = { Icon(IconSearch, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onSearch()
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("新建文件夹") },
                     leadingIcon = { Icon(IconNewFolder, null) },
@@ -491,6 +725,20 @@ private fun FileRow(
 ) {
     val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
 
+    val subtitle = remember(item.uriString, item.sizeText, item.typeText, item.lastModifiedText) {
+        buildString {
+            append(item.typeText)
+            if (!item.isDirectory && item.sizeText.isNotEmpty()) {
+                append(" · ")
+                append(item.sizeText)
+            }
+            if (item.lastModifiedText.isNotEmpty()) {
+                append(" · ")
+                append(item.lastModifiedText)
+            }
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -513,14 +761,13 @@ private fun FileRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (!item.isDirectory) {
-                Text(
-                    text = item.sizeText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-            }
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
         if (!isSelectionMode) {
             IconButton(
@@ -533,7 +780,7 @@ private fun FileRow(
     }
 }
 
-// ==================== 对话框 ====================
+// ==================== 通用对话框 ====================
 
 @Composable
 private fun TextInputDialog(
