@@ -10,8 +10,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -104,22 +108,30 @@ fun AppRoot(vm: MainViewModel) {
     // ZIP 进度对话框
     if (zipProgress.visible) {
         AlertDialog(
-            onDismissRequest = { if (zipProgress.done || zipProgress.error != null) vm.dismissZipProgress() },
+            onDismissRequest = {
+                if (zipProgress.done || zipProgress.error != null) {
+                    vm.dismissZipProgress()
+                }
+            },
             title = { Text(zipProgress.title) },
             text = {
-                androidx.compose.foundation.layout.Column {
+                Column {
                     Text(zipProgress.message, maxLines = 2)
                     if (zipProgress.total > 0) {
-                        androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(
                             progress = {
                                 if (zipProgress.total == 0) 0f
                                 else zipProgress.current.toFloat() / zipProgress.total
                             },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxWidth()
                         )
-                        androidx.compose.foundation.layout.Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(4.dp))
                         Text("${zipProgress.current} / ${zipProgress.total}")
+                    }
+                    zipProgress.error?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text("错误: $it", color = MaterialTheme.colorScheme.error)
                     }
                 }
             },
