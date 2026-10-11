@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,7 +57,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 监听 PackageInstaller 的安装结果广播
     private val installReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ApkInstaller.ACTION_INSTALL_RESULT) return
@@ -64,27 +64,13 @@ class MainActivity : ComponentActivity() {
                 android.content.pm.PackageInstaller.EXTRA_STATUS,
                 -1
             )
-            val message = intent.getStringExtra(
-                android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE
-            )
-            when (status) {
-                android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                    // 系统要求用户在界面上确认
-                    @Suppress("DEPRECATION")
-                    val confirmIntent = intent.getParcelableExtra<Intent>(
-                        android.content.Intent.EXTRA_INTENT
-                    )
-                    if (confirmIntent != null) {
-                        try {
-                            startActivity(confirmIntent)
-                        } catch (_: Exception) { }
-                    }
-                }
-                android.content.pm.PackageInstaller.STATUS_SUCCESS -> {
-                    // 安装完成，系统自己会显示
-                }
-                else -> {
-                    // 失败/取消，交给系统
+            if (status == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                @Suppress("DEPRECATION")
+                val confirmIntent = intent.getParcelableExtra<Intent>(
+                    android.content.Intent.EXTRA_INTENT
+                )
+                if (confirmIntent != null) {
+                    runCatching { startActivity(confirmIntent) }
                 }
             }
         }
@@ -93,7 +79,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 注册安装结果接收器
         val filter = IntentFilter(ApkInstaller.ACTION_INSTALL_RESULT)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(installReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -146,6 +131,8 @@ fun AppRoot(vm: MainViewModel) {
     val apkBrowserState by vm.apkBrowserState.collectAsState()
     val pendingInstall by vm.pendingInstall.collectAsState()
     val installState by vm.installState.collectAsState()
+    val bookmarkState by vm.bookmarkPanelState.collectAsState()
+    val newFilePrompt by vm.newFilePrompt.collectAsState()
 
     val context = LocalContext.current
 
@@ -214,7 +201,6 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // 安装进度对话框
     if (installState.visible) {
         AlertDialog(
             onDismissRequest = {
@@ -245,10 +231,7 @@ fun AppRoot(vm: MainViewModel) {
                     )
                     installState.error?.let {
                         Spacer(Modifier.height(8.dp))
-                        Text(
-                            "错误: $it",
-                            color = MaterialTheme.colorScheme.error
-                        )
+                        Text("错误: $it", color = MaterialTheme.colorScheme.error)
                     }
                 }
             },
@@ -283,6 +266,33 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
+    // 新建文件对话框
+    if (newFilePrompt) {
+        var text by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { vm.dismissNewFilePrompt() },
+            title = { Text("新建文件") },
+            text = {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    placeholder = { Text("文件名（含扩展名）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (text.isNotBlank()) vm.createFile(text)
+                    else vm.dismissNewFilePrompt()
+                }) { Text("创建") }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissNewFilePrompt() }) { Text("取消") }
+            }
+        )
+    }
+
     when {
         editor.isOpen -> {
             BackHandler { vm.closeEditor() }
@@ -303,6 +313,10 @@ fun AppRoot(vm: MainViewModel) {
         apkBrowserState.visible -> {
             BackHandler { vm.closeApkBrowser() }
             ApkBrowserScreen(vm)
+        }
+        bookmarkState.visible -> {
+            BackHandler { vm.closeBookmarkPanel() }
+            BookmarkScreen(vm)
         }
         else -> {
             MainScreen(vm)
