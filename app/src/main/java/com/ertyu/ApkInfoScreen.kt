@@ -1,5 +1,6 @@
 package com.ertyu
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,7 +44,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
 import com.ertyu.model.ApkInfo
 import com.ertyu.model.ApkSignature
 
@@ -79,11 +80,24 @@ fun ApkInfoScreen(vm: MainViewModel) {
                     }
                 },
                 actions = {
+                    if (state.info != null) {
+                        IconButton(onClick = {
+                            state.info?.let { vm.installApkFromInfo(it) }
+                        }) {
+                            Icon(
+                                Icons.Default.InstallMobile,
+                                contentDescription = "安装"
+                            )
+                        }
+                    }
                     if (state.info?.icon != null) {
                         IconButton(onClick = {
                             state.info?.let { vm.saveApkIcon(it) }
                         }) {
-                            Icon(Icons.Default.Save, contentDescription = "保存图标")
+                            Icon(
+                                Icons.Default.Save,
+                                contentDescription = "保存图标"
+                            )
                         }
                     }
                 }
