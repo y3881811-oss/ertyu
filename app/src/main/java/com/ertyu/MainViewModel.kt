@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ertyu.engine.ApkBrowser
 import com.ertyu.engine.ApkInspector
 import com.ertyu.engine.ApkInstaller
 import com.ertyu.engine.ArchiveEngine
@@ -13,6 +14,8 @@ import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
 import com.ertyu.engine.FolderSizeCalculator
 import com.ertyu.engine.SearchEngine
+import com.ertyu.model.ApkBrowserState
+import com.ertyu.model.ApkEntry
 import com.ertyu.model.ApkInfo
 import com.ertyu.model.ApkInfoState
 import com.ertyu.model.ArchiveFormat
@@ -72,15 +75,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _apkInfoState = MutableStateFlow(ApkInfoState())
     val apkInfoState: StateFlow<ApkInfoState> = _apkInfoState.asStateFlow()
 
+    private val _apkBrowserState = MutableStateFlow(ApkBrowserState())
+    val apkBrowserState: StateFlow<ApkBrowserState> = _apkBrowserState.asStateFlow()
+
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
-    // 需要申请"安装未知应用"权限的待安装文件
     private val _pendingInstall = MutableStateFlow<File?>(null)
     val pendingInstall: StateFlow<File?> = _pendingInstall.asStateFlow()
 
     private var folderSizeJob: Job? = null
     private var searchJob: Job? = null
+
+    // 记录当前浏览 APK 的路径 + 来源面板，用于提取文件
+    private var apkBrowserSourceIsLeft = true
 
     private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
@@ -340,6 +348,61 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _imageViewer.value = ImageViewerState()
     }
 
+    // ================= APK 浏览 =================
+
+    fun openApkBrowser(isLeft: Boolean, item: FileItem) {
+        val apkFile = item.uri.path?.let(::File) ?: run {
+            _toast.value = "无效路径"
+            return
+        }
+        apkBrowserSourceIsLeft = isLeft
+        _apkBrowserState.value = ApkBrowserState(
+            visible = true,
+            apkPath = apkFile.absolutePath,
+            apkName = apkFile.name,
+            isLoading = true
+        )
+        viewModelScope.launch {
+            val result = ApkBrowser.list(apkFile)
+            result.onSuccess { entries ->
+                _apkBrowserState.update {
+                    it.copy(isLoading = false, entries = entries)
+                }
+            }.onFailure { e ->
+                _apkBrowserState.update {
+                    it.copy(isLoading = false, error = e.message ?: "读取失败")
+                }
+            }
+        }
+    }
+
+    fun closeApkBrowser() {
+        _apkBrowserState.value = ApkBrowserState()
+    }
+
+    fun updateApkBrowserFilter(q: String) {
+        _apkBrowserState.update { it.copy(filterQuery = q) }
+    }
+
+    fun extractApkEntry(entry: ApkEntry) {
+        val apkPath = _apkBrowserState.value.apkPath
+        val apkFile = File(apkPath)
+        val targetDir = flowOf(apkBrowserSourceIsLeft).value.currentUri?.path?.let(::File)
+            ?: run {
+                _toast.value = "无目标目录"
+                return
+            }
+        viewModelScope.launch {
+            val result = ApkBrowser.extractEntry(apkFile, entry.path, targetDir)
+            result.onSuccess { out ->
+                _toast.value = "已提取：${out.name}"
+                refresh(apkBrowserSourceIsLeft)
+            }.onFailure { e ->
+                _toast.value = "提取失败：${e.message}"
+            }
+        }
+    }
+
     // ================= APK 安装 =================
 
     fun installApk(item: FileItem) {
@@ -351,16 +414,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun installApkFromInfo(info: ApkInfo) {
-        val apkFile = File(info.filePath)
-        tryInstall(apkFile)
+        tryInstall(File(info.filePath))
     }
 
     private fun tryInstall(apkFile: File) {
         val result = ApkInstaller.install(getApplication(), apkFile)
         when (result) {
-            is ApkInstaller.Result.Success -> {
-                // 系统安装器已弹出，无需提示
-            }
+            is ApkInstaller.Result.Success -> { /* 系统安装器已弹出 */ }
             is ApkInstaller.Result.NeedInstallPermission -> {
                 _pendingInstall.value = apkFile
                 _toast.value = "请先允许本应用安装未知应用"
@@ -372,14 +432,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun dismissInstallPermissionPrompt() {
-        _pendingInstall.value = null
-    }
-
-    /**
-     * 用户在权限对话框里点了"去授权" → 打开系统设置页。
-     * 用户从设置页返回后，UI 会再次弹对话框让用户点"重试安装"。
-     */
-    fun openInstallPermissionSettingsAndClear() {
         _pendingInstall.value = null
     }
 
