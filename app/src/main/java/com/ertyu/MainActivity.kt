@@ -87,8 +87,8 @@ fun AppRoot(vm: MainViewModel) {
     val zipPrompt by vm.zipPrompt.collectAsState()
     val zipProgress by vm.zipProgress.collectAsState()
     val searchState by vm.searchState.collectAsState()
+    val apkState by vm.apkInfoState.collectAsState()
 
-    // 压缩包解压位置对话框
     zipPrompt.item?.let { item ->
         val format = ArchiveFormat.detect(item.name)
         AlertDialog(
@@ -114,7 +114,6 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // 进度对话框
     if (zipProgress.visible) {
         AlertDialog(
             onDismissRequest = {
@@ -169,6 +168,10 @@ fun AppRoot(vm: MainViewModel) {
         searchState.visible -> {
             BackHandler { vm.closeSearch() }
             SearchScreen(vm)
+        }
+        apkState.visible -> {
+            BackHandler { vm.closeApkInfo() }
+            ApkInfoScreen(vm)
         }
         else -> {
             MainScreen(vm)
