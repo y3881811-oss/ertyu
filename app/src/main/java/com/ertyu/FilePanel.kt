@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -19,19 +20,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -63,24 +65,25 @@ import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 import java.io.File
 
-// ==================== 顶层图标缓存，避免每行重复访问 ====================
+// ==================== 顶层图标缓存 ====================
 
 private val IconFolder: ImageVector = Icons.Default.Folder
-private val IconFile: ImageVector = Icons.Default.InsertDriveFile
+private val IconFile: ImageVector = Icons.AutoMirrored.Filled.InsertDriveFile
 private val IconMore: ImageVector = Icons.Default.MoreVert
 private val IconUp: ImageVector = Icons.Default.ArrowUpward
 private val IconSwap: ImageVector = Icons.Default.SwapHoriz
 private val IconClose: ImageVector = Icons.Default.Close
 private val IconSelectAll: ImageVector = Icons.Default.SelectAll
 private val IconCopy: ImageVector = Icons.Default.ContentCopy
-private val IconMove: ImageVector = Icons.Default.DriveFileMove
+private val IconMove: ImageVector = Icons.AutoMirrored.Filled.DriveFileMove
 private val IconDelete: ImageVector = Icons.Default.Delete
 private val IconNewFolder: ImageVector = Icons.Default.CreateNewFolder
-private val IconSort: ImageVector = Icons.Default.Sort
+private val IconSort: ImageVector = Icons.AutoMirrored.Filled.Sort
 private val IconRefresh: ImageVector = Icons.Default.Refresh
 private val IconEdit: ImageVector = Icons.Default.Edit
 private val IconVisibility: ImageVector = Icons.Default.Visibility
 private val IconVisibilityOff: ImageVector = Icons.Default.VisibilityOff
+private val IconZip: ImageVector = Icons.Default.FolderZip
 
 @Composable
 fun FilePanel(
@@ -107,7 +110,8 @@ fun FilePanel(
                 onSelectAll = { vm.selectAll(isLeft) },
                 onCopy = { vm.batchCopy(isLeft) },
                 onMove = { vm.batchMove(isLeft) },
-                onDelete = { vm.batchDelete(isLeft) }
+                onDelete = { vm.batchDelete(isLeft) },
+                onZip = { vm.compressSelection(isLeft) }
             )
         } else {
             NormalToolbar(
@@ -147,10 +151,7 @@ fun FilePanel(
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                // 提高滚动流畅度
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    vertical = 4.dp
-                )
+                contentPadding = PaddingValues(vertical = 4.dp)
             ) {
                 items(
                     items = state.items,
@@ -186,6 +187,7 @@ fun FilePanel(
     actionTarget?.let { target ->
         FileActionDialog(
             item = target,
+            isZip = target.name.substringAfterLast('.', "").lowercase() == "zip",
             onDismiss = { actionTarget = null },
             onRename = {
                 actionTarget = null
@@ -206,6 +208,19 @@ fun FilePanel(
             onSelect = {
                 actionTarget = null
                 vm.enterSelection(isLeft, target.uriString)
+            },
+            onExtractHere = {
+                actionTarget = null
+                vm.extractZipHere(isLeft, target)
+            },
+            onExtractOther = {
+                actionTarget = null
+                vm.extractZipToOtherPanel(isLeft, target)
+            },
+            onZipThis = {
+                actionTarget = null
+                vm.enterSelection(isLeft, target.uriString)
+                vm.compressSelection(isLeft)
             }
         )
     }
@@ -273,18 +288,27 @@ fun FilePanel(
 @Composable
 private fun FileActionDialog(
     item: FileItem,
+    isZip: Boolean,
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onCopy: () -> Unit,
     onMove: () -> Unit,
     onDelete: () -> Unit,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    onExtractHere: () -> Unit,
+    onExtractOther: () -> Unit,
+    onZipThis: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column {
+                if (isZip) {
+                    ActionItem("解压到当前目录", IconZip, onExtractHere)
+                    ActionItem("解压到另一侧", IconZip, onExtractOther)
+                }
+                ActionItem("压缩为 ZIP", IconZip, onZipThis)
                 ActionItem("重命名", IconEdit, onRename)
                 ActionItem("复制到另一侧", IconCopy, onCopy)
                 ActionItem("移动到另一侧", IconMove, onMove)
@@ -416,7 +440,8 @@ private fun SelectionToolbar(
     onSelectAll: () -> Unit,
     onCopy: () -> Unit,
     onMove: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onZip: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -437,6 +462,9 @@ private fun SelectionToolbar(
         IconButton(onClick = onSelectAll) {
             Icon(IconSelectAll, contentDescription = "全选")
         }
+        IconButton(onClick = onZip) {
+            Icon(IconZip, contentDescription = "压缩")
+        }
         IconButton(onClick = onCopy) {
             Icon(IconCopy, contentDescription = "复制到另一侧")
         }
@@ -449,7 +477,7 @@ private fun SelectionToolbar(
     }
 }
 
-// ==================== 文件行（高度精简） ====================
+// ==================== 文件行 ====================
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
