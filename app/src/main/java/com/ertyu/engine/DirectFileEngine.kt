@@ -6,10 +6,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/**
- * 基于 java.io.File 的引擎，适用于 Android 9（API 28）及以下。
- * 直接通过 file:// URI 访问外部存储，无需 SAF 授权。
- */
 class DirectFileEngine : FileEngine {
 
     private fun Uri.toFileOrNull(): File? = when (scheme) {
@@ -31,8 +27,7 @@ class DirectFileEngine : FileEngine {
                 lastModified = file.lastModified(),
                 mimeType = null
             )
-        }?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-            ?: emptyList()
+        } ?: emptyList()
     }
 
     override suspend fun delete(uri: Uri): Boolean = withContext(Dispatchers.IO) {
@@ -76,7 +71,6 @@ class DirectFileEngine : FileEngine {
             val dir = targetDir.toFileOrNull() ?: return@withContext false
             val dst = File(dir, src.name)
             if (src.renameTo(dst)) return@withContext true
-            // 跨挂载点兜底：先复制再删除
             val ok = copy(source, targetDir)
             if (ok) src.deleteRecursively()
             ok
