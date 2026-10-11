@@ -9,12 +9,14 @@ import com.ertyu.engine.ArchiveEngine
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
 import com.ertyu.engine.FolderSizeCalculator
+import com.ertyu.engine.SearchEngine
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
 import com.ertyu.model.FolderSizeState
 import com.ertyu.model.ImageViewerState
 import com.ertyu.model.PanelState
+import com.ertyu.model.SearchState
 import com.ertyu.model.SortMode
 import com.ertyu.model.ZipProgress
 import com.ertyu.model.ZipPrompt
@@ -55,11 +57,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _compressPanelIsLeft = MutableStateFlow(true)
 
-    // 文件夹大小计算状态
     private val _folderSizeState = MutableStateFlow(FolderSizeState())
     val folderSizeState: StateFlow<FolderSizeState> = _folderSizeState.asStateFlow()
 
+    private val _searchState = MutableStateFlow(SearchState())
+    val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
+
     private var folderSizeJob: Job? = null
+    private var searchJob: Job? = null
 
     private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
@@ -474,7 +479,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _zipProgress.value = ZipProgress()
     }
 
-    // ================= 文件夹大小计算 =================
+    // ================= 文件夹大小 =================
 
     fun calculateFolderSize(item: FileItem) {
         folderSizeJob?.cancel()
@@ -515,6 +520,88 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         folderSizeJob?.cancel()
         folderSizeJob = null
         _folderSizeState.value = FolderSizeState()
+    }
+
+    // ================= 搜索 =================
+
+    fun openSearch(isLeft: Boolean) {
+        val rootPath = flowOf(isLeft).value.currentUri?.path ?: return
+        _searchState.value = SearchState(
+            visible = true,
+            sourceIsLeft = isLeft,
+            rootPath = rootPath
+        )
+    }
+
+    fun closeSearch() {
+        searchJob?.cancel()
+        searchJob = null
+        _searchState.value = SearchState()
+    }
+
+    fun updateSearchQuery(q: String) {
+        _searchState.update { it.copy(query = q) }
+    }
+
+    fun startSearch() {
+        val state = _searchState.value
+        if (state.query.isBlank()) return
+        searchJob?.cancel()
+        _searchState.update {
+            it.copy(
+                isSearching = true,
+                results = emptyList(),
+                scannedDirs = 0,
+                scannedFiles = 0,
+                error = null,
+                truncated = false
+            )
+        }
+
+        searchJob = viewModelScope.launch {
+            try {
+                val root = File(state.rootPath)
+                val (results, truncated) = SearchEngine.search(root, state.query) { dirs, files, list ->
+                    _searchState.update {
+                        it.copy(scannedDirs = dirs, scannedFiles = files, results = list)
+                    }
+                }
+                _searchState.update {
+                    it.copy(isSearching = false, results = results, truncated = truncated)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _searchState.update { it.copy(isSearching = false, error = e.message) }
+            }
+        }
+    }
+
+    fun cancelSearch() {
+        searchJob?.cancel()
+        searchJob = null
+        _searchState.update { it.copy(isSearching = false) }
+    }
+
+    /** 点击搜索结果：目录 → 源面板进入；文件 → 直接打开 */
+    fun handleSearchResultClick(item: FileItem) {
+        val isLeft = _searchState.value.sourceIsLeft
+        if (item.isDirectory) {
+            val uri = item.uri
+            closeSearch()
+            openDirectory(isLeft, uri)
+        } else {
+            openFile(item)
+        }
+    }
+
+    /** 长按搜索结果：定位到所在目录 */
+    fun revealInPanel(item: FileItem) {
+        val isLeft = _searchState.value.sourceIsLeft
+        val parent = item.uri.path?.let { File(it).parentFile } ?: return
+        if (!parent.exists()) return
+        closeSearch()
+        openDirectory(isLeft, Uri.fromFile(parent))
     }
 
     companion object {
