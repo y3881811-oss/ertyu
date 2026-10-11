@@ -75,6 +75,8 @@ fun FilePanel(
     var showJumpDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<FileItem?>(null) }
+    // 全局单个操作菜单目标，避免每行创建 DropdownMenu
+    var actionTarget by remember { mutableStateOf<FileItem?>(null) }
 
     Column(modifier = modifier.fillMaxHeight()) {
 
@@ -105,24 +107,38 @@ fun FilePanel(
         HorizontalDivider()
 
         when {
-            state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            state.isLoading -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator()
             }
-            state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            state.error != null -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 Text("错误: ${state.error}")
             }
-            state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            state.items.isEmpty() -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(if (state.showHidden) "空目录" else "空目录（可尝试显示隐藏文件）")
             }
             else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(state.items, key = { it.uri.toString() }) { item ->
+                items(
+                    items = state.items,
+                    key = { it.uriString },
+                    contentType = { if (it.isDirectory) "dir" else "file" }
+                ) { item ->
+                    val isSelected = state.selectedUris.contains(item.uriString)
                     FileRow(
                         item = item,
-                        isSelected = state.selectedUris.contains(item.uri.toString()),
+                        isSelected = isSelected,
                         isSelectionMode = state.isSelectionMode,
                         onClick = {
                             if (state.isSelectionMode) {
-                                vm.toggleSelection(isLeft, item.uri.toString())
+                                vm.toggleSelection(isLeft, item.uriString)
                             } else if (item.isDirectory) {
                                 vm.openDirectory(isLeft, item.uri)
                             } else {
@@ -131,17 +147,42 @@ fun FilePanel(
                         },
                         onLongClick = {
                             if (!state.isSelectionMode) {
-                                vm.enterSelection(isLeft, item.uri.toString())
+                                actionTarget = item
                             }
                         },
-                        onRename = { renameTarget = item },
-                        onCopy = { vm.copyToOtherPanel(isLeft, item) },
-                        onMove = { vm.moveToOtherPanel(isLeft, item) },
-                        onDelete = { vm.delete(isLeft, item) }
+                        onMoreClick = { actionTarget = item }
                     )
                 }
             }
         }
+    }
+
+    // 全局操作菜单
+    actionTarget?.let { target ->
+        FileActionDialog(
+            item = target,
+            onDismiss = { actionTarget = null },
+            onRename = {
+                actionTarget = null
+                renameTarget = target
+            },
+            onCopy = {
+                actionTarget = null
+                vm.copyToOtherPanel(isLeft, target)
+            },
+            onMove = {
+                actionTarget = null
+                vm.moveToOtherPanel(isLeft, target)
+            },
+            onDelete = {
+                actionTarget = null
+                vm.delete(isLeft, target)
+            },
+            onSelect = {
+                actionTarget = null
+                vm.enterSelection(isLeft, target.uriString)
+            }
+        )
     }
 
     if (showSortDialog) {
@@ -199,6 +240,55 @@ fun FilePanel(
             },
             onDismiss = { renameTarget = null }
         )
+    }
+}
+
+// ==================== 文件操作菜单（全局单个 Dialog） ====================
+
+@Composable
+private fun FileActionDialog(
+    item: FileItem,
+    onDismiss: () -> Unit,
+    onRename: () -> Unit,
+    onCopy: () -> Unit,
+    onMove: () -> Unit,
+    onDelete: () -> Unit,
+    onSelect: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            Column {
+                ActionItem("重命名", Icons.Default.Edit, onRename)
+                ActionItem("复制到另一侧", Icons.Default.ContentCopy, onCopy)
+                ActionItem("移动到另一侧", Icons.Default.DriveFileMove, onMove)
+                ActionItem("删除", Icons.Default.Delete, onDelete)
+                ActionItem("多选", Icons.Default.SelectAll, onSelect)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+@Composable
+private fun ActionItem(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null)
+        Spacer(Modifier.width(16.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -333,7 +423,7 @@ private fun SelectionToolbar(
     }
 }
 
-// ==================== 文件行（关键修复） ====================
+// ==================== 文件行（精简版） ====================
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -343,13 +433,9 @@ private fun FileRow(
     isSelectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onRename: () -> Unit,
-    onCopy: () -> Unit,
-    onMove: () -> Unit,
-    onDelete: () -> Unit
+    onMoreClick: () -> Unit
 ) {
     val bg = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-    var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -374,58 +460,20 @@ private fun FileRow(
                 overflow = TextOverflow.Ellipsis
             )
             if (!item.isDirectory) {
+                val sizeText = remember(item.size) { formatSize(item.size) }
                 Text(
-                    text = formatSize(item.size),
+                    text = sizeText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
         if (!isSelectionMode) {
-            Box {
-                IconButton(
-                    onClick = { menuExpanded = true },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "更多")
-                }
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("重命名") },
-                        leadingIcon = { Icon(Icons.Default.Edit, null) },
-                        onClick = {
-                            menuExpanded = false
-                            onRename()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("复制到另一侧") },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
-                        onClick = {
-                            menuExpanded = false
-                            onCopy()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("移动到另一侧") },
-                        leadingIcon = { Icon(Icons.Default.DriveFileMove, null) },
-                        onClick = {
-                            menuExpanded = false
-                            onMove()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("删除") },
-                        leadingIcon = { Icon(Icons.Default.Delete, null) },
-                        onClick = {
-                            menuExpanded = false
-                            onDelete()
-                        }
-                    )
-                }
+            IconButton(
+                onClick = onMoreClick,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(Icons.Default.MoreVert, contentDescription = "更多")
             }
         }
     }
