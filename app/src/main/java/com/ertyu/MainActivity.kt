@@ -86,6 +86,7 @@ fun AppRoot(vm: MainViewModel) {
     val imageViewer by vm.imageViewer.collectAsState()
     val zipPrompt by vm.zipPrompt.collectAsState()
     val zipProgress by vm.zipProgress.collectAsState()
+    val searchState by vm.searchState.collectAsState()
 
     // 压缩包解压位置对话框
     zipPrompt.item?.let { item ->
@@ -164,6 +165,10 @@ fun AppRoot(vm: MainViewModel) {
         imageViewer.isOpen -> {
             BackHandler { vm.closeImageViewer() }
             ImageViewerScreen(vm)
+        }
+        searchState.visible -> {
+            BackHandler { vm.closeSearch() }
+            SearchScreen(vm)
         }
         else -> {
             MainScreen(vm)
