@@ -81,4 +81,21 @@ class DirectFileEngine : FileEngine {
 
     override fun getDisplayName(uri: Uri): String =
         uri.toFileOrNull()?.name ?: uri.lastPathSegment ?: ""
+
+    // ================= 新增 =================
+
+    override suspend fun readText(uri: Uri): String? = withContext(Dispatchers.IO) {
+        val file = uri.toFileOrNull() ?: return@withContext null
+        if (!file.isFile) return@withContext null
+        runCatching { file.readText(Charsets.UTF_8) }.getOrNull()
+    }
+
+    override suspend fun writeText(uri: Uri, content: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val file = uri.toFileOrNull() ?: return@withContext false
+            runCatching {
+                file.parentFile?.mkdirs()
+                file.writeText(content, Charsets.UTF_8)
+            }.isSuccess
+        }
 }
