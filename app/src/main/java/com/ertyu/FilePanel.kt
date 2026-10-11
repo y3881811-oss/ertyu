@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -93,6 +94,7 @@ private val IconVisibilityOff: ImageVector = Icons.Default.VisibilityOff
 private val IconZip: ImageVector = Icons.Default.FolderZip
 private val IconInfo: ImageVector = Icons.Default.Info
 private val IconSearch: ImageVector = Icons.Default.Search
+private val IconInstall: ImageVector = Icons.Default.InstallMobile
 
 @Composable
 fun FilePanel(
@@ -196,13 +198,13 @@ fun FilePanel(
         }
     }
 
-    // ============ 操作菜单 ============
-
     actionTarget?.let { target ->
         val format = ArchiveFormat.detect(target.name)
+        val isApk = target.name.substringAfterLast('.', "").lowercase() == "apk"
         FileActionDialog(
             item = target,
             archiveFormat = format,
+            isApk = isApk,
             onDismiss = { actionTarget = null },
             onRename = {
                 actionTarget = null
@@ -240,11 +242,13 @@ fun FilePanel(
             onInfo = {
                 actionTarget = null
                 infoTarget = target
+            },
+            onInstall = {
+                actionTarget = null
+                vm.installApk(target)
             }
         )
     }
-
-    // ============ 属性对话框 ============
 
     infoTarget?.let { target ->
         FileInfoDialog(
@@ -257,16 +261,12 @@ fun FilePanel(
         )
     }
 
-    // ============ 压缩格式选择 ============
-
     if (compressPromptVisible) {
         CompressFormatDialog(
             onSelect = { format -> vm.compressWithFormat(format) },
             onDismiss = { vm.dismissCompressPrompt() }
         )
     }
-
-    // ============ 排序对话框 ============
 
     if (showSortDialog) {
         SortDialog(
@@ -278,8 +278,6 @@ fun FilePanel(
             onDismiss = { showSortDialog = false }
         )
     }
-
-    // ============ 新建文件夹对话框 ============
 
     if (showNewFolderDialog) {
         TextInputDialog(
@@ -293,8 +291,6 @@ fun FilePanel(
             onDismiss = { showNewFolderDialog = false }
         )
     }
-
-    // ============ 跳转路径对话框 ============
 
     if (showJumpDialog) {
         TextInputDialog(
@@ -314,8 +310,6 @@ fun FilePanel(
         )
     }
 
-    // ============ 重命名对话框 ============
-
     renameTarget?.let { target ->
         TextInputDialog(
             title = "重命名",
@@ -331,8 +325,6 @@ fun FilePanel(
         )
     }
 }
-
-// ==================== 压缩格式选择对话框 ====================
 
 @Composable
 private fun CompressFormatDialog(
@@ -396,8 +388,6 @@ private fun CompressFormatItem(
         }
     }
 }
-
-// ==================== 文件详情对话框 ====================
 
 @Composable
 private fun FileInfoDialog(
@@ -502,12 +492,11 @@ private fun formatSize(bytes: Long): String {
     return String.format("%.2f GB", gb)
 }
 
-// ==================== 文件操作菜单 ====================
-
 @Composable
 private fun FileActionDialog(
     item: FileItem,
     archiveFormat: ArchiveFormat?,
+    isApk: Boolean,
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onCopy: () -> Unit,
@@ -517,13 +506,17 @@ private fun FileActionDialog(
     onExtractHere: () -> Unit,
     onExtractOther: () -> Unit,
     onZipThis: () -> Unit,
-    onInfo: () -> Unit
+    onInfo: () -> Unit,
+    onInstall: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                if (isApk) {
+                    ActionItem("安装", IconInstall, onInstall)
+                }
                 if (archiveFormat != null) {
                     ActionItem(
                         "解压到当前目录（${archiveFormat.label}）",
@@ -565,8 +558,6 @@ private fun ActionItem(
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
-
-// ==================== 顶部工具栏 ====================
 
 @Composable
 private fun NormalToolbar(
@@ -711,8 +702,6 @@ private fun SelectionToolbar(
     }
 }
 
-// ==================== 文件行 ====================
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
@@ -779,8 +768,6 @@ private fun FileRow(
         }
     }
 }
-
-// ==================== 通用对话框 ====================
 
 @Composable
 private fun TextInputDialog(
