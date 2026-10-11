@@ -11,6 +11,6 @@ data class FileItem(
     val size: Long = 0,
     val lastModified: Long = 0,
     val mimeType: String? = null,
-    // 预计算，避免每帧调用 uri.toString()
-    val uriString: String = uri.toString()
+    val uriString: String = uri.toString(),
+    val sizeText: String = ""
 )
