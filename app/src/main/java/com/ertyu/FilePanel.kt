@@ -77,6 +77,8 @@ import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 import java.io.File
 
+// ==================== 顶层图标缓存 ====================
+
 private val IconFolder: ImageVector = Icons.Default.Folder
 private val IconFile: ImageVector = Icons.AutoMirrored.Filled.InsertDriveFile
 private val IconMore: ImageVector = Icons.Default.MoreVert
@@ -211,6 +213,8 @@ fun FilePanel(
         }
     }
 
+    // ============ 文件操作菜单 ============
+
     actionTarget?.let { target ->
         val format = ArchiveFormat.detect(target.name)
         val isApk = target.name.substringAfterLast('.', "")
@@ -268,6 +272,8 @@ fun FilePanel(
         )
     }
 
+    // ============ 属性对话框 ============
+
     infoTarget?.let { target ->
         FileInfoDialog(
             item = target,
@@ -279,12 +285,16 @@ fun FilePanel(
         )
     }
 
+    // ============ 压缩格式选择 ============
+
     if (compressPromptVisible) {
         CompressFormatDialog(
             onSelect = { format -> vm.compressWithFormat(format) },
             onDismiss = { vm.dismissCompressPrompt() }
         )
     }
+
+    // ============ 排序对话框 ============
 
     if (showSortDialog) {
         SortDialog(
@@ -296,6 +306,8 @@ fun FilePanel(
             onDismiss = { showSortDialog = false }
         )
     }
+
+    // ============ 新建文件夹对话框 ============
 
     if (showNewFolderDialog) {
         TextInputDialog(
@@ -309,6 +321,8 @@ fun FilePanel(
             onDismiss = { showNewFolderDialog = false }
         )
     }
+
+    // ============ 跳转路径对话框 ============
 
     if (showJumpDialog) {
         TextInputDialog(
@@ -328,6 +342,8 @@ fun FilePanel(
         )
     }
 
+    // ============ 重命名对话框 ============
+
     renameTarget?.let { target ->
         TextInputDialog(
             title = "重命名",
@@ -344,6 +360,8 @@ fun FilePanel(
     }
 }
 
+// ==================== 压缩格式选择对话框 ====================
+
 @Composable
 private fun CompressFormatDialog(
     onSelect: (ArchiveFormat) -> Unit,
@@ -356,7 +374,7 @@ private fun CompressFormatDialog(
             Column {
                 CompressFormatItem(
                     label = "ZIP",
-                    desc = ".zip（兼容性最好）",
+                    desc = ".zip（兼容性最好，Windows/手机通用）",
                     format = ArchiveFormat.ZIP,
                     onSelect = onSelect
                 )
@@ -368,7 +386,7 @@ private fun CompressFormatDialog(
                 )
                 CompressFormatItem(
                     label = "TAR.GZ",
-                    desc = ".tar.gz（Linux 常见）",
+                    desc = ".tar.gz（Linux 常见，压缩率高）",
                     format = ArchiveFormat.TAR_GZ,
                     onSelect = onSelect
                 )
@@ -406,6 +424,8 @@ private fun CompressFormatItem(
         }
     }
 }
+
+// ==================== 文件详情对话框 ====================
 
 @Composable
 private fun FileInfoDialog(
@@ -516,6 +536,8 @@ private fun formatSize(bytes: Long): String {
     return String.format("%.2f GB", gb)
 }
 
+// ==================== 文件操作菜单 ====================
+
 @Composable
 private fun FileActionDialog(
     item: FileItem,
@@ -592,6 +614,8 @@ private fun ActionItem(
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
+
+// ==================== 顶部工具栏 ====================
 
 @Composable
 private fun NormalToolbar(
@@ -775,6 +799,8 @@ private fun SelectionToolbar(
     }
 }
 
+// ==================== 文件行 ====================
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
@@ -839,29 +865,4 @@ private fun FileRow(
         }
         if (!isSelectionMode) {
             IconButton(
-                onClick = onMoreClick,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(IconMore, contentDescription = "更多")
-            }
-        }
-    }
-}
-
-@Composable
-private fun TextInputDialog(
-    title: String,
-    placeholder: String,
-    initial: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var text by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-  
+       
