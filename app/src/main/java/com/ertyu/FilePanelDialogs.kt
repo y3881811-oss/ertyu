@@ -19,8 +19,10 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -61,7 +63,8 @@ fun FileActionDialog(
     onZipThis: () -> Unit,
     onInfo: () -> Unit,
     onInstall: () -> Unit,
-    onBrowseApk: () -> Unit
+    onBrowseApk: () -> Unit,
+    onHexView: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -87,6 +90,7 @@ fun FileActionDialog(
                     )
                 }
                 ActionRow("压缩为…", Icons.Default.FolderZip, onZipThis)
+                ActionRow("HEX 查看", Icons.Default.Search, onHexView)
                 ActionRow("属性", Icons.Default.Info, onInfo)
                 ActionRow("重命名", Icons.Default.Edit, onRename)
                 ActionRow(
@@ -122,7 +126,7 @@ private fun ActionRow(
             .padding(vertical = 12.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        androidx.compose.material3.Icon(icon, contentDescription = null)
+        Icon(icon, contentDescription = null)
         Spacer(Modifier.width(16.dp))
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
@@ -249,12 +253,12 @@ fun CompressFormatDialog(
         title = { Text("选择压缩格式") },
         text = {
             Column {
-                FormatRow("ZIP", ".zip（兼容性最好）", ArchiveFormat.ZIP, onSelect)
-                FormatRow("TAR", ".tar（不压缩）", ArchiveFormat.TAR, onSelect)
-                FormatRow(
-                    "TAR.GZ", ".tar.gz（Linux 常见）",
-                    ArchiveFormat.TAR_GZ, onSelect
-                )
+                FormatRow("ZIP", ".zip（兼容性最好）",
+                    ArchiveFormat.ZIP, onSelect)
+                FormatRow("TAR", ".tar（不压缩）",
+                    ArchiveFormat.TAR, onSelect)
+                FormatRow("TAR.GZ", ".tar.gz（Linux 常见）",
+                    ArchiveFormat.TAR_GZ, onSelect)
             }
         },
         confirmButton = {
@@ -277,10 +281,7 @@ private fun FormatRow(
             .padding(vertical = 12.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        androidx.compose.material3.Icon(
-            Icons.Default.FolderZip,
-            contentDescription = null
-        )
+        Icon(Icons.Default.FolderZip, contentDescription = null)
         Spacer(Modifier.width(16.dp))
         Column {
             Text(label, style = MaterialTheme.typography.bodyLarge)
@@ -361,62 +362,4 @@ fun TextInputDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
-}
-
-// ==================== 归档/文件夹大小/排序弹窗状态管理 ====================
-
-// 这些是 FilePanel 里弹出的对话框，状态放在 MainViewModel 里，方便跨文件访问
-
-fun MainViewModel.openNewFolderDialog(isLeft: Boolean) {
-    _newFolderDialogIsLeft.value = isLeft
-    _newFolderDialogVisible.value = true
-}
-
-fun MainViewModel.dismissNewFolderDialog() {
-    _newFolderDialogVisible.value = false
-}
-
-fun MainViewModel.openJumpDialog(isLeft: Boolean) {
-    _jumpDialogIsLeft.value = isLeft
-    _jumpDialogVisible.value = true
-}
-
-fun MainViewModel.dismissJumpDialog() {
-    _jumpDialogVisible.value = false
-}
-
-fun MainViewModel.openSortDialog(isLeft: Boolean) {
-    _sortDialogIsLeft.value = isLeft
-    _sortDialogVisible.value = true
-}
-
-fun MainViewModel.dismissSortDialog() {
-    _sortDialogVisible.value = false
-}
-
-fun MainViewModel.openActionDialog(isLeft: Boolean, item: FileItem) {
-    _actionDialogIsLeft.value = isLeft
-    _actionDialogTarget.value = item
-}
-
-fun MainViewModel.dismissActionDialog() {
-    _actionDialogTarget.value = null
-}
-
-fun MainViewModel.openInfoDialog(item: FileItem) {
-    _infoDialogTarget.value = item
-}
-
-fun MainViewModel.dismissInfoDialog() {
-    _infoDialogTarget.value = null
-    resetFolderSize()
-}
-
-fun MainViewModel.openRenameDialog(isLeft: Boolean, item: FileItem) {
-    _renameDialogIsLeft.value = isLeft
-    _renameDialogTarget.value = item
-}
-
-fun MainViewModel.dismissRenameDialog() {
-    _renameDialogTarget.value = null
 }
