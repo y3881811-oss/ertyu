@@ -130,6 +130,7 @@ class MainActivity : ComponentActivity() {
 fun AppRoot(vm: MainViewModel) {
     val editor by vm.editor.collectAsState()
     val imageViewer by vm.imageViewer.collectAsState()
+    val hexViewerState by vm.hexViewerState.collectAsState()
     val zipPrompt by vm.zipPrompt.collectAsState()
     val zipProgress by vm.zipProgress.collectAsState()
     val searchState by vm.searchState.collectAsState()
@@ -141,7 +142,6 @@ fun AppRoot(vm: MainViewModel) {
     val newFilePrompt by vm.newFilePrompt.collectAsState()
     val installedAppsState by vm.installedAppsState.collectAsState()
 
-    // FilePanel 弹窗状态
     val newFolderVisible by vm.newFolderDialogVisible.collectAsState()
     val newFolderIsLeft by vm.newFolderDialogIsLeft.collectAsState()
     val jumpVisible by vm.jumpDialogVisible.collectAsState()
@@ -157,8 +157,7 @@ fun AppRoot(vm: MainViewModel) {
 
     val context = LocalContext.current
 
-    // ============ ZIP 解压位置选择 ============
-
+    // ZIP 解压位置
     zipPrompt.item?.let { item ->
         val format = ArchiveFormat.detect(item.name)
         AlertDialog(
@@ -184,8 +183,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 压缩/解压进度 ============
-
+    // 压缩/解压进度
     if (zipProgress.visible) {
         AlertDialog(
             onDismissRequest = {
@@ -229,8 +227,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 安装进度 ============
-
+    // 安装进度
     if (installState.visible) {
         AlertDialog(
             onDismissRequest = {
@@ -280,8 +277,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 安装权限引导 ============
-
+    // 安装权限引导
     if (pendingInstall != null) {
         AlertDialog(
             onDismissRequest = { vm.dismissInstallPermissionPrompt() },
@@ -307,8 +303,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 新建文件 ============
-
+    // 新建文件
     if (newFilePrompt) {
         var text by remember { mutableStateOf("") }
         AlertDialog(
@@ -337,8 +332,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 新建文件夹 ============
-
+    // 新建文件夹
     if (newFolderVisible) {
         TextInputDialog(
             title = "新建文件夹",
@@ -352,8 +346,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 跳转路径 ============
-
+    // 跳转路径
     if (jumpVisible) {
         val currentPath = vm.flowOf(jumpIsLeft).value.currentUri?.path ?: ""
         TextInputDialog(
@@ -376,8 +369,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 排序方式 ============
-
+    // 排序方式
     if (sortVisible) {
         val currentSort = vm.flowOf(sortIsLeft).value.sortMode
         SortDialog(
@@ -390,8 +382,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 文件操作菜单 ============
-
+    // 文件操作菜单
     actionTarget?.let { target ->
         val format = ArchiveFormat.detect(target.name)
         val isApk = target.name.substringAfterLast('.', "")
@@ -445,12 +436,15 @@ fun AppRoot(vm: MainViewModel) {
             onBrowseApk = {
                 vm.dismissActionDialog()
                 vm.openApkBrowser(actionIsLeft, target)
+            },
+            onHexView = {
+                vm.dismissActionDialog()
+                vm.openHexViewer(target)
             }
         )
     }
 
-    // ============ 属性对话框 ============
-
+    // 属性对话框
     infoTarget?.let { target ->
         FileInfoDialog(
             item = target,
@@ -459,8 +453,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 重命名 ============
-
+    // 重命名
     renameTarget?.let { target ->
         TextInputDialog(
             title = "重命名",
@@ -476,8 +469,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 压缩格式选择 ============
-
+    // 压缩格式选择
     if (compressVisible) {
         CompressFormatDialog(
             onSelect = { format -> vm.compressWithFormat(format) },
@@ -485,8 +477,7 @@ fun AppRoot(vm: MainViewModel) {
         )
     }
 
-    // ============ 页面路由 ============
-
+    // 页面路由
     when {
         editor.isOpen -> {
             BackHandler { vm.closeEditor() }
@@ -495,6 +486,10 @@ fun AppRoot(vm: MainViewModel) {
         imageViewer.isOpen -> {
             BackHandler { vm.closeImageViewer() }
             ImageViewerScreen(vm)
+        }
+        hexViewerState.visible -> {
+            BackHandler { vm.closeHexViewer() }
+            HexViewerScreen(vm)
         }
         searchState.visible -> {
             BackHandler { vm.closeSearch() }
