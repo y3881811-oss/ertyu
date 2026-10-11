@@ -1,0 +1,87 @@
+name: Scheduled Release
+
+on:
+  # 定时触发：每天 UTC 03:00（北京时间 11:00）
+  schedule:
+    - cron: '0 3 * * *'
+
+  # 手动触发（方便测试，不用等到点）
+  workflow_dispatch:
+
+# 需要写权限才能创建 Release
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      # 生成版本号：基于日期，如 2026.10.11
+      - name: Generate version
+        id: version
+        run: |
+          DATE=$(date -u +'%Y.%m.%d')
+          TIME=$(date -u +'%H%M')
+          TAG="v${DATE}-${TIME}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "date=${DATE}" >> $GITHUB_OUTPUT
+          echo "版本号: ${TAG}"
+
+      - name: Build Debug APK
+        run: gradle assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: |
+          mkdir -p release
+          SRC=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          cp "$SRC" "release/MTFM-${{ steps.version.outputs.tag }}.apk"
+          ls -lh release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "MTFM ${{ steps.version.outputs.tag }}"
+          body: |
+            ## MTFM 自动构建版本
+
+            - **构建时间**：${{ steps.version.outputs.date }}
+            - **提交**：${{ github.sha }}
+            - **类型**：Debug APK
+
+            ### 安装说明
+            1. 下载下方 APK 文件
+            2. 在 Android 9 设备上允许「未知来源」安装
+            3. 安装前请先卸载旧版本（签名相同可覆盖）
+          files: release/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 可选：同时上传为 Artifact，方便调试
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MTFM-apk
+          path: release/*.apk
