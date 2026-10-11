@@ -1,14 +1,18 @@
 package com.ertyu
 
 import android.app.Application
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Environment
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.ApkBrowser
 import com.ertyu.engine.ApkInspector
 import com.ertyu.engine.ApkInstaller
+import com.ertyu.engine.AppListLoader
 import com.ertyu.engine.ArchiveEngine
 import com.ertyu.engine.BookmarkStore
 import com.ertyu.engine.DirectFileEngine
@@ -27,6 +31,8 @@ import com.ertyu.model.FileItem
 import com.ertyu.model.FolderSizeState
 import com.ertyu.model.ImageViewerState
 import com.ertyu.model.InstallState
+import com.ertyu.model.InstalledApp
+import com.ertyu.model.InstalledAppsState
 import com.ertyu.model.PanelState
 import com.ertyu.model.RecentItem
 import com.ertyu.model.SearchState
@@ -43,6 +49,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+
+private val TEXT_FILE_EXTS = setOf(
+    "txt", "md", "json", "xml", "kt", "java", "kts",
+    "gradle", "properties", "yml", "yaml", "html", "css", "js",
+    "log", "ini", "conf", "cfg", "sh", "bat"
+)
+
+private val IMAGE_FILE_EXTS = setOf(
+    "jpg", "jpeg", "png", "gif", "bmp", "webp"
+)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -68,7 +84,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _compressPromptVisible = MutableStateFlow(false)
     val compressPromptVisible: StateFlow<Boolean> = _compressPromptVisible.asStateFlow()
-
     private val _compressPanelIsLeft = MutableStateFlow(true)
 
     private val _folderSizeState = MutableStateFlow(FolderSizeState())
@@ -95,18 +110,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _bookmarkPanelState = MutableStateFlow(BookmarkPanelState())
     val bookmarkPanelState: StateFlow<BookmarkPanelState> = _bookmarkPanelState.asStateFlow()
 
-    // 新建文件对话框
-    private val _newFilePrompt = MutableStateFlow<Boolean>(false)
+    private val _newFilePrompt = MutableStateFlow(false)
     val newFilePrompt: StateFlow<Boolean> = _newFilePrompt.asStateFlow()
     private val _newFilePanelIsLeft = MutableStateFlow(true)
+
+    private val _installedAppsState = MutableStateFlow(InstalledAppsState())
+    val installedAppsState: StateFlow<InstalledAppsState> = _installedAppsState.asStateFlow()
 
     private var folderSizeJob: Job? = null
     private var searchJob: Job? = null
     private var installJob: Job? = null
-
+    private var appsJob: Job? = null
     private var apkBrowserSourceIsLeft = true
 
-    private fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
+    private fun flowOf(isLeft: Boolean) =
+        if (isLeft) _leftPanel else _rightPanel
+
+    // ==================== 初始化 ====================
 
     fun initDefaultDirs() {
         val root = Uri.fromFile(Environment.getExternalStorageDirectory())
@@ -116,6 +136,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             openDirectory(false, root)
         }
     }
+
+    // ==================== 浏览 ====================
 
     fun openDirectory(isLeft: Boolean, uri: Uri) {
         val flow = flowOf(isLeft)
@@ -140,10 +162,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         canGoUp = parent != null
                     )
                 }
-                // 记录最近访问
                 uri.path?.let { p ->
                     val f = File(p)
-                    if (f.isDirectory) BookmarkStore.addRecent(getApplication(), f)
+                    if (f.isDirectory) {
+                        BookmarkStore.addRecent(getApplication(), f)
+                    }
                 }
             } catch (e: Exception) {
                 flow.update { it.copy(isLoading = false, error = e.message) }
@@ -156,12 +179,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         sort: SortMode,
         showHidden: Boolean
     ): List<FileItem> {
-        val filtered = if (showHidden) raw else raw.filter { !it.name.startsWith(".") }
-        val comparator = when (sort) {
+        val filtered = if (showHidden) raw
+        else raw.filter { !it.name.startsWith(".") }
+
+        val comparator: Comparator<FileItem> = when (sort) {
             SortMode.NAME_ASC ->
-                compareBy<FileItem> { !it.isDirectory }.thenBy { it.name.lowercase() }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenBy { it.name.lowercase() }
             SortMode.NAME_DESC ->
-                compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.name.lowercase() }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenByDescending { it.name.lowercase() }
             SortMode.SIZE_ASC ->
                 compareBy<FileItem> { !it.isDirectory }.thenBy { it.size }
             SortMode.SIZE_DESC ->
@@ -169,7 +196,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             SortMode.TIME_ASC ->
                 compareBy<FileItem> { !it.isDirectory }.thenBy { it.lastModified }
             SortMode.TIME_DESC ->
-                compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.lastModified }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenByDescending { it.lastModified }
             SortMode.TYPE_ASC ->
                 compareBy<FileItem> { !it.isDirectory }
                     .thenBy { it.name.substringAfterLast('.', "").lowercase() }
@@ -182,13 +210,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setSortMode(isLeft: Boolean, mode: SortMode) {
         flowOf(isLeft).update {
-            it.copy(sortMode = mode, items = process(it.rawItems, mode, it.showHidden))
+            it.copy(
+                sortMode = mode,
+                items = process(it.rawItems, mode, it.showHidden)
+            )
         }
     }
 
     fun setShowHidden(isLeft: Boolean, show: Boolean) {
         flowOf(isLeft).update {
-            it.copy(showHidden = show, items = process(it.rawItems, it.sortMode, show))
+            it.copy(
+                showHidden = show,
+                items = process(it.rawItems, it.sortMode, show)
+            )
         }
     }
 
@@ -197,11 +231,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun goUp(isLeft: Boolean) {
-        val flow = flowOf(isLeft)
-        val current = flow.value.currentUri ?: return
+        val current = flowOf(isLeft).value.currentUri ?: return
         val parent = engine.getParent(current) ?: return
         openDirectory(isLeft, parent)
     }
+
+    // ==================== 文件操作 ====================
 
     fun delete(isLeft: Boolean, item: FileItem) {
         viewModelScope.launch {
@@ -235,7 +270,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ================= 新建文件 =================
+    fun rename(isLeft: Boolean, item: FileItem, newName: String) {
+        viewModelScope.launch {
+            engine.rename(item.uri, newName)
+            refresh(isLeft)
+        }
+    }
 
     fun openNewFilePrompt(isLeft: Boolean) {
         _newFilePanelIsLeft.value = isLeft
@@ -267,12 +307,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun rename(isLeft: Boolean, item: FileItem, newName: String) {
-        viewModelScope.launch {
-            engine.rename(item.uri, newName)
-            refresh(isLeft)
-        }
-    }
+    // ==================== 多选 ====================
 
     fun enterSelection(isLeft: Boolean, uriString: String) {
         flowOf(isLeft).update {
@@ -284,7 +319,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         flowOf(isLeft).update { state ->
             val set = state.selectedUris.toMutableSet()
             if (!set.add(uriString)) set.remove(uriString)
-            state.copy(selectedUris = set, isSelectionMode = set.isNotEmpty())
+            state.copy(
+                selectedUris = set,
+                isSelectionMode = set.isNotEmpty()
+            )
         }
     }
 
@@ -305,7 +343,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun batchDelete(isLeft: Boolean) {
         val state = flowOf(isLeft).value
-        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+        val targets = state.items.filter {
+            state.selectedUris.contains(it.uriString)
+        }
         viewModelScope.launch {
             targets.forEach { engine.delete(it.uri) }
             clearSelection(isLeft)
@@ -316,7 +356,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun batchCopy(fromLeft: Boolean) {
         val state = flowOf(fromLeft).value
         val target = flowOf(!fromLeft).value.currentUri ?: return
-        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+        val targets = state.items.filter {
+            state.selectedUris.contains(it.uriString)
+        }
         viewModelScope.launch {
             targets.forEach { engine.copy(it.uri, target) }
             clearSelection(fromLeft)
@@ -327,7 +369,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun batchMove(fromLeft: Boolean) {
         val state = flowOf(fromLeft).value
         val target = flowOf(!fromLeft).value.currentUri ?: return
-        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+        val targets = state.items.filter {
+            state.selectedUris.contains(it.uriString)
+        }
         viewModelScope.launch {
             targets.forEach { engine.move(it.uri, target) }
             clearSelection(fromLeft)
@@ -336,13 +380,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ==================== 打开文件 ====================
+
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
         when {
             ext == "apk" -> openApkInfo(item)
-            ArchiveFormat.isArchive(item.name) -> _zipPrompt.value = ZipPrompt(item)
-            ext in TEXT_EXTS -> openInEditor(item)
-            ext in IMAGE_EXTS -> openInImageViewer(item)
+            ArchiveFormat.isArchive(item.name) ->
+                _zipPrompt.value = ZipPrompt(item)
+            ext in TEXT_FILE_EXTS -> openInEditor(item)
+            ext in IMAGE_FILE_EXTS -> openInImageViewer(item)
         }
     }
 
@@ -364,7 +411,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (text == null) {
                     s.copy(isLoading = false, error = "无法读取文件")
                 } else {
-                    s.copy(content = text, originalContent = text, isLoading = false)
+                    s.copy(
+                        content = text,
+                        originalContent = text,
+                        isLoading = false
+                    )
                 }
             }
         }
@@ -401,16 +452,94 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _imageViewer.value = ImageViewerState()
     }
 
-    // ================= 书签 / 最近 =================
+    // ==================== 已安装应用 ====================
+
+    fun openInstalledApps() {
+        _installedAppsState.value = InstalledAppsState(
+            visible = true,
+            isLoading = true
+        )
+        appsJob?.cancel()
+        appsJob = viewModelScope.launch {
+            try {
+                val apps = AppListLoader.load(getApplication())
+                _installedAppsState.update {
+                    it.copy(isLoading = false, apps = apps)
+                }
+            } catch (e: Exception) {
+                _installedAppsState.update {
+                    it.copy(isLoading = false, error = e.message ?: "加载失败")
+                }
+            }
+        }
+    }
+
+    fun refreshInstalledApps() {
+        AppListLoader.invalidate()
+        openInstalledApps()
+    }
+
+    fun closeInstalledApps() {
+        appsJob?.cancel()
+        appsJob = null
+        _installedAppsState.value = InstalledAppsState()
+    }
+
+    fun updateInstalledAppsFilter(q: String) {
+        _installedAppsState.update { it.copy(filter = q) }
+    }
+
+    fun toggleShowSystemApps() {
+        _installedAppsState.update { it.copy(showSystem = !it.showSystem) }
+    }
+
+    fun openApp(app: InstalledApp, context: Context) {
+        try {
+            val intent = context.packageManager
+                .getLaunchIntentForPackage(app.packageName)
+            if (intent == null) {
+                _toast.value = "无法启动此应用"
+                return
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            _toast.value = "启动失败：${e.message}"
+        }
+    }
+
+    fun showAppDetails(app: InstalledApp, context: Context) {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${app.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            _toast.value = "打开详情失败：${e.message}"
+        }
+    }
+
+    fun uninstallApp(app: InstalledApp, context: Context) {
+        try {
+            val intent = Intent(Intent.ACTION_DELETE).apply {
+                data = Uri.parse("package:${app.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            _toast.value = "卸载失败：${e.message}"
+        }
+    }
+
+    // ==================== 书签 ====================
 
     fun openBookmarkPanel(isLeft: Boolean) {
-        val bookmarks = BookmarkStore.loadBookmarks(getApplication())
-        val recents = BookmarkStore.loadRecents(getApplication())
         _bookmarkPanelState.value = BookmarkPanelState(
             visible = true,
             sourceIsLeft = isLeft,
-            bookmarks = bookmarks,
-            recents = recents,
+            bookmarks = BookmarkStore.loadBookmarks(getApplication()),
+            recents = BookmarkStore.loadRecents(getApplication()),
             showRecents = false
         )
     }
@@ -449,9 +578,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
         BookmarkStore.saveBookmarks(getApplication(), list)
         _toast.value = "已添加书签"
-        _bookmarkPanelState.update {
-            it.copy(bookmarks = list)
-        }
+        _bookmarkPanelState.update { it.copy(bookmarks = list) }
     }
 
     fun removeBookmark(bm: Bookmark) {
@@ -480,7 +607,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _bookmarkPanelState.update { it.copy(recents = emptyList()) }
     }
 
-    // ================= APK 浏览 =================
+    // ==================== APK 浏览 ====================
 
     fun openApkBrowser(isLeft: Boolean, item: FileItem) {
         val apkFile = item.uri.path?.let(::File) ?: run {
@@ -519,11 +646,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun extractApkEntry(entry: ApkEntry) {
         val apkPath = _apkBrowserState.value.apkPath
         val apkFile = File(apkPath)
-        val targetDir = flowOf(apkBrowserSourceIsLeft).value.currentUri?.path?.let(::File)
-            ?: run {
-                _toast.value = "无目标目录"
-                return
-            }
+        val targetDir = flowOf(apkBrowserSourceIsLeft)
+            .value.currentUri?.path?.let(::File) ?: run {
+            _toast.value = "无目标目录"
+            return
+        }
         viewModelScope.launch {
             val result = ApkBrowser.extractEntry(apkFile, entry.path, targetDir)
             result.onSuccess { out ->
@@ -535,7 +662,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ================= APK 安装 =================
+    // ==================== APK 安装 ====================
 
     fun installApk(item: FileItem) {
         val apkFile = item.uri.path?.let(::File) ?: run {
@@ -563,8 +690,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ) { copied, total ->
                 _installState.update {
                     it.copy(
-                        stage = if (total > 0 && copied >= total)
-                            "提交安装…" else "复制中…",
+                        stage = if (total > 0 && copied >= total) "提交安装…"
+                        else "复制中…",
                         copied = copied,
                         total = total
                     )
@@ -606,7 +733,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _pendingInstall.value = null
     }
 
-    // ================= APK 信息 =================
+    // ==================== APK 信息 ====================
 
     private fun openApkInfo(item: FileItem) {
         _apkInfoState.value = ApkInfoState(
@@ -653,8 +780,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _toast.value = "无法确定目录"
                     return@launch
                 }
-                val safeLabel = info.label.replace(Regex("[\\\\/:*?\"<>|]"), "_")
-                val outFile = File(parentDir, "${safeLabel}_${info.packageName}.png")
+                val safeLabel = info.label.replace(
+                    Regex("[\\\\/:*?\"<>|]"), "_"
+                )
+                val outFile = File(
+                    parentDir,
+                    "${safeLabel}_${info.packageName}.png"
+                )
                 FileOutputStream(outFile).use { out ->
                     icon.compress(Bitmap.CompressFormat.PNG, 100, out)
                 }
@@ -669,7 +801,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _toast.value = null
     }
 
-    // ================= 解压 =================
+    // ==================== 解压 ====================
 
     fun dismissZipPrompt() {
         _zipPrompt.value = ZipPrompt()
@@ -677,10 +809,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun extractZipHere(isLeft: Boolean, item: FileItem) {
         _zipPrompt.value = ZipPrompt()
-        val currentDir = flowOf(isLeft).value.currentUri?.path?.let { File(it) } ?: return
-        val archiveFile = item.uri.path?.let { File(it) } ?: return
-        val baseName = archiveBaseName(archiveFile.name)
-        val targetDir = File(currentDir, baseName)
+        val currentDir = flowOf(isLeft)
+            .value.currentUri?.path?.let(::File) ?: return
+        val archiveFile = item.uri.path?.let(::File) ?: return
+        val targetDir = File(currentDir, archiveBaseName(archiveFile.name))
 
         viewModelScope.launch {
             _zipProgress.value = ZipProgress(
@@ -689,7 +821,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 message = archiveFile.name
             )
             val result = ArchiveEngine.extract(archiveFile, targetDir) { cur, total ->
-                _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
+                _zipProgress.value = _zipProgress.value
+                    .copy(current = cur, total = total)
             }
             result.onSuccess {
                 _zipProgress.value = _zipProgress.value.copy(
@@ -707,10 +840,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun extractZipToOtherPanel(isLeft: Boolean, item: FileItem) {
         _zipPrompt.value = ZipPrompt()
-        val targetDir = flowOf(!isLeft).value.currentUri?.path?.let { File(it) } ?: return
-        val archiveFile = item.uri.path?.let { File(it) } ?: return
-        val baseName = archiveBaseName(archiveFile.name)
-        val finalDir = File(targetDir, baseName)
+        val targetDir = flowOf(!isLeft)
+            .value.currentUri?.path?.let(::File) ?: return
+        val archiveFile = item.uri.path?.let(::File) ?: return
+        val finalDir = File(targetDir, archiveBaseName(archiveFile.name))
 
         viewModelScope.launch {
             _zipProgress.value = ZipProgress(
@@ -719,7 +852,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 message = archiveFile.name
             )
             val result = ArchiveEngine.extract(archiveFile, finalDir) { cur, total ->
-                _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
+                _zipProgress.value = _zipProgress.value
+                    .copy(current = cur, total = total)
             }
             result.onSuccess {
                 _zipProgress.value = _zipProgress.value.copy(
@@ -752,6 +886,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ==================== 压缩 ====================
+
     fun requestCompress(isLeft: Boolean) {
         val state = flowOf(isLeft).value
         if (state.selectedUris.isEmpty()) return
@@ -760,120 +896,4 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun dismissCompressPrompt() {
-        _compressPromptVisible.value = false
-    }
-
-    fun compressWithFormat(format: ArchiveFormat) {
-        _compressPromptVisible.value = false
-        if (!format.canCompress) return
-        val isLeft = _compressPanelIsLeft.value
-        val state = flowOf(isLeft).value
-        val currentDir = state.currentUri?.path?.let { File(it) } ?: return
-        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
-        if (targets.isEmpty()) return
-
-        val sources = targets.mapNotNull { it.uri.path?.let(::File) }
-        if (sources.isEmpty()) return
-
-        val ext = when (format) {
-            ArchiveFormat.ZIP -> ".zip"
-            ArchiveFormat.TAR -> ".tar"
-            ArchiveFormat.TAR_GZ -> ".tar.gz"
-            else -> ".zip"
-        }
-
-        val fileName = if (sources.size == 1) {
-            val n = sources[0].name
-            val base = if (n.contains('.')) n.substringBeforeLast('.') else n
-            "$base$ext"
-        } else {
-            "archive_${System.currentTimeMillis()}$ext"
-        }
-        val targetFile = File(currentDir, fileName)
-
-        viewModelScope.launch {
-            _zipProgress.value = ZipProgress(
-                visible = true,
-                title = "压缩中",
-                message = fileName
-            )
-            val result = ArchiveEngine.compress(sources, targetFile, format) { cur, total ->
-                _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
-            }
-            result.onSuccess {
-                _zipProgress.value = _zipProgress.value.copy(
-                    done = true,
-                    message = "压缩完成：$fileName"
-                )
-            }.onFailure { e ->
-                _zipProgress.value = _zipProgress.value.copy(
-                    error = e.message ?: "压缩失败"
-                )
-            }
-            clearSelection(isLeft)
-            refresh(isLeft)
-        }
-    }
-
-    fun dismissZipProgress() {
-        _zipProgress.value = ZipProgress()
-    }
-
-    // ================= 文件夹大小 =================
-
-    fun calculateFolderSize(item: FileItem) {
-        folderSizeJob?.cancel()
-        val folder = item.uri.path?.let { File(it) } ?: return
-        _folderSizeState.value = FolderSizeState(isCalculating = true)
-        folderSizeJob = viewModelScope.launch {
-            try {
-                val (bytes, count) = FolderSizeCalculator.calculate(folder) { scanned, totalBytes ->
-                    _folderSizeState.value = FolderSizeState(
-                        isCalculating = true,
-                        scanned = scanned,
-                        totalBytes = totalBytes
-                    )
-                }
-                _folderSizeState.value = FolderSizeState(
-                    isCalculating = false,
-                    scanned = count,
-                    totalBytes = bytes,
-                    done = true
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _folderSizeState.value = FolderSizeState(
-                    error = e.message ?: "计算失败"
-                )
-            }
-        }
-    }
-
-    fun cancelFolderSize() {
-        folderSizeJob?.cancel()
-        folderSizeJob = null
-        _folderSizeState.value = FolderSizeState()
-    }
-
-    fun resetFolderSize() {
-        folderSizeJob?.cancel()
-        folderSizeJob = null
-        _folderSizeState.value = FolderSizeState()
-    }
-
-    // ================= 搜索 =================
-
-    fun openSearch(isLeft: Boolean) {
-        val rootPath = flowOf(isLeft).value.currentUri?.path ?: return
-        _searchState.value = SearchState(
-            visible = true,
-            sourceIsLeft = isLeft,
-            rootPath = rootPath
-        )
-    }
-
-    fun closeSearch() {
-        searchJob?.cancel()
-        searchJob = null
-        _searchState.value = 
+        _compressPr
