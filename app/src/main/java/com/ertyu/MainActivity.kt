@@ -12,8 +12,12 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -25,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
@@ -74,6 +79,59 @@ class MainActivity : ComponentActivity() {
 fun AppRoot(vm: MainViewModel) {
     val editor by vm.editor.collectAsState()
     val imageViewer by vm.imageViewer.collectAsState()
+    val zipPrompt by vm.zipPrompt.collectAsState()
+    val zipProgress by vm.zipProgress.collectAsState()
+
+    // ZIP 选择对话框
+    zipPrompt.item?.let { item ->
+        AlertDialog(
+            onDismissRequest = { vm.dismissZipPrompt() },
+            title = { Text(item.name, maxLines = 2) },
+            text = { Text("选择解压位置") },
+            confirmButton = {
+                TextButton(onClick = { vm.extractZipToOtherPanel(true, item) }) {
+                    Text("解压到另一侧")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.extractZipHere(true, item) }) {
+                    Text("解压到当前目录")
+                }
+            }
+        )
+    }
+
+    // ZIP 进度对话框
+    if (zipProgress.visible) {
+        AlertDialog(
+            onDismissRequest = { if (zipProgress.done || zipProgress.error != null) vm.dismissZipProgress() },
+            title = { Text(zipProgress.title) },
+            text = {
+                androidx.compose.foundation.layout.Column {
+                    Text(zipProgress.message, maxLines = 2)
+                    if (zipProgress.total > 0) {
+                        androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = {
+                                if (zipProgress.total == 0) 0f
+                                else zipProgress.current.toFloat() / zipProgress.total
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        androidx.compose.foundation.layout.Spacer(Modifier.height(4.dp))
+                        Text("${zipProgress.current} / ${zipProgress.total}")
+                    }
+                }
+            },
+            confirmButton = {
+                if (zipProgress.done || zipProgress.error != null) {
+                    TextButton(onClick = { vm.dismissZipProgress() }) {
+                        Text(if (zipProgress.error != null) "关闭" else "完成")
+                    }
+                }
+            }
+        )
+    }
 
     when {
         editor.isOpen -> {
@@ -97,22 +155,12 @@ fun MainScreen(vm: MainViewModel) {
     val isWide = configuration.screenWidthDp >= 600
 
     if (isLandscape || isWide) {
-        // 横屏或平板：双面板
         Row(modifier = Modifier.fillMaxSize()) {
-            FilePanel(
-                isLeft = true,
-                vm = vm,
-                modifier = Modifier.weight(1f)
-            )
+            FilePanel(isLeft = true, vm = vm, modifier = Modifier.weight(1f))
             VerticalDivider()
-            FilePanel(
-                isLeft = false,
-                vm = vm,
-                modifier = Modifier.weight(1f)
-            )
+            FilePanel(isLeft = false, vm = vm, modifier = Modifier.weight(1f))
         }
     } else {
-        // 竖屏手机：单面板 + 可切换
         var activeLeft by remember { mutableStateOf(true) }
         FilePanel(
             isLeft = activeLeft,
