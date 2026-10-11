@@ -15,6 +15,7 @@ import com.ertyu.model.BookmarkPanelState
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
 import com.ertyu.model.FolderSizeState
+import com.ertyu.model.HexViewerState
 import com.ertyu.model.ImageViewerState
 import com.ertyu.model.InstallState
 import com.ertyu.model.InstalledAppsState
@@ -24,6 +25,7 @@ import com.ertyu.model.SortMode
 import com.ertyu.model.ZipProgress
 import com.ertyu.model.ZipPrompt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +33,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.RandomAccessFile
 
 internal val TEXT_FILE_EXTS = setOf(
     "txt", "md", "json", "xml", "kt", "java", "kts",
@@ -60,6 +64,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     internal val _imageViewer = MutableStateFlow(ImageViewerState())
     val imageViewer: StateFlow<ImageViewerState> = _imageViewer.asStateFlow()
+
+    internal val _hexViewerState = MutableStateFlow(HexViewerState())
+    val hexViewerState: StateFlow<HexViewerState> =
+        _hexViewerState.asStateFlow()
 
     // ==================== 压缩 ====================
 
@@ -129,14 +137,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _newFolderDialogIsLeft.asStateFlow()
 
     internal val _jumpDialogVisible = MutableStateFlow(false)
-    val jumpDialogVisible: StateFlow<Boolean> =
-        _jumpDialogVisible.asStateFlow()
+    val jumpDialogVisible: StateFlow<Boolean> = _jumpDialogVisible.asStateFlow()
     internal val _jumpDialogIsLeft = MutableStateFlow(true)
     val jumpDialogIsLeft: StateFlow<Boolean> = _jumpDialogIsLeft.asStateFlow()
 
     internal val _sortDialogVisible = MutableStateFlow(false)
-    val sortDialogVisible: StateFlow<Boolean> =
-        _sortDialogVisible.asStateFlow()
+    val sortDialogVisible: StateFlow<Boolean> = _sortDialogVisible.asStateFlow()
     internal val _sortDialogIsLeft = MutableStateFlow(true)
     val sortDialogIsLeft: StateFlow<Boolean> = _sortDialogIsLeft.asStateFlow()
 
@@ -165,6 +171,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal var installJob: Job? = null
     internal var appsJob: Job? = null
     internal var apkBrowserSourceIsLeft = true
+
+    private val hexLoadChunk = 64 * 1024
+    private var hexFile: File? = null
+    private var hexLoadedBytes = 0
 
     internal fun flowOf(isLeft: Boolean) =
         if (isLeft) _leftPanel else _rightPanel
@@ -555,6 +565,77 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeImageViewer() {
         _imageViewer.value = ImageViewerState()
+    }
+
+    // ==================== HEX 查看器 ====================
+
+    fun openHexViewer(item: FileItem) {
+        val file = item.uri.path?.let(::File) ?: run {
+            _toast.value = "无效路径"
+            return
+        }
+        if (!file.exists() || !file.isFile) {
+            _toast.value = "文件不存在"
+            return
+        }
+        hexFile = file
+        hexLoadedBytes = 0
+        _hexViewerState.value = HexViewerState(
+            visible = true,
+            filePath = file.absolutePath,
+            fileName = file.name,
+            fileSize = file.length(),
+            isLoading = true
+        )
+        loadHexChunk()
+    }
+
+    fun loadMoreHex() {
+        if (hexFile == null) return
+        _hexViewerState.update { it.copy(isLoading = true) }
+        loadHexChunk()
+    }
+
+    private fun loadHexChunk() {
+        val file = hexFile ?: return
+        viewModelScope.launch {
+            try {
+                val chunk = withContext(Dispatchers.IO) {
+                    RandomAccessFile(file, "r").use { raf ->
+                        val remaining = (file.length() - hexLoadedBytes)
+                            .coerceAtMost(hexLoadChunk.toLong())
+                        if (remaining <= 0) return@withContext ByteArray(0)
+                        raf.seek(hexLoadedBytes)
+                        val buf = ByteArray(remaining.toInt())
+                        raf.readFully(buf)
+                        buf
+                    }
+                }
+
+                val oldBytes = _hexViewerState.value.bytes
+                val newBytes = oldBytes + chunk
+                hexLoadedBytes += chunk.size
+
+                _hexViewerState.update {
+                    it.copy(
+                        bytes = newBytes,
+                        loadedBytes = hexLoadedBytes,
+                        isLoading = false,
+                        error = null
+                    )
+                }
+            } catch (e: Exception) {
+                _hexViewerState.update {
+                    it.copy(isLoading = false, error = e.message ?: "读取失败")
+                }
+            }
+        }
+    }
+
+    fun closeHexViewer() {
+        hexFile = null
+        hexLoadedBytes = 0
+        _hexViewerState.value = HexViewerState()
     }
 
     // ==================== 文件夹大小 ====================
