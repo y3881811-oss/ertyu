@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
@@ -91,6 +92,7 @@ private val IconVisibility: ImageVector = Icons.Default.Visibility
 private val IconVisibilityOff: ImageVector = Icons.Default.VisibilityOff
 private val IconZip: ImageVector = Icons.Default.FolderZip
 private val IconInfo: ImageVector = Icons.Default.Info
+private val IconSearch: ImageVector = Icons.Default.Search
 
 @Composable
 fun FilePanel(
@@ -134,7 +136,8 @@ fun FilePanel(
                 onSort = { showSortDialog = true },
                 onToggleHidden = { vm.setShowHidden(isLeft, !state.showHidden) },
                 onRefresh = { vm.refresh(isLeft) },
-                onSwitchPanel = { onSwitchPanel?.invoke() }
+                onSwitchPanel = { onSwitchPanel?.invoke() },
+                onSearch = { vm.openSearch(isLeft) }
             )
         }
         HorizontalDivider()
@@ -413,7 +416,6 @@ private fun FileInfoDialog(
                 InfoRow("类型", item.typeText)
 
                 if (item.isDirectory) {
-                    // 目录：显示子项数 + 计算总大小
                     val countText = if (item.childCount >= 0)
                         "目录（包含 ${item.childCount} 项）" else "目录"
                     InfoRow("内容", countText)
@@ -578,7 +580,8 @@ private fun NormalToolbar(
     onSort: () -> Unit,
     onToggleHidden: () -> Unit,
     onRefresh: () -> Unit,
-    onSwitchPanel: () -> Unit
+    onSwitchPanel: () -> Unit,
+    onSearch: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -614,6 +617,14 @@ private fun NormalToolbar(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false }
             ) {
+                DropdownMenuItem(
+                    text = { Text("搜索") },
+                    leadingIcon = { Icon(IconSearch, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onSearch()
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("新建文件夹") },
                     leadingIcon = { Icon(IconNewFolder, null) },
