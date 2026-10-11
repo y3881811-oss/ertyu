@@ -1,7 +1,6 @@
 package com.ertyu
 
 import android.app.Application
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
@@ -9,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.BookmarkStore
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
+import com.ertyu.engine.FolderSizeCalculator
 import com.ertyu.model.ApkBrowserState
 import com.ertyu.model.ApkInfoState
 import com.ertyu.model.BookmarkPanelState
@@ -23,6 +23,7 @@ import com.ertyu.model.SearchState
 import com.ertyu.model.SortMode
 import com.ertyu.model.ZipProgress
 import com.ertyu.model.ZipPrompt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +32,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
-import java.io.FileOutputStream
 
 internal val TEXT_FILE_EXTS = setOf(
     "txt", "md", "json", "xml", "kt", "java", "kts",
@@ -47,7 +47,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     internal val engine: FileEngine = DirectFileEngine()
 
-    // ==================== State ====================
+    // ==================== 面板 / 查看器 ====================
+
     internal val _leftPanel = MutableStateFlow(PanelState())
     val leftPanel: StateFlow<PanelState> = _leftPanel.asStateFlow()
 
@@ -60,6 +61,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _imageViewer = MutableStateFlow(ImageViewerState())
     val imageViewer: StateFlow<ImageViewerState> = _imageViewer.asStateFlow()
 
+    // ==================== 压缩 ====================
+
     internal val _zipProgress = MutableStateFlow(ZipProgress())
     val zipProgress: StateFlow<ZipProgress> = _zipProgress.asStateFlow()
 
@@ -67,23 +70,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val zipPrompt: StateFlow<ZipPrompt> = _zipPrompt.asStateFlow()
 
     internal val _compressPromptVisible = MutableStateFlow(false)
-    val compressPromptVisible: StateFlow<Boolean> = _compressPromptVisible.asStateFlow()
+    val compressPromptVisible: StateFlow<Boolean> =
+        _compressPromptVisible.asStateFlow()
     internal val _compressPanelIsLeft = MutableStateFlow(true)
 
+    // ==================== 属性 ====================
+
     internal val _folderSizeState = MutableStateFlow(FolderSizeState())
-    val folderSizeState: StateFlow<FolderSizeState> = _folderSizeState.asStateFlow()
+    val folderSizeState: StateFlow<FolderSizeState> =
+        _folderSizeState.asStateFlow()
+
+    // ==================== 搜索 / 书签 ====================
 
     internal val _searchState = MutableStateFlow(SearchState())
     val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
+
+    internal val _bookmarkPanelState = MutableStateFlow(BookmarkPanelState())
+    val bookmarkPanelState: StateFlow<BookmarkPanelState> =
+        _bookmarkPanelState.asStateFlow()
+
+    // ==================== APK ====================
 
     internal val _apkInfoState = MutableStateFlow(ApkInfoState())
     val apkInfoState: StateFlow<ApkInfoState> = _apkInfoState.asStateFlow()
 
     internal val _apkBrowserState = MutableStateFlow(ApkBrowserState())
-    val apkBrowserState: StateFlow<ApkBrowserState> = _apkBrowserState.asStateFlow()
-
-    internal val _toast = MutableStateFlow<String?>(null)
-    val toast: StateFlow<String?> = _toast.asStateFlow()
+    val apkBrowserState: StateFlow<ApkBrowserState> =
+        _apkBrowserState.asStateFlow()
 
     internal val _pendingInstall = MutableStateFlow<File?>(null)
     val pendingInstall: StateFlow<File?> = _pendingInstall.asStateFlow()
@@ -91,19 +104,62 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _installState = MutableStateFlow(InstallState())
     val installState: StateFlow<InstallState> = _installState.asStateFlow()
 
-    internal val _bookmarkPanelState = MutableStateFlow(BookmarkPanelState())
-    val bookmarkPanelState: StateFlow<BookmarkPanelState> =
-        _bookmarkPanelState.asStateFlow()
-
-    internal val _newFilePrompt = MutableStateFlow(false)
-    val newFilePrompt: StateFlow<Boolean> = _newFilePrompt.asStateFlow()
-    internal val _newFilePanelIsLeft = MutableStateFlow(true)
+    // ==================== 已安装应用 ====================
 
     internal val _installedAppsState = MutableStateFlow(InstalledAppsState())
     val installedAppsState: StateFlow<InstalledAppsState> =
         _installedAppsState.asStateFlow()
 
-    // ==================== Jobs / 辅助 ====================
+    // ==================== 提示 ====================
+
+    internal val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast.asStateFlow()
+
+    // ==================== FilePanel 弹窗状态 ====================
+
+    internal val _newFilePrompt = MutableStateFlow(false)
+    val newFilePrompt: StateFlow<Boolean> = _newFilePrompt.asStateFlow()
+    internal val _newFilePanelIsLeft = MutableStateFlow(true)
+
+    internal val _newFolderDialogVisible = MutableStateFlow(false)
+    val newFolderDialogVisible: StateFlow<Boolean> =
+        _newFolderDialogVisible.asStateFlow()
+    internal val _newFolderDialogIsLeft = MutableStateFlow(true)
+    val newFolderDialogIsLeft: StateFlow<Boolean> =
+        _newFolderDialogIsLeft.asStateFlow()
+
+    internal val _jumpDialogVisible = MutableStateFlow(false)
+    val jumpDialogVisible: StateFlow<Boolean> =
+        _jumpDialogVisible.asStateFlow()
+    internal val _jumpDialogIsLeft = MutableStateFlow(true)
+    val jumpDialogIsLeft: StateFlow<Boolean> = _jumpDialogIsLeft.asStateFlow()
+
+    internal val _sortDialogVisible = MutableStateFlow(false)
+    val sortDialogVisible: StateFlow<Boolean> =
+        _sortDialogVisible.asStateFlow()
+    internal val _sortDialogIsLeft = MutableStateFlow(true)
+    val sortDialogIsLeft: StateFlow<Boolean> = _sortDialogIsLeft.asStateFlow()
+
+    internal val _actionDialogTarget = MutableStateFlow<FileItem?>(null)
+    val actionDialogTarget: StateFlow<FileItem?> =
+        _actionDialogTarget.asStateFlow()
+    internal val _actionDialogIsLeft = MutableStateFlow(true)
+    val actionDialogIsLeft: StateFlow<Boolean> =
+        _actionDialogIsLeft.asStateFlow()
+
+    internal val _infoDialogTarget = MutableStateFlow<FileItem?>(null)
+    val infoDialogTarget: StateFlow<FileItem?> =
+        _infoDialogTarget.asStateFlow()
+
+    internal val _renameDialogTarget = MutableStateFlow<FileItem?>(null)
+    val renameDialogTarget: StateFlow<FileItem?> =
+        _renameDialogTarget.asStateFlow()
+    internal val _renameDialogIsLeft = MutableStateFlow(true)
+    val renameDialogIsLeft: StateFlow<Boolean> =
+        _renameDialogIsLeft.asStateFlow()
+
+    // ==================== Jobs ====================
+
     internal var folderSizeJob: Job? = null
     internal var searchJob: Job? = null
     internal var installJob: Job? = null
@@ -179,9 +235,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             SortMode.SIZE_ASC ->
                 compareBy<FileItem> { !it.isDirectory }.thenBy { it.size }
             SortMode.SIZE_DESC ->
-                compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.size }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenByDescending { it.size }
             SortMode.TIME_ASC ->
-                compareBy<FileItem> { !it.isDirectory }.thenBy { it.lastModified }
+                compareBy<FileItem> { !it.isDirectory }
+                    .thenBy { it.lastModified }
             SortMode.TIME_DESC ->
                 compareBy<FileItem> { !it.isDirectory }
                     .thenByDescending { it.lastModified }
@@ -190,7 +248,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     .thenBy { it.name.substringAfterLast('.', "").lowercase() }
             SortMode.TYPE_DESC ->
                 compareBy<FileItem> { !it.isDirectory }
-                    .thenByDescending { it.name.substringAfterLast('.', "").lowercase() }
+                    .thenByDescending {
+                        it.name.substringAfterLast('.', "").lowercase()
+                    }
         }
         return filtered.sortedWith(cmp)
     }
@@ -223,7 +283,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         openDirectory(isLeft, parent)
     }
 
-    // ==================== 文件基础操作 ====================
+    // ==================== 基础文件操作 ====================
 
     fun delete(isLeft: Boolean, item: FileItem) {
         viewModelScope.launch {
@@ -264,6 +324,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ==================== 新建文件 ====================
+
     fun openNewFilePrompt(isLeft: Boolean) {
         _newFilePanelIsLeft.value = isLeft
         _newFilePrompt.value = true
@@ -292,6 +354,62 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _toast.value = "创建失败：${e.message}"
             }
         }
+    }
+
+    // ==================== FilePanel 弹窗控制 ====================
+
+    fun openNewFolderDialog(isLeft: Boolean) {
+        _newFolderDialogIsLeft.value = isLeft
+        _newFolderDialogVisible.value = true
+    }
+
+    fun dismissNewFolderDialog() {
+        _newFolderDialogVisible.value = false
+    }
+
+    fun openJumpDialog(isLeft: Boolean) {
+        _jumpDialogIsLeft.value = isLeft
+        _jumpDialogVisible.value = true
+    }
+
+    fun dismissJumpDialog() {
+        _jumpDialogVisible.value = false
+    }
+
+    fun openSortDialog(isLeft: Boolean) {
+        _sortDialogIsLeft.value = isLeft
+        _sortDialogVisible.value = true
+    }
+
+    fun dismissSortDialog() {
+        _sortDialogVisible.value = false
+    }
+
+    fun openActionDialog(isLeft: Boolean, item: FileItem) {
+        _actionDialogIsLeft.value = isLeft
+        _actionDialogTarget.value = item
+    }
+
+    fun dismissActionDialog() {
+        _actionDialogTarget.value = null
+    }
+
+    fun openInfoDialog(item: FileItem) {
+        _infoDialogTarget.value = item
+    }
+
+    fun dismissInfoDialog() {
+        _infoDialogTarget.value = null
+        resetFolderSize()
+    }
+
+    fun openRenameDialog(isLeft: Boolean, item: FileItem) {
+        _renameDialogIsLeft.value = isLeft
+        _renameDialogTarget.value = item
+    }
+
+    fun dismissRenameDialog() {
+        _renameDialogTarget.value = null
     }
 
     // ==================== 多选 ====================
@@ -447,21 +565,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _folderSizeState.value = FolderSizeState(isCalculating = true)
         folderSizeJob = viewModelScope.launch {
             try {
-                val (bytes, count) = com.ertyu.engine.FolderSizeCalculator
-                    .calculate(folder) { scanned, totalBytes ->
-                        _folderSizeState.value = FolderSizeState(
-                            isCalculating = true,
-                            scanned = scanned,
-                            totalBytes = totalBytes
-                        )
-                    }
+                val (bytes, count) = FolderSizeCalculator.calculate(folder) {
+                        scanned, totalBytes ->
+                    _folderSizeState.value = FolderSizeState(
+                        isCalculating = true,
+                        scanned = scanned,
+                        totalBytes = totalBytes
+                    )
+                }
                 _folderSizeState.value = FolderSizeState(
                     isCalculating = false,
                     scanned = count,
                     totalBytes = bytes,
                     done = true
                 )
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _folderSizeState.value = FolderSizeState(
@@ -482,8 +600,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         folderSizeJob = null
         _folderSizeState.value = FolderSizeState()
     }
-
-    // ==================== 工具 ====================
 
     fun clearToast() {
         _toast.value = null
