@@ -10,6 +10,7 @@ import com.ertyu.engine.ApkBrowser
 import com.ertyu.engine.ApkInspector
 import com.ertyu.engine.ApkInstaller
 import com.ertyu.engine.ArchiveEngine
+import com.ertyu.engine.BookmarkStore
 import com.ertyu.engine.DirectFileEngine
 import com.ertyu.engine.FileEngine
 import com.ertyu.engine.FolderSizeCalculator
@@ -19,12 +20,15 @@ import com.ertyu.model.ApkEntry
 import com.ertyu.model.ApkInfo
 import com.ertyu.model.ApkInfoState
 import com.ertyu.model.ArchiveFormat
+import com.ertyu.model.Bookmark
+import com.ertyu.model.BookmarkPanelState
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
 import com.ertyu.model.FolderSizeState
 import com.ertyu.model.ImageViewerState
 import com.ertyu.model.InstallState
 import com.ertyu.model.PanelState
+import com.ertyu.model.RecentItem
 import com.ertyu.model.SearchState
 import com.ertyu.model.SortMode
 import com.ertyu.model.ZipProgress
@@ -88,6 +92,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _installState = MutableStateFlow(InstallState())
     val installState: StateFlow<InstallState> = _installState.asStateFlow()
 
+    private val _bookmarkPanelState = MutableStateFlow(BookmarkPanelState())
+    val bookmarkPanelState: StateFlow<BookmarkPanelState> = _bookmarkPanelState.asStateFlow()
+
+    // 新建文件对话框
+    private val _newFilePrompt = MutableStateFlow<Boolean>(false)
+    val newFilePrompt: StateFlow<Boolean> = _newFilePrompt.asStateFlow()
+    private val _newFilePanelIsLeft = MutableStateFlow(true)
+
     private var folderSizeJob: Job? = null
     private var searchJob: Job? = null
     private var installJob: Job? = null
@@ -127,6 +139,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         isLoading = false,
                         canGoUp = parent != null
                     )
+                }
+                // 记录最近访问
+                uri.path?.let { p ->
+                    val f = File(p)
+                    if (f.isDirectory) BookmarkStore.addRecent(getApplication(), f)
                 }
             } catch (e: Exception) {
                 flow.update { it.copy(isLoading = false, error = e.message) }
@@ -215,6 +232,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             engine.createDirectory(current, name)
             refresh(isLeft)
+        }
+    }
+
+    // ================= 新建文件 =================
+
+    fun openNewFilePrompt(isLeft: Boolean) {
+        _newFilePanelIsLeft.value = isLeft
+        _newFilePrompt.value = true
+    }
+
+    fun dismissNewFilePrompt() {
+        _newFilePrompt.value = false
+    }
+
+    fun createFile(name: String) {
+        _newFilePrompt.value = false
+        val isLeft = _newFilePanelIsLeft.value
+        val dir = flowOf(isLeft).value.currentUri?.path?.let(::File) ?: return
+        viewModelScope.launch {
+            try {
+                val f = File(dir, name)
+                if (f.exists()) {
+                    _toast.value = "文件已存在"
+                    return@launch
+                }
+                f.parentFile?.mkdirs()
+                f.createNewFile()
+                _toast.value = "已创建：${f.name}"
+                refresh(isLeft)
+            } catch (e: Exception) {
+                _toast.value = "创建失败：${e.message}"
+            }
         }
     }
 
@@ -352,6 +401,85 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _imageViewer.value = ImageViewerState()
     }
 
+    // ================= 书签 / 最近 =================
+
+    fun openBookmarkPanel(isLeft: Boolean) {
+        val bookmarks = BookmarkStore.loadBookmarks(getApplication())
+        val recents = BookmarkStore.loadRecents(getApplication())
+        _bookmarkPanelState.value = BookmarkPanelState(
+            visible = true,
+            sourceIsLeft = isLeft,
+            bookmarks = bookmarks,
+            recents = recents,
+            showRecents = false
+        )
+    }
+
+    fun closeBookmarkPanel() {
+        _bookmarkPanelState.value = BookmarkPanelState()
+    }
+
+    fun toggleBookmarkTab(showRecents: Boolean) {
+        _bookmarkPanelState.update {
+            it.copy(
+                showRecents = showRecents,
+                bookmarks = BookmarkStore.loadBookmarks(getApplication()),
+                recents = BookmarkStore.loadRecents(getApplication())
+            )
+        }
+    }
+
+    fun addBookmark(isLeft: Boolean) {
+        val uri = flowOf(isLeft).value.currentUri ?: return
+        val path = uri.path ?: return
+        val f = File(path)
+        if (!f.isDirectory) return
+        val list = BookmarkStore.loadBookmarks(getApplication()).toMutableList()
+        if (list.any { it.uriString == uri.toString() }) {
+            _toast.value = "已收藏"
+            return
+        }
+        list.add(
+            0,
+            Bookmark(
+                path = path,
+                name = f.name.ifBlank { path },
+                uriString = uri.toString()
+            )
+        )
+        BookmarkStore.saveBookmarks(getApplication(), list)
+        _toast.value = "已添加书签"
+        _bookmarkPanelState.update {
+            it.copy(bookmarks = list)
+        }
+    }
+
+    fun removeBookmark(bm: Bookmark) {
+        val list = BookmarkStore.loadBookmarks(getApplication())
+            .filterNot { it.uriString == bm.uriString }
+        BookmarkStore.saveBookmarks(getApplication(), list)
+        _bookmarkPanelState.update { it.copy(bookmarks = list) }
+    }
+
+    fun openBookmark(bm: Bookmark) {
+        val isLeft = _bookmarkPanelState.value.sourceIsLeft
+        val uri = bm.toUri()
+        closeBookmarkPanel()
+        openDirectory(isLeft, uri)
+    }
+
+    fun openRecent(item: RecentItem) {
+        val isLeft = _bookmarkPanelState.value.sourceIsLeft
+        val uri = item.toUri()
+        closeBookmarkPanel()
+        openDirectory(isLeft, uri)
+    }
+
+    fun clearRecents() {
+        BookmarkStore.clearRecents(getApplication())
+        _bookmarkPanelState.update { it.copy(recents = emptyList()) }
+    }
+
     // ================= APK 浏览 =================
 
     fun openApkBrowser(isLeft: Boolean, item: FileItem) {
@@ -451,7 +579,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             copied = it.total
                         )
                     }
-                    // 延迟自动关闭进度框，让用户看到结果
                     delay(1200)
                     _installState.value = InstallState()
                 }
@@ -749,80 +876,4 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun closeSearch() {
         searchJob?.cancel()
         searchJob = null
-        _searchState.value = SearchState()
-    }
-
-    fun updateSearchQuery(q: String) {
-        _searchState.update { it.copy(query = q) }
-    }
-
-    fun startSearch() {
-        val state = _searchState.value
-        if (state.query.isBlank()) return
-        searchJob?.cancel()
-        _searchState.update {
-            it.copy(
-                isSearching = true,
-                results = emptyList(),
-                scannedDirs = 0,
-                scannedFiles = 0,
-                error = null,
-                truncated = false
-            )
-        }
-
-        searchJob = viewModelScope.launch {
-            try {
-                val root = File(state.rootPath)
-                val (results, truncated) = SearchEngine.search(root, state.query) { dirs, files, list ->
-                    _searchState.update {
-                        it.copy(scannedDirs = dirs, scannedFiles = files, results = list)
-                    }
-                }
-                _searchState.update {
-                    it.copy(isSearching = false, results = results, truncated = truncated)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _searchState.update { it.copy(isSearching = false, error = e.message) }
-            }
-        }
-    }
-
-    fun cancelSearch() {
-        searchJob?.cancel()
-        searchJob = null
-        _searchState.update { it.copy(isSearching = false) }
-    }
-
-    fun handleSearchResultClick(item: FileItem) {
-        val isLeft = _searchState.value.sourceIsLeft
-        if (item.isDirectory) {
-            val uri = item.uri
-            closeSearch()
-            openDirectory(isLeft, uri)
-        } else {
-            openFile(item)
-        }
-    }
-
-    fun revealInPanel(item: FileItem) {
-        val isLeft = _searchState.value.sourceIsLeft
-        val parent = item.uri.path?.let { File(it).parentFile } ?: return
-        if (!parent.exists()) return
-        closeSearch()
-        openDirectory(isLeft, Uri.fromFile(parent))
-    }
-
-    companion object {
-        private val TEXT_EXTS = setOf(
-            "txt", "md", "json", "xml", "kt", "java", "kts",
-            "gradle", "properties", "yml", "yaml", "html", "css", "js",
-            "log", "ini", "conf", "cfg", "sh", "bat"
-        )
-        private val IMAGE_EXTS = setOf(
-            "jpg", "jpeg", "png", "gif", "bmp", "webp"
-        )
-    }
-}
+        _searchState.value = 
