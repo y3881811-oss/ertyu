@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,11 +56,31 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 import java.io.File
+
+// ==================== 顶层图标缓存，避免每行重复访问 ====================
+
+private val IconFolder: ImageVector = Icons.Default.Folder
+private val IconFile: ImageVector = Icons.Default.InsertDriveFile
+private val IconMore: ImageVector = Icons.Default.MoreVert
+private val IconUp: ImageVector = Icons.Default.ArrowUpward
+private val IconSwap: ImageVector = Icons.Default.SwapHoriz
+private val IconClose: ImageVector = Icons.Default.Close
+private val IconSelectAll: ImageVector = Icons.Default.SelectAll
+private val IconCopy: ImageVector = Icons.Default.ContentCopy
+private val IconMove: ImageVector = Icons.Default.DriveFileMove
+private val IconDelete: ImageVector = Icons.Default.Delete
+private val IconNewFolder: ImageVector = Icons.Default.CreateNewFolder
+private val IconSort: ImageVector = Icons.Default.Sort
+private val IconRefresh: ImageVector = Icons.Default.Refresh
+private val IconEdit: ImageVector = Icons.Default.Edit
+private val IconVisibility: ImageVector = Icons.Default.Visibility
+private val IconVisibilityOff: ImageVector = Icons.Default.VisibilityOff
 
 @Composable
 fun FilePanel(
@@ -75,7 +96,6 @@ fun FilePanel(
     var showJumpDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<FileItem?>(null) }
-    // 全局单个操作菜单目标，避免每行创建 DropdownMenu
     var actionTarget by remember { mutableStateOf<FileItem?>(null) }
 
     Column(modifier = modifier.fillMaxHeight()) {
@@ -125,7 +145,13 @@ fun FilePanel(
             ) {
                 Text(if (state.showHidden) "空目录" else "空目录（可尝试显示隐藏文件）")
             }
-            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+            else -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                // 提高滚动流畅度
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    vertical = 4.dp
+                )
+            ) {
                 items(
                     items = state.items,
                     key = { it.uriString },
@@ -157,7 +183,6 @@ fun FilePanel(
         }
     }
 
-    // 全局操作菜单
     actionTarget?.let { target ->
         FileActionDialog(
             item = target,
@@ -243,7 +268,7 @@ fun FilePanel(
     }
 }
 
-// ==================== 文件操作菜单（全局单个 Dialog） ====================
+// ==================== 文件操作菜单 ====================
 
 @Composable
 private fun FileActionDialog(
@@ -260,11 +285,11 @@ private fun FileActionDialog(
         title = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column {
-                ActionItem("重命名", Icons.Default.Edit, onRename)
-                ActionItem("复制到另一侧", Icons.Default.ContentCopy, onCopy)
-                ActionItem("移动到另一侧", Icons.Default.DriveFileMove, onMove)
-                ActionItem("删除", Icons.Default.Delete, onDelete)
-                ActionItem("多选", Icons.Default.SelectAll, onSelect)
+                ActionItem("重命名", IconEdit, onRename)
+                ActionItem("复制到另一侧", IconCopy, onCopy)
+                ActionItem("移动到另一侧", IconMove, onMove)
+                ActionItem("删除", IconDelete, onDelete)
+                ActionItem("多选", IconSelectAll, onSelect)
             }
         },
         confirmButton = {
@@ -276,7 +301,7 @@ private fun FileActionDialog(
 @Composable
 private fun ActionItem(
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     onClick: () -> Unit
 ) {
     Row(
@@ -313,11 +338,12 @@ private fun NormalToolbar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(48.dp)
             .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onUp, enabled = canGoUp) {
-            Icon(Icons.Default.ArrowUpward, contentDescription = "上级")
+            Icon(IconUp, contentDescription = "上级")
         }
         Text(
             text = path,
@@ -330,12 +356,12 @@ private fun NormalToolbar(
         )
         if (showSwitch) {
             IconButton(onClick = onSwitchPanel) {
-                Icon(Icons.Default.SwapHoriz, contentDescription = "切换面板")
+                Icon(IconSwap, contentDescription = "切换面板")
             }
         }
         Box {
             IconButton(onClick = { menuExpanded = true }) {
-                Icon(Icons.Default.MoreVert, contentDescription = "菜单")
+                Icon(IconMore, contentDescription = "菜单")
             }
             DropdownMenu(
                 expanded = menuExpanded,
@@ -343,7 +369,7 @@ private fun NormalToolbar(
             ) {
                 DropdownMenuItem(
                     text = { Text("新建文件夹") },
-                    leadingIcon = { Icon(Icons.Default.CreateNewFolder, null) },
+                    leadingIcon = { Icon(IconNewFolder, null) },
                     onClick = {
                         menuExpanded = false
                         onNewFolder()
@@ -351,7 +377,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("排序方式") },
-                    leadingIcon = { Icon(Icons.Default.Sort, null) },
+                    leadingIcon = { Icon(IconSort, null) },
                     onClick = {
                         menuExpanded = false
                         onSort()
@@ -361,8 +387,7 @@ private fun NormalToolbar(
                     text = { Text(if (showHidden) "隐藏隐藏文件" else "显示隐藏文件") },
                     leadingIcon = {
                         Icon(
-                            if (showHidden) Icons.Default.VisibilityOff
-                            else Icons.Default.Visibility,
+                            if (showHidden) IconVisibilityOff else IconVisibility,
                             null
                         )
                     },
@@ -373,7 +398,7 @@ private fun NormalToolbar(
                 )
                 DropdownMenuItem(
                     text = { Text("刷新") },
-                    leadingIcon = { Icon(Icons.Default.Refresh, null) },
+                    leadingIcon = { Icon(IconRefresh, null) },
                     onClick = {
                         menuExpanded = false
                         onRefresh()
@@ -396,12 +421,13 @@ private fun SelectionToolbar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(48.dp)
             .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(2.dp),
+            .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onClear) {
-            Icon(Icons.Default.Close, contentDescription = "取消")
+            Icon(IconClose, contentDescription = "取消")
         }
         Text(
             text = "已选 $count 项",
@@ -409,21 +435,21 @@ private fun SelectionToolbar(
             modifier = Modifier.weight(1f)
         )
         IconButton(onClick = onSelectAll) {
-            Icon(Icons.Default.SelectAll, contentDescription = "全选")
+            Icon(IconSelectAll, contentDescription = "全选")
         }
         IconButton(onClick = onCopy) {
-            Icon(Icons.Default.ContentCopy, contentDescription = "复制到另一侧")
+            Icon(IconCopy, contentDescription = "复制到另一侧")
         }
         IconButton(onClick = onMove) {
-            Icon(Icons.Default.DriveFileMove, contentDescription = "移动到另一侧")
+            Icon(IconMove, contentDescription = "移动到另一侧")
         }
         IconButton(onClick = onDelete) {
-            Icon(Icons.Default.Delete, contentDescription = "删除")
+            Icon(IconDelete, contentDescription = "删除")
         }
     }
 }
 
-// ==================== 文件行（精简版） ====================
+// ==================== 文件行（高度精简） ====================
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -440,16 +466,16 @@ private fun FileRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(56.dp)
             .background(bg)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(start = 12.dp, end = 0.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = 12.dp, end = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = if (item.isDirectory) Icons.Default.Folder
-            else Icons.Default.InsertDriveFile,
+            imageVector = if (item.isDirectory) IconFolder else IconFile,
             contentDescription = null,
-            modifier = Modifier.size(28.dp)
+            modifier = Modifier.size(24.dp)
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -460,11 +486,11 @@ private fun FileRow(
                 overflow = TextOverflow.Ellipsis
             )
             if (!item.isDirectory) {
-                val sizeText = remember(item.size) { formatSize(item.size) }
                 Text(
-                    text = sizeText,
+                    text = item.sizeText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
                 )
             }
         }
@@ -473,7 +499,7 @@ private fun FileRow(
                 onClick = onMoreClick,
                 modifier = Modifier.size(40.dp)
             ) {
-                Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                Icon(IconMore, contentDescription = "更多")
             }
         }
     }
@@ -544,16 +570,4 @@ private fun SortDialog(
             TextButton(onClick = onDismiss) { Text("关闭") }
         }
     )
-}
-
-// ==================== 工具 ====================
-
-private fun formatSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format("%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format("%.2f GB", gb)
 }
