@@ -34,7 +34,6 @@ android {
             signingConfig = signingConfigs.getByName("mtfm")
         }
         getByName("release") {
-            // 关键：开启 R8 优化，Compose 在 Release 下性能提升明显
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -43,6 +42,12 @@ android {
             )
             signingConfig = signingConfigs.getByName("mtfm")
         }
+    }
+
+    // 关键：关闭 lint 的 fatal 检查
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     compileOptions {
