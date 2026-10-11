@@ -18,16 +18,24 @@ class DirectFileEngine : FileEngine {
         val dir = uri.toFileOrNull()?.takeIf { it.isDirectory }
             ?: return@withContext emptyList()
 
-        dir.listFiles()?.map { file ->
-            FileItem(
-                name = file.name,
-                uri = Uri.fromFile(file),
-                isDirectory = file.isDirectory,
-                size = if (file.isFile) file.length() else 0L,
-                lastModified = file.lastModified(),
-                mimeType = null
+        // 一次性拿全部字段，避免后续重复访问文件系统
+        val children = dir.listFiles() ?: return@withContext emptyList()
+        val result = ArrayList<FileItem>(children.size)
+        for (file in children) {
+            val childUri = Uri.fromFile(file)
+            result.add(
+                FileItem(
+                    name = file.name,
+                    uri = childUri,
+                    isDirectory = file.isDirectory,
+                    size = if (file.isFile) file.length() else 0L,
+                    lastModified = file.lastModified(),
+                    mimeType = null,
+                    uriString = childUri.toString()
+                )
             )
-        } ?: emptyList()
+        }
+        result
     }
 
     override suspend fun delete(uri: Uri): Boolean = withContext(Dispatchers.IO) {
@@ -81,8 +89,6 @@ class DirectFileEngine : FileEngine {
 
     override fun getDisplayName(uri: Uri): String =
         uri.toFileOrNull()?.name ?: uri.lastPathSegment ?: ""
-
-    // ================= 新增 =================
 
     override suspend fun readText(uri: Uri): String? = withContext(Dispatchers.IO) {
         val file = uri.toFileOrNull() ?: return@withContext null
