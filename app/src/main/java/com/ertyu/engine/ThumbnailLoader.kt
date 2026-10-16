@@ -8,12 +8,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/**
- * 图片缩略图加载器。
- * - 内存 LRU 缓存（8MB）
- * - 4 路并发解码
- * - BitmapFactory.inSampleSize 缩小，节省内存
- */
 object ThumbnailLoader {
 
     private const val THUMB_PX = 96
