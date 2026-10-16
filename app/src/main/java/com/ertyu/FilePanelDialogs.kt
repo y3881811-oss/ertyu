@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -65,7 +66,8 @@ fun FileActionDialog(
     onInfo: () -> Unit,
     onInstall: () -> Unit,
     onBrowseApk: () -> Unit,
-    onHexView: () -> Unit
+    onHexView: () -> Unit,
+    onChecksum: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -94,6 +96,9 @@ fun FileActionDialog(
                 }
                 ActionRow("压缩为…", Icons.Default.FolderZip, onZipThis)
                 ActionRow("HEX 查看", Icons.Default.Search, onHexView)
+                if (!item.isDirectory) {
+                    ActionRow("校验和（MD5/SHA）", Icons.Default.Verified, onChecksum)
+                }
                 ActionRow("属性", Icons.Default.Info, onInfo)
                 ActionRow("重命名", Icons.Default.Edit, onRename)
                 if (showCrossPanel) {
