@@ -11,6 +11,7 @@ import com.ertyu.engine.FileEngine
 import com.ertyu.engine.FolderSizeCalculator
 import com.ertyu.model.ApkBrowserState
 import com.ertyu.model.ApkInfoState
+import com.ertyu.model.AppSettings
 import com.ertyu.model.BookmarkPanelState
 import com.ertyu.model.EditorState
 import com.ertyu.model.FileItem
@@ -117,6 +118,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _installedAppsState = MutableStateFlow(InstalledAppsState())
     val installedAppsState: StateFlow<InstalledAppsState> =
         _installedAppsState.asStateFlow()
+
+    // ==================== 设置 ====================
+
+    internal val _settingsState = MutableStateFlow(AppSettings())
+    val settingsState: StateFlow<AppSettings> =
+        _settingsState.asStateFlow()
+
+    internal val _settingsVisible = MutableStateFlow(false)
+    val settingsVisible: StateFlow<Boolean> =
+        _settingsVisible.asStateFlow()
+
+    internal val _helpVisible = MutableStateFlow(false)
+    val helpVisible: StateFlow<Boolean> = _helpVisible.asStateFlow()
 
     // ==================== 提示 ====================
 
