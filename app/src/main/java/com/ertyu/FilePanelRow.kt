@@ -3,6 +3,7 @@ package com.ertyu
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
@@ -118,13 +118,14 @@ fun FileRow(
             .padding(start = 12.dp, end = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = if (item.isDirectory) Icons.Default.Folder
-            else Icons.AutoMirrored.Filled.InsertDriveFile,
-            contentDescription = null,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(Modifier.width(12.dp))
+        // 缩略图（图片显示小图，其他显示默认图标）
+        Box(
+            modifier = Modifier.size(40.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            FileThumbnail(item = item)
+        }
+        Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.name,
