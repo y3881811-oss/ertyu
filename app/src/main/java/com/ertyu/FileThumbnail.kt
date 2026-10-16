@@ -1,5 +1,6 @@
 package com.ertyu
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +36,7 @@ fun FileThumbnail(
         return
     }
 
-    val bitmap by produceState<android.graphics.Bitmap?>(
+    val bitmap by produceState<Bitmap?>(
         initialValue = null,
         item.path
     ) {
