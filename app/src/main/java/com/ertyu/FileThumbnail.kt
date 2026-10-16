@@ -1,71 +1,70 @@
-package com.ertyu.engine
+package com.ertyu
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.LruCache
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.dp
+import com.ertyu.engine.ThumbnailLoader
+import com.ertyu.model.FileItem
 
-/**
- * 图片缩略图加载器。
- * - 内存 LRU 缓存（8MB）
- * - 4 路并发解码
- * - BitmapFactory.inSampleSize 缩小，节省内存
- */
-object ThumbnailLoader {
+@Composable
+fun FileThumbnail(
+    item: FileItem,
+    modifier: Modifier = Modifier
+) {
+    val isImage = !item.isDirectory && isImageFile(item.name)
 
-    private const val THUMB_PX = 96
-    private const val CACHE_BYTES = 8 * 1024 * 1024
-
-    private val cache = object : LruCache<String, Bitmap>(CACHE_BYTES) {
-        override fun sizeOf(key: String, value: Bitmap): Int {
-            return value.byteCount
-        }
+    if (!isImage) {
+        Icon(
+            imageVector = if (item.isDirectory) Icons.Default.Folder
+            else Icons.AutoMirrored.Filled.InsertDriveFile,
+            contentDescription = null,
+            modifier = modifier.size(24.dp)
+        )
+        return
     }
 
-    private val mutex = Mutex()
-
-    suspend fun load(path: String): Bitmap? {
-        if (path.isEmpty()) return null
-
-        mutex.withLock { cache.get(path) }?.let { return it }
-
-        val bmp = withContext(Dispatchers.IO.limitedParallelism(4)) {
-            decodeThumbnail(path)
-        } ?: return null
-
-        mutex.withLock { cache.put(path, bmp) }
-        return bmp
+    val bitmap by produceState<android.graphics.Bitmap?>(
+        initialValue = null,
+        item.path
+    ) {
+        value = ThumbnailLoader.load(item.path)
     }
 
-    private fun decodeThumbnail(path: String): Bitmap? {
-        return try {
-            val bounds = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
-            BitmapFactory.decodeFile(path, bounds)
-            val w = bounds.outWidth
-            val h = bounds.outHeight
-            if (w <= 0 || h <= 0) return null
-
-            var sample = 1
-            while (w / sample > THUMB_PX * 2 || h / sample > THUMB_PX * 2) {
-                sample *= 2
-            }
-
-            val opts = BitmapFactory.Options().apply {
-                inSampleSize = sample
-                inPreferredConfig = Bitmap.Config.RGB_565
-            }
-            BitmapFactory.decodeFile(path, opts)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    fun clear() {
-        cache.evictAll()
+    val bmp = bitmap
+    if (bmp != null) {
+        Image(
+            bitmap = bmp.asImageBitmap(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(4.dp))
+        )
+    } else {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+            contentDescription = null,
+            modifier = modifier.size(24.dp)
+        )
     }
 }
+
+private fun isImageFile(name: String): Boolean {
+    val ext = name.substringAfterLast('.', "").lowercase()
+    return ext in IMAGE_EXT_SET
+}
+
+private val IMAGE_EXT_SET = setOf(
+    "jpg", "jpeg", "png", "gif", "bmp", "webp"
+)
