@@ -51,6 +51,7 @@ fun FilePanel(
                 count = state.selectedUris.size,
                 onClear = { vm.clearSelection(isLeft) },
                 onSelectAll = { vm.selectAll(isLeft) },
+                onRename = { vm.openBatchRename(isLeft) },
                 onZip = { vm.requestCompress(isLeft) },
                 onCopy = { vm.batchCopy(isLeft) },
                 onMove = { vm.batchMove(isLeft) },
