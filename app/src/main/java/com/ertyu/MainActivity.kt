@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.ertyu.engine.ApkInstaller
 import com.ertyu.model.ArchiveFormat
+import com.ertyu.model.PanelMode
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -101,6 +102,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        vm.loadSettings()
         requestStorageThenLoad()
     }
 
@@ -141,6 +143,9 @@ fun AppRoot(vm: MainViewModel) {
     val bookmarkState by vm.bookmarkPanelState.collectAsState()
     val newFilePrompt by vm.newFilePrompt.collectAsState()
     val installedAppsState by vm.installedAppsState.collectAsState()
+    val settingsState by vm.settingsState.collectAsState()
+    val settingsVisible by vm.settingsVisible.collectAsState()
+    val helpVisible by vm.helpVisible.collectAsState()
 
     val newFolderVisible by vm.newFolderDialogVisible.collectAsState()
     val newFolderIsLeft by vm.newFolderDialogIsLeft.collectAsState()
@@ -387,10 +392,12 @@ fun AppRoot(vm: MainViewModel) {
         val format = ArchiveFormat.detect(target.name)
         val isApk = target.name.substringAfterLast('.', "")
             .lowercase() == "apk"
+        val showCrossPanel = settingsState.panelMode != PanelMode.SINGLE
         FileActionDialog(
             item = target,
             archiveFormat = format,
             isApk = isApk,
+            showCrossPanel = showCrossPanel,
             onDismiss = { vm.dismissActionDialog() },
             onRename = {
                 vm.dismissActionDialog()
@@ -511,6 +518,14 @@ fun AppRoot(vm: MainViewModel) {
             BackHandler { vm.closeInstalledApps() }
             InstalledAppsScreen(vm)
         }
+        settingsVisible -> {
+            BackHandler { vm.closeSettings() }
+            SettingsScreen(vm)
+        }
+        helpVisible -> {
+            BackHandler { vm.closeHelp() }
+            HelpScreen(vm)
+        }
         else -> {
             MainScreen(vm)
         }
@@ -519,12 +534,19 @@ fun AppRoot(vm: MainViewModel) {
 
 @Composable
 fun MainScreen(vm: MainViewModel) {
+    val settings by vm.settingsState.collectAsState()
     val configuration = LocalConfiguration.current
     val isLandscape =
         configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val isWide = configuration.screenWidthDp >= 600
 
-    if (isLandscape || isWide) {
+    val showDual = when (settings.panelMode) {
+        PanelMode.DUAL -> true
+        PanelMode.SINGLE -> false
+        PanelMode.AUTO -> isLandscape || isWide
+    }
+
+    if (showDual) {
         Row(modifier = Modifier.fillMaxSize()) {
             FilePanel(isLeft = true, vm = vm, modifier = Modifier.weight(1f))
             VerticalDivider()
