@@ -17,7 +17,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.Icon
@@ -38,6 +40,7 @@ fun SelectionToolbar(
     count: Int,
     onClear: () -> Unit,
     onSelectAll: () -> Unit,
+    onRename: () -> Unit,
     onZip: () -> Unit,
     onCopy: () -> Unit,
     onMove: () -> Unit,
@@ -62,8 +65,11 @@ fun SelectionToolbar(
         IconButton(onClick = onSelectAll) {
             Icon(Icons.Default.SelectAll, contentDescription = "全选")
         }
+        IconButton(onClick = onRename) {
+            Icon(Icons.Default.Edit, contentDescription = "批量重命名")
+        }
         IconButton(onClick = onZip) {
-            Icon(Icons.Default.Folder, contentDescription = "压缩")
+            Icon(Icons.Default.FolderZip, contentDescription = "压缩")
         }
         IconButton(onClick = onCopy) {
             Icon(Icons.Default.Add, contentDescription = "复制")
@@ -118,7 +124,6 @@ fun FileRow(
             .padding(start = 12.dp, end = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 缩略图（图片显示小图，其他显示默认图标）
         Box(
             modifier = Modifier.size(40.dp),
             contentAlignment = Alignment.Center
