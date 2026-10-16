@@ -235,6 +235,13 @@ private fun FileToolbar(
                         vm.refresh(isLeft)
                     }
                 )
+                DropdownMenuItem(
+                    text = { Text("设置") },
+                    onClick = {
+                        menuExpanded = false
+                        vm.openSettings()
+                    }
+                )
             }
         }
     }
