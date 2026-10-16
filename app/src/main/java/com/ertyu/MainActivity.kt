@@ -93,7 +93,6 @@ class MainActivity : ComponentActivity() {
             registerReceiver(installReceiver, filter)
         }
 
-        // 监听应用安装/卸载，自动失效已安装应用列表缓存
         PackageChangeMonitor.start(this)
 
         setContent {
@@ -166,6 +165,10 @@ fun AppRoot(vm: MainViewModel) {
     val compressVisible by vm.compressPromptVisible.collectAsState()
 
     val context = LocalContext.current
+
+    // 批量重命名 / 校验和 对话框
+    BatchRenameDialog(vm)
+    ChecksumDialog(vm)
 
     // ZIP 解压位置
     zipPrompt.item?.let { item ->
@@ -452,6 +455,10 @@ fun AppRoot(vm: MainViewModel) {
             onHexView = {
                 vm.dismissActionDialog()
                 vm.openHexViewer(target)
+            },
+            onChecksum = {
+                vm.dismissActionDialog()
+                vm.openChecksum(target)
             }
         )
     }
