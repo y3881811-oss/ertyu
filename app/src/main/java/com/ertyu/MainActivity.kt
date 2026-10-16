@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.ertyu.engine.ApkInstaller
+import com.ertyu.engine.PackageChangeMonitor
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.PanelMode
 import java.io.File
@@ -92,6 +93,9 @@ class MainActivity : ComponentActivity() {
             registerReceiver(installReceiver, filter)
         }
 
+        // 监听应用安装/卸载，自动失效已安装应用列表缓存
+        PackageChangeMonitor.start(this)
+
         setContent {
             val dark = isSystemInDarkTheme()
             MaterialTheme(
@@ -108,6 +112,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(installReceiver) }
+        PackageChangeMonitor.stop(this)
         super.onDestroy()
     }
 
