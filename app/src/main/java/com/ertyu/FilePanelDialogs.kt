@@ -52,6 +52,7 @@ fun FileActionDialog(
     item: FileItem,
     archiveFormat: ArchiveFormat?,
     isApk: Boolean,
+    showCrossPanel: Boolean,
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onCopy: () -> Unit,
@@ -83,26 +84,30 @@ fun FileActionDialog(
                         Icons.Default.FolderZip,
                         onExtractHere
                     )
-                    ActionRow(
-                        "解压到另一侧",
-                        Icons.Default.FolderZip,
-                        onExtractOther
-                    )
+                    if (showCrossPanel) {
+                        ActionRow(
+                            "解压到另一侧",
+                            Icons.Default.FolderZip,
+                            onExtractOther
+                        )
+                    }
                 }
                 ActionRow("压缩为…", Icons.Default.FolderZip, onZipThis)
                 ActionRow("HEX 查看", Icons.Default.Search, onHexView)
                 ActionRow("属性", Icons.Default.Info, onInfo)
                 ActionRow("重命名", Icons.Default.Edit, onRename)
-                ActionRow(
-                    "复制到另一侧",
-                    Icons.Default.ContentCopy,
-                    onCopy
-                )
-                ActionRow(
-                    "移动到另一侧",
-                    Icons.AutoMirrored.Filled.DriveFileMove,
-                    onMove
-                )
+                if (showCrossPanel) {
+                    ActionRow(
+                        "复制到另一侧",
+                        Icons.Default.ContentCopy,
+                        onCopy
+                    )
+                    ActionRow(
+                        "移动到另一侧",
+                        Icons.AutoMirrored.Filled.DriveFileMove,
+                        onMove
+                    )
+                }
                 ActionRow("删除", Icons.Default.Delete, onDelete)
                 ActionRow("多选", Icons.Default.SelectAll, onSelect)
             }
