@@ -49,6 +49,25 @@ fun MainViewModel.setWebDavPassword(p: String) {
     persistSettings()
 }
 
+// 新增路径
+fun MainViewModel.addCustomPath(path: String) {
+    if (path.isBlank()) return
+    val current = _settingsState.value.customPaths
+    if (current.contains(path)) {
+        _toast.value = "路径已存在"
+        return
+    }
+    _settingsState.update { it.copy(customPaths = current + path) }
+    persistSettings()
+}
+
+// 删除路径
+fun MainViewModel.removeCustomPath(path: String) {
+    val current = _settingsState.value.customPaths
+    _settingsState.update { it.copy(customPaths = current - path) }
+    persistSettings()
+}
+
 private fun MainViewModel.persistSettings() {
     viewModelScope.launch {
         SettingsStore.save(getApplication(), _settingsState.value)
