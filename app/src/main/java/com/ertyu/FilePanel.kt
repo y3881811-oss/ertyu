@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +63,7 @@ fun FilePanel(
     isLeft: Boolean,
     vm: MainViewModel,
     onSwitchPanel: (() -> Unit)? = null,
+    onOpenDrawer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
@@ -92,7 +94,7 @@ fun FilePanel(
     }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        // 标签栏：常驻显示，即使只有 1 个标签也能点 + 号
+        // 标签栏
         FileTabBar(
             isLeft = isLeft,
             tabs = tabs,
@@ -121,7 +123,8 @@ fun FilePanel(
                 canGoUp = state.canGoUp,
                 showHidden = state.showHidden,
                 showSwitch = onSwitchPanel != null,
-                onSwitchPanel = { onSwitchPanel?.invoke() }
+                onSwitchPanel = { onSwitchPanel?.invoke() },
+                onOpenDrawer = onOpenDrawer // 传递抽屉事件
             )
         }
         HorizontalDivider()
@@ -262,7 +265,8 @@ private fun FileToolbar(
     canGoUp: Boolean,
     showHidden: Boolean,
     showSwitch: Boolean,
-    onSwitchPanel: () -> Unit
+    onSwitchPanel: () -> Unit,
+    onOpenDrawer: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val settings by vm.settingsState.collectAsState()
@@ -274,6 +278,11 @@ private fun FileToolbar(
             .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // 汉堡菜单按钮
+        IconButton(onClick = onOpenDrawer) {
+            Icon(Icons.Default.Menu, contentDescription = "菜单")
+        }
+        
         IconButton(onClick = { vm.goUp(isLeft) }, enabled = canGoUp) {
             Icon(Icons.Default.ArrowUpward, contentDescription = "上级")
         }
@@ -293,7 +302,7 @@ private fun FileToolbar(
         }
         Box {
             IconButton(onClick = { menuExpanded = true }) {
-                Icon(Icons.Default.MoreVert, contentDescription = "菜单")
+                Icon(Icons.Default.MoreVert, contentDescription = "更多")
             }
             DropdownMenu(
                 expanded = menuExpanded,
@@ -304,29 +313,8 @@ private fun FileToolbar(
                     onClick = { menuExpanded = false; vm.openSearch(isLeft) }
                 )
                 DropdownMenuItem(
-                    text = { Text("书签") },
-                    onClick = { menuExpanded = false; vm.openBookmarkPanel(isLeft) }
-                )
-                DropdownMenuItem(
-                    text = { Text("添加到书签") },
+                    text = { Text("添加书签") },
                     onClick = { menuExpanded = false; vm.addBookmark(isLeft) }
-                )
-                DropdownMenuItem(
-                    text = { Text("已安装应用") },
-                    onClick = { menuExpanded = false; vm.openInstalledApps() }
-                )
-                DropdownMenuItem(
-                    text = { Text("WebDAV 服务器") },
-                    onClick = {
-                        menuExpanded = false
-                        WebDavStateHolder.state.value = WebDavStateHolder.state.value.copy(
-                            sharePath = settings.webDavSharePath,
-                            port = settings.webDavPort,
-                            username = settings.webDavUsername,
-                            password = settings.webDavPassword
-                        )
-                        vm.openWebDav()
-                    }
                 )
                 DropdownMenuItem(
                     text = { Text("新建文件夹") },
@@ -348,10 +336,7 @@ private fun FileToolbar(
                     text = { Text("刷新") },
                     onClick = { menuExpanded = false; vm.refresh(isLeft) }
                 )
-                DropdownMenuItem(
-                    text = { Text("设置") },
-                    onClick = { menuExpanded = false; vm.openSettings() }
-                )
+                // 设置和 WebDAV 移到左侧抽屉里了，这里就不留了
             }
         }
     }
