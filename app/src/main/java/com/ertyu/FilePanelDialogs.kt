@@ -46,8 +46,6 @@ import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 
-// ==================== 文件操作菜单 ====================
-
 @Composable
 fun FileActionDialog(
     item: FileItem,
@@ -67,7 +65,9 @@ fun FileActionDialog(
     onInstall: () -> Unit,
     onBrowseApk: () -> Unit,
     onHexView: () -> Unit,
-    onChecksum: () -> Unit
+    onChecksum: () -> Unit,
+    onApkSign: () -> Unit,
+    onApkClone: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -79,6 +79,8 @@ fun FileActionDialog(
                 if (isApk) {
                     ActionRow("安装", Icons.Default.InstallMobile, onInstall)
                     ActionRow("浏览内部", Icons.Default.FolderOpen, onBrowseApk)
+                    ActionRow("APK 签名", Icons.Default.Edit, onApkSign)
+                    ActionRow("共存/克隆", Icons.Default.ContentCopy, onApkClone)
                 }
                 if (archiveFormat != null) {
                     ActionRow(
@@ -97,7 +99,11 @@ fun FileActionDialog(
                 ActionRow("压缩为…", Icons.Default.FolderZip, onZipThis)
                 ActionRow("HEX 查看", Icons.Default.Search, onHexView)
                 if (!item.isDirectory) {
-                    ActionRow("校验和（MD5/SHA）", Icons.Default.Verified, onChecksum)
+                    ActionRow(
+                        "校验和（MD5/SHA）",
+                        Icons.Default.Verified,
+                        onChecksum
+                    )
                 }
                 ActionRow("属性", Icons.Default.Info, onInfo)
                 ActionRow("重命名", Icons.Default.Edit, onRename)
@@ -141,8 +147,6 @@ private fun ActionRow(
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
-
-// ==================== 文件属性对话框 ====================
 
 @Composable
 fun FileInfoDialog(
@@ -251,8 +255,6 @@ private fun formatBytes(bytes: Long): String {
     return String.format("%.2f GB", gb)
 }
 
-// ==================== 压缩格式对话框 ====================
-
 @Composable
 fun CompressFormatDialog(
     onSelect: (ArchiveFormat) -> Unit,
@@ -304,8 +306,6 @@ private fun FormatRow(
     }
 }
 
-// ==================== 排序对话框 ====================
-
 @Composable
 fun SortDialog(
     current: SortMode,
@@ -340,8 +340,6 @@ fun SortDialog(
         }
     )
 }
-
-// ==================== 通用输入对话框 ====================
 
 @Composable
 fun TextInputDialog(
