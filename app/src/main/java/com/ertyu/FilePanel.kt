@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ertyu.model.ArchiveFormat
 
 @Composable
 fun FilePanel(
@@ -140,6 +141,9 @@ fun FilePanel(
                             } else if (item.isDirectory) {
                                 FilePanelScrollStore.save(isLeft, "", 0, 0)
                                 vm.openDirectory(isLeft, item.uri)
+                            } else if (ArchiveFormat.isArchive(item.name)) {
+                                // 点压缩包：进入内部浏览界面
+                                vm.openArchiveViewer(isLeft, item)
                             } else {
                                 vm.openFile(item)
                             }
@@ -234,6 +238,7 @@ private fun FileToolbar(
                     text = { Text("WebDAV 服务器") },
                     onClick = {
                         menuExpanded = false
+                        // 用设置里的默认值初始化
                         WebDavStateHolder.state.value =
                             WebDavStateHolder.state.value.copy(
                                 sharePath = settings.webDavSharePath,
