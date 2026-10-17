@@ -21,11 +21,10 @@ fun AppRoot(vm: MainViewModel) {
     val signerState by ApkToolsState.signerState.collectAsState()
     val dexViewerState by ApkToolsState.dexViewerState.collectAsState()
     val diffState by DiffStateHolder.state.collectAsState()
+    val webDavState by WebDavStateHolder.state.collectAsState()
 
-    // 所有对话框（ZIP、安装、新建、重命名、属性等）
     AppDialogs(vm)
 
-    // 页面路由
     when {
         editor.isOpen -> {
             BackHandler { vm.closeEditor() }
@@ -56,6 +55,13 @@ fun AppRoot(vm: MainViewModel) {
         diffState.visible -> {
             BackHandler { vm.closeDiff() }
             DiffScreen(vm)
+        }
+        webDavState.isRunning || webDavState.sharePath.isNotEmpty() -> {
+            BackHandler {
+                if (webDavState.isRunning) vm.stopWebDav()
+                vm.closeWebDav()
+            }
+            WebDavScreen(vm)
         }
         searchState.visible -> {
             BackHandler { vm.closeSearch() }
