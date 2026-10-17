@@ -36,10 +36,6 @@
 -dontwarn org.smali.**
 -dontwarn javax.annotation.**
 
-# ========== NanoHTTPD ==========
--keep class fi.iki.elonen.** { *; }
--dontwarn fi.iki.elonen.**
-
 # ========== 其他 ==========
 -dontwarn java.awt.**
 -dontwarn org.osgi.**
