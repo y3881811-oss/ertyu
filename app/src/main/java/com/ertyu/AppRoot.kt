@@ -23,11 +23,10 @@ fun AppRoot(vm: MainViewModel) {
     val diffState by DiffStateHolder.state.collectAsState()
     val webDavState by WebDavStateHolder.state.collectAsState()
     val archiveViewerState by ArchiveViewerStateHolder.state.collectAsState()
+    val videoPlayerState by VideoPlayerStateHolder.state.collectAsState()
 
-    // 所有对话框
     AppDialogs(vm)
 
-    // 页面路由
     when {
         editor.isOpen -> {
             BackHandler { vm.closeEditor() }
@@ -62,6 +61,9 @@ fun AppRoot(vm: MainViewModel) {
         archiveViewerState.visible -> {
             BackHandler { vm.closeArchiveViewer() }
             ArchiveViewerScreen(vm)
+        }
+        videoPlayerState.visible -> {
+            VideoPlayerScreen(vm)
         }
         webDavState.isRunning || webDavState.sharePath.isNotEmpty() -> {
             BackHandler {
