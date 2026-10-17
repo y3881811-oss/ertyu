@@ -109,4 +109,7 @@ dependencies {
 
     implementation(libs.apksig)
     implementation(libs.baksmali)
+
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
 }
