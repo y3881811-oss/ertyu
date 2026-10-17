@@ -13,7 +13,8 @@ data class AppSettings(
     val webDavSharePath: String = "",
     val webDavPort: Int = 7326,
     val webDavUsername: String = "mtfm",
-    val webDavPassword: String = "mtfm123"
+    val webDavPassword: String = "mtfm123",
+    val customPaths: List<String> = emptyList() // 新增：自定义快捷路径
 ) {
     val isSinglePanel: Boolean get() = panelMode == PanelMode.SINGLE
     val isDualPanel: Boolean get() = panelMode == PanelMode.DUAL
