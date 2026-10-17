@@ -19,6 +19,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -60,9 +61,7 @@ fun SettingsScreen(vm: MainViewModel) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            // ============ 面板模式 ============
             SectionTitle("面板模式")
-
             PanelMode.entries.forEach { mode ->
                 Row(
                     modifier = Modifier
@@ -97,10 +96,8 @@ fun SettingsScreen(vm: MainViewModel) {
             Spacer(Modifier.height(16.dp))
             HorizontalDivider()
 
-            // ============ 默认显示隐藏文件 ============
             Spacer(Modifier.height(16.dp))
             SectionTitle("浏览")
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -124,10 +121,65 @@ fun SettingsScreen(vm: MainViewModel) {
             Spacer(Modifier.height(16.dp))
             HorizontalDivider()
 
-            // ============ 操作说明 ============
+            Spacer(Modifier.height(16.dp))
+            SectionTitle("WebDAV 服务器")
+
+            Text(
+                "默认共享目录",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                "开启 WebDAV 服务器时默认使用此目录",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            OutlinedTextField(
+                value = settings.webDavSharePath,
+                onValueChange = { vm.setWebDavSharePath(it) },
+                placeholder = { Text("/storage/emulated/0/Download") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(8.dp))
+            Text("默认端口", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(4.dp))
+            OutlinedTextField(
+                value = settings.webDavPort.toString(),
+                onValueChange = {
+                    val n = it.toIntOrNull() ?: 7326
+                    vm.setWebDavPort(n)
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(8.dp))
+            Text("默认用户名", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(4.dp))
+            OutlinedTextField(
+                value = settings.webDavUsername,
+                onValueChange = { vm.setWebDavUsername(it) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(8.dp))
+            Text("默认密码", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(4.dp))
+            OutlinedTextField(
+                value = settings.webDavPassword,
+                onValueChange = { vm.setWebDavPassword(it) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+
             Spacer(Modifier.height(16.dp))
             SectionTitle("帮助")
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
