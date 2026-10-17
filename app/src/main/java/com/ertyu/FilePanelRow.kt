@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SelectAll
@@ -44,7 +43,8 @@ fun SelectionToolbar(
     onZip: () -> Unit,
     onCopy: () -> Unit,
     onMove: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onDiff: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -64,6 +64,19 @@ fun SelectionToolbar(
         )
         IconButton(onClick = onSelectAll) {
             Icon(Icons.Default.SelectAll, contentDescription = "全选")
+        }
+        // 只有选 2 项时才启用对比
+        IconButton(
+            onClick = onDiff,
+            enabled = count == 2
+        ) {
+            Text(
+                "≠",
+                style = MaterialTheme.typography.titleLarge,
+                color = if (count == 2)
+                    MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         IconButton(onClick = onRename) {
             Icon(Icons.Default.Edit, contentDescription = "批量重命名")
