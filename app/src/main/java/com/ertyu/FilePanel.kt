@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -49,8 +48,6 @@ fun FilePanel(
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
     val state by panelFlow.collectAsState()
 
-    // ==================== 滚动位置记忆 ====================
-
     val currentUriStr = state.currentUri?.toString() ?: ""
     val savedUri = FilePanelScrollStore.savedUri(isLeft)
     val isSameDir = currentUriStr.isNotEmpty() && currentUriStr == savedUri
@@ -64,7 +61,6 @@ fun FilePanel(
         } else 0
     )
 
-    // 用户滚动时持续保存位置（同目录才有效）
     LaunchedEffect(listState, currentUriStr) {
         snapshotFlow {
             listState.firstVisibleItemIndex to
@@ -76,8 +72,6 @@ fun FilePanel(
         }
     }
 
-    // ==================== UI ====================
-
     Column(modifier = modifier.fillMaxHeight()) {
         if (state.isSelectionMode) {
             SelectionToolbar(
@@ -88,7 +82,8 @@ fun FilePanel(
                 onZip = { vm.requestCompress(isLeft) },
                 onCopy = { vm.batchCopy(isLeft) },
                 onMove = { vm.batchMove(isLeft) },
-                onDelete = { vm.batchDelete(isLeft) }
+                onDelete = { vm.batchDelete(isLeft) },
+                onDiff = { vm.startFileDiff(isLeft) }
             )
         } else {
             FileToolbar(
@@ -143,10 +138,7 @@ fun FilePanel(
                             if (state.isSelectionMode) {
                                 vm.toggleSelection(isLeft, item.uriString)
                             } else if (item.isDirectory) {
-                                // 进新目录前清空本面板的滚动记录
-                                FilePanelScrollStore.save(
-                                    isLeft, "", 0, 0
-                                )
+                                FilePanelScrollStore.save(isLeft, "", 0, 0)
                                 vm.openDirectory(isLeft, item.uri)
                             } else {
                                 vm.openFile(item)
