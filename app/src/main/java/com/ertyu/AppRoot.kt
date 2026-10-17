@@ -22,9 +22,12 @@ fun AppRoot(vm: MainViewModel) {
     val dexViewerState by ApkToolsState.dexViewerState.collectAsState()
     val diffState by DiffStateHolder.state.collectAsState()
     val webDavState by WebDavStateHolder.state.collectAsState()
+    val archiveViewerState by ArchiveViewerStateHolder.state.collectAsState()
 
+    // 所有对话框
     AppDialogs(vm)
 
+    // 页面路由
     when {
         editor.isOpen -> {
             BackHandler { vm.closeEditor() }
@@ -55,6 +58,10 @@ fun AppRoot(vm: MainViewModel) {
         diffState.visible -> {
             BackHandler { vm.closeDiff() }
             DiffScreen(vm)
+        }
+        archiveViewerState.visible -> {
+            BackHandler { vm.closeArchiveViewer() }
+            ArchiveViewerScreen(vm)
         }
         webDavState.isRunning || webDavState.sharePath.isNotEmpty() -> {
             BackHandler {
