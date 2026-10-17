@@ -23,7 +23,16 @@ class DirectFileEngine : FileEngine {
         val dir = uri.toFileOrNull()?.takeIf { it.isDirectory }
             ?: return@withContext emptyList()
 
-        val children = dir.listFiles() ?: return@withContext emptyList()
+        // 关键修复：如果 listFiles 返回 null，说明没有读取权限
+        val children = dir.listFiles() ?: run {
+            if (dir.absolutePath == "/storage/emulated") {
+                // 针对这个特定的系统目录，给它个提示
+                throw SecurityException("系统限制，请访问 /storage/emulated/0")
+            } else {
+                throw SecurityException("无权限访问此目录")
+            }
+        }
+
         val result = ArrayList<FileItem>(children.size)
         for (file in children) {
             val isDir = file.isDirectory
