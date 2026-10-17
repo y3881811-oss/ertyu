@@ -9,7 +9,11 @@ enum class PanelMode(val label: String) {
 data class AppSettings(
     val panelMode: PanelMode = PanelMode.AUTO,
     val showHiddenByDefault: Boolean = false,
-    val sortModeDefault: SortMode = SortMode.NAME_ASC
+    val sortModeDefault: SortMode = SortMode.NAME_ASC,
+    val webDavSharePath: String = "",
+    val webDavPort: Int = 7326,
+    val webDavUsername: String = "mtfm",
+    val webDavPassword: String = "mtfm123"
 ) {
     val isSinglePanel: Boolean get() = panelMode == PanelMode.SINGLE
     val isDualPanel: Boolean get() = panelMode == PanelMode.DUAL
