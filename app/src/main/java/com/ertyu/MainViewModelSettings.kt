@@ -2,18 +2,14 @@ package com.ertyu
 
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.SettingsStore
-import com.ertyu.model.AppSettings
 import com.ertyu.model.PanelMode
 import com.ertyu.model.SortMode
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// ==================== 设置加载/保存 ====================
-
 fun MainViewModel.loadSettings() {
     val s = SettingsStore.load(getApplication())
     _settingsState.value = s
-    // 应用到当前面板
     _leftPanel.update { it.copy(sortMode = s.sortModeDefault) }
     _rightPanel.update { it.copy(sortMode = s.sortModeDefault) }
 }
@@ -33,13 +29,31 @@ fun MainViewModel.setSortModeDefault(sort: SortMode) {
     persistSettings()
 }
 
+fun MainViewModel.setWebDavSharePath(path: String) {
+    _settingsState.update { it.copy(webDavSharePath = path) }
+    persistSettings()
+}
+
+fun MainViewModel.setWebDavPort(port: Int) {
+    _settingsState.update { it.copy(webDavPort = port) }
+    persistSettings()
+}
+
+fun MainViewModel.setWebDavUsername(u: String) {
+    _settingsState.update { it.copy(webDavUsername = u) }
+    persistSettings()
+}
+
+fun MainViewModel.setWebDavPassword(p: String) {
+    _settingsState.update { it.copy(webDavPassword = p) }
+    persistSettings()
+}
+
 private fun MainViewModel.persistSettings() {
     viewModelScope.launch {
         SettingsStore.save(getApplication(), _settingsState.value)
     }
 }
-
-// ==================== 设置页开关 ====================
 
 fun MainViewModel.openSettings() {
     _settingsVisible.value = true
@@ -55,4 +69,8 @@ fun MainViewModel.openHelp() {
 
 fun MainViewModel.closeHelp() {
     _helpVisible.value = false
+}
+
+fun MainViewModel.showToast(msg: String) {
+    _toast.value = msg
 }
