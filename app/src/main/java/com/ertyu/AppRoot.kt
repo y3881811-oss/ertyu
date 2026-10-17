@@ -1,0 +1,92 @@
+package com.ertyu
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+
+@Composable
+fun AppRoot(vm: MainViewModel) {
+    val editor by vm.editor.collectAsState()
+    val imageViewer by vm.imageViewer.collectAsState()
+    val hexViewerState by vm.hexViewerState.collectAsState()
+    val searchState by vm.searchState.collectAsState()
+    val apkState by vm.apkInfoState.collectAsState()
+    val apkBrowserState by vm.apkBrowserState.collectAsState()
+    val bookmarkState by vm.bookmarkPanelState.collectAsState()
+    val installedAppsState by vm.installedAppsState.collectAsState()
+    val settingsVisible by vm.settingsVisible.collectAsState()
+    val helpVisible by vm.helpVisible.collectAsState()
+
+    val signerState by ApkToolsState.signerState.collectAsState()
+    val dexViewerState by ApkToolsState.dexViewerState.collectAsState()
+    val diffState by DiffStateHolder.state.collectAsState()
+
+    // 所有对话框（ZIP、安装、新建、重命名、属性等）
+    AppDialogs(vm)
+
+    // 页面路由
+    when {
+        editor.isOpen -> {
+            BackHandler { vm.closeEditor() }
+            EditorScreen(vm)
+        }
+        imageViewer.isOpen -> {
+            BackHandler { vm.closeImageViewer() }
+            ImageViewerScreen(vm)
+        }
+        hexViewerState.visible -> {
+            BackHandler { vm.closeHexViewer() }
+            HexViewerScreen(vm)
+        }
+        signerState.visible -> {
+            BackHandler { vm.closeApkSigner() }
+            ApkSignerScreen(vm)
+        }
+        dexViewerState.visible -> {
+            BackHandler {
+                if (dexViewerState.selectedClass != null) {
+                    vm.closeSmaliClass()
+                } else {
+                    vm.closeDexViewer()
+                }
+            }
+            DexViewerScreen(vm)
+        }
+        diffState.visible -> {
+            BackHandler { vm.closeDiff() }
+            DiffScreen(vm)
+        }
+        searchState.visible -> {
+            BackHandler { vm.closeSearch() }
+            SearchScreen(vm)
+        }
+        apkState.visible -> {
+            BackHandler { vm.closeApkInfo() }
+            ApkInfoScreen(vm)
+        }
+        apkBrowserState.visible -> {
+            BackHandler { vm.closeApkBrowser() }
+            ApkBrowserScreen(vm)
+        }
+        bookmarkState.visible -> {
+            BackHandler { vm.closeBookmarkPanel() }
+            BookmarkScreen(vm)
+        }
+        installedAppsState.visible -> {
+            BackHandler { vm.closeInstalledApps() }
+            InstalledAppsScreen(vm)
+        }
+        settingsVisible -> {
+            BackHandler { vm.closeSettings() }
+            SettingsScreen(vm)
+        }
+        helpVisible -> {
+            BackHandler { vm.closeHelp() }
+            HelpScreen(vm)
+        }
+        else -> {
+            MainScreen(vm)
+        }
+    }
+}
