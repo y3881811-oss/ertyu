@@ -71,7 +71,7 @@ fun MainViewModel.startWebDav() {
                 password = s.password
             )
             withContext(Dispatchers.IO) {
-                server.start(5000, false)
+                server.start()
             }
             WebDavStateHolder.server = server
             WebDavStateHolder.state.update {
