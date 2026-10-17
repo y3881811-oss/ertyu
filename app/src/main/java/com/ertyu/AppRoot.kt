@@ -24,6 +24,7 @@ fun AppRoot(vm: MainViewModel) {
     val webDavState by WebDavStateHolder.state.collectAsState()
     val archiveViewerState by ArchiveViewerStateHolder.state.collectAsState()
     val videoPlayerState by VideoPlayerStateHolder.state.collectAsState()
+    val audioPlayerState by AudioPlayerStateHolder.state.collectAsState()
 
     AppDialogs(vm)
 
@@ -64,6 +65,9 @@ fun AppRoot(vm: MainViewModel) {
         }
         videoPlayerState.visible -> {
             VideoPlayerScreen(vm)
+        }
+        audioPlayerState.visible -> {
+            AudioPlayerScreen(vm)
         }
         webDavState.isRunning || webDavState.sharePath.isNotEmpty() -> {
             BackHandler {
