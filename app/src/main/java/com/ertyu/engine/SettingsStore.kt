@@ -11,6 +11,10 @@ object SettingsStore {
     private const val KEY_PANEL_MODE = "panel_mode"
     private const val KEY_SHOW_HIDDEN = "show_hidden"
     private const val KEY_SORT_MODE = "sort_mode"
+    private const val KEY_WEBDAV_PATH = "webdav_path"
+    private const val KEY_WEBDAV_PORT = "webdav_port"
+    private const val KEY_WEBDAV_USER = "webdav_user"
+    private const val KEY_WEBDAV_PASS = "webdav_pass"
 
     fun load(context: Context): AppSettings {
         val sp = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
@@ -25,7 +29,11 @@ object SettingsStore {
         return AppSettings(
             panelMode = mode,
             showHiddenByDefault = sp.getBoolean(KEY_SHOW_HIDDEN, false),
-            sortModeDefault = sort
+            sortModeDefault = sort,
+            webDavSharePath = sp.getString(KEY_WEBDAV_PATH, "") ?: "",
+            webDavPort = sp.getInt(KEY_WEBDAV_PORT, 7326),
+            webDavUsername = sp.getString(KEY_WEBDAV_USER, "mtfm") ?: "mtfm",
+            webDavPassword = sp.getString(KEY_WEBDAV_PASS, "mtfm123") ?: "mtfm123"
         )
     }
 
@@ -35,6 +43,10 @@ object SettingsStore {
             .putString(KEY_PANEL_MODE, s.panelMode.name)
             .putBoolean(KEY_SHOW_HIDDEN, s.showHiddenByDefault)
             .putString(KEY_SORT_MODE, s.sortModeDefault.name)
+            .putString(KEY_WEBDAV_PATH, s.webDavSharePath)
+            .putInt(KEY_WEBDAV_PORT, s.webDavPort)
+            .putString(KEY_WEBDAV_USER, s.webDavUsername)
+            .putString(KEY_WEBDAV_PASS, s.webDavPassword)
             .apply()
     }
 }
