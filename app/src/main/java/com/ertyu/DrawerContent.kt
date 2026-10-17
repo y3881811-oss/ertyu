@@ -2,6 +2,9 @@ package com.ertyu
 
 import android.net.Uri
 import android.os.Environment
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -11,30 +14,46 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.ertyu.engine.StorageScanner
 import java.io.File
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DrawerContent(
     vm: MainViewModel,
     onDismiss: () -> Unit
 ) {
+    val settings = vm.settingsState.value
+    val volumes = remember { StorageScanner.scanAll() }
+    var showAddDialog by remember { mutableStateOf(false) }
+
     ModalDrawerSheet(
         modifier = Modifier.fillMaxHeight()
     ) {
@@ -43,7 +62,7 @@ fun DrawerContent(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
-            // 头部：App 图标与名称
+            // 头部
             Column(modifier = Modifier.padding(20.dp)) {
                 Icon(
                     Icons.Default.Android,
@@ -51,31 +70,65 @@ fun DrawerContent(
                     modifier = Modifier.height(48.dp)
                 )
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    "MTFM",
-                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge
-                )
+                Text("MTFM", style = MaterialTheme.typography.titleLarge)
                 Text(
                     "本地文件管理器",
-                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
             HorizontalDivider()
 
-            Spacer(Modifier.height(8.dp))
-
-            // 存储空间入口
-            DrawerItem("内部存储", Icons.Default.PhoneAndroid) {
-                onDismiss()
-                val root = Uri.fromFile(Environment.getExternalStorageDirectory())
-                vm.openDirectory(true, root)
+            // 扫描到的本地存储
+            volumes.forEach { vol ->
+                DrawerItem(vol.name, if (vol.isInternal) Icons.Default.PhoneAndroid else Icons.Default.SdCard) {
+                    onDismiss()
+                    vm.openDirectory(true, Uri.fromFile(File(vol.path)))
+                }
             }
-            DrawerItem("根目录", Icons.Default.Folder) {
-                onDismiss()
-                val root = Uri.fromFile(File("/"))
-                vm.openDirectory(true, root)
+
+            // 自定义路径
+            if (settings.customPaths.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "自定义路径",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)
+                )
+                settings.customPaths.forEach { path ->
+                    val name = File(path).name.ifBlank { path }
+                    // 长按可以删除自定义路径
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = {
+                                    onDismiss()
+                                    vm.openDirectory(true, Uri.fromFile(File(path)))
+                                },
+                                onLongClick = {
+                                    vm.removeCustomPath(path)
+                                    vm.showToast("已删除快捷路径")
+                                }
+                            )
+                    ) {
+                        NavigationDrawerItem(
+                            label = { Text(name) },
+                            icon = { Icon(Icons.Default.Folder, contentDescription = null) },
+                            selected = false,
+                            onClick = {},
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                        )
+                    }
+                }
+            }
+
+            // 添加路径按钮
+            DrawerItem("添加本地路径", Icons.Default.Add) {
+                showAddDialog = true
             }
 
             Spacer(Modifier.height(8.dp))
@@ -93,7 +146,6 @@ fun DrawerContent(
             }
             DrawerItem("WebDAV 服务器", Icons.Default.Cloud) {
                 onDismiss()
-                val settings = vm.settingsState.value
                 WebDavStateHolder.state.value = WebDavStateHolder.state.value.copy(
                     sharePath = settings.webDavSharePath,
                     port = settings.webDavPort,
@@ -107,7 +159,6 @@ fun DrawerContent(
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
 
-            // 设置
             DrawerItem("设置", Icons.Default.Settings) {
                 onDismiss()
                 vm.openSettings()
@@ -115,6 +166,40 @@ fun DrawerContent(
 
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    // 添加路径的弹窗
+    if (showAddDialog) {
+        var inputPath by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = { Text("添加本地快捷路径") },
+            text = {
+                OutlinedTextField(
+                    value = inputPath,
+                    onValueChange = { inputPath = it },
+                    placeholder = { Text("/storage/emulated/0/...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (inputPath.isNotBlank()) {
+                        val f = File(inputPath)
+                        if (f.exists() && f.isDirectory) {
+                            vm.addCustomPath(inputPath)
+                            showAddDialog = false
+                        } else {
+                            vm.showToast("目录不存在")
+                        }
+                    }
+                }) { Text("添加") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddDialog = false }) { Text("取消") }
+            }
+        )
     }
 }
 
