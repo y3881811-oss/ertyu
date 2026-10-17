@@ -109,6 +109,4 @@ dependencies {
 
     implementation(libs.apksig)
     implementation(libs.baksmali)
-
-    implementation(libs.nanohttpd)
 }
