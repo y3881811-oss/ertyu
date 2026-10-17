@@ -92,16 +92,14 @@ fun FilePanel(
     }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        // 标签栏 (只在多标签时显示)
-        if (tabs.size > 1) {
-            FileTabBar(
-                isLeft = isLeft,
-                tabs = tabs,
-                activeIndex = activeIndex,
-                currentState = state,
-                vm = vm
-            )
-        }
+        // 标签栏：常驻显示，即使只有 1 个标签也能点 + 号
+        FileTabBar(
+            isLeft = isLeft,
+            tabs = tabs,
+            activeIndex = activeIndex,
+            currentState = state,
+            vm = vm
+        )
 
         if (state.isSelectionMode) {
             SelectionToolbar(
@@ -201,8 +199,8 @@ private fun FileTabBar(
         itemsIndexed(tabs) { index, tab ->
             val isActive = index == activeIndex
             val displayState = if (isActive) currentState else tab
-            val name = displayState.currentUri?.path?.let { File(it).name } ?: "标签"
-            val title = if (name.isBlank()) "根目录" else name
+            val name = displayState.currentUri?.path?.let { File(it).name } ?: "根目录"
+            val title = if (name.isBlank()) "/" else name
 
             Row(
                 modifier = Modifier
