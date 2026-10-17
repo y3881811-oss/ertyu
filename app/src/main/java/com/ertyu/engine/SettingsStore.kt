@@ -4,6 +4,7 @@ import android.content.Context
 import com.ertyu.model.AppSettings
 import com.ertyu.model.PanelMode
 import com.ertyu.model.SortMode
+import org.json.JSONArray
 
 object SettingsStore {
 
@@ -15,6 +16,7 @@ object SettingsStore {
     private const val KEY_WEBDAV_PORT = "webdav_port"
     private const val KEY_WEBDAV_USER = "webdav_user"
     private const val KEY_WEBDAV_PASS = "webdav_pass"
+    private const val KEY_CUSTOM_PATHS = "custom_paths"
 
     fun load(context: Context): AppSettings {
         val sp = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
@@ -26,6 +28,17 @@ object SettingsStore {
         val sort = runCatching {
             SortMode.valueOf(sortName ?: SortMode.NAME_ASC.name)
         }.getOrDefault(SortMode.NAME_ASC)
+
+        // 读取自定义路径
+        val customPathsJson = sp.getString(KEY_CUSTOM_PATHS, "[]") ?: "[]"
+        val customPaths = mutableListOf<String>()
+        try {
+            val arr = JSONArray(customPathsJson)
+            for (i in 0 until arr.length()) {
+                customPaths.add(arr.getString(i))
+            }
+        } catch (e: Exception) {}
+
         return AppSettings(
             panelMode = mode,
             showHiddenByDefault = sp.getBoolean(KEY_SHOW_HIDDEN, false),
@@ -33,11 +46,15 @@ object SettingsStore {
             webDavSharePath = sp.getString(KEY_WEBDAV_PATH, "") ?: "",
             webDavPort = sp.getInt(KEY_WEBDAV_PORT, 7326),
             webDavUsername = sp.getString(KEY_WEBDAV_USER, "mtfm") ?: "mtfm",
-            webDavPassword = sp.getString(KEY_WEBDAV_PASS, "mtfm123") ?: "mtfm123"
+            webDavPassword = sp.getString(KEY_WEBDAV_PASS, "mtfm123") ?: "mtfm123",
+            customPaths = customPaths
         )
     }
 
     fun save(context: Context, s: AppSettings) {
+        val arr = JSONArray()
+        s.customPaths.forEach { arr.put(it) }
+
         context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_PANEL_MODE, s.panelMode.name)
@@ -47,6 +64,7 @@ object SettingsStore {
             .putInt(KEY_WEBDAV_PORT, s.webDavPort)
             .putString(KEY_WEBDAV_USER, s.webDavUsername)
             .putString(KEY_WEBDAV_PASS, s.webDavPassword)
+            .putString(KEY_CUSTOM_PATHS, arr.toString())
             .apply()
     }
 }
