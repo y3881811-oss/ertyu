@@ -1,11 +1,19 @@
 package com.ertyu.engine
 
 import android.util.Base64
-import fi.iki.elonen.NanoHTTPD
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileInputStream
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.net.ServerSocket
+import java.net.Socket
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
@@ -15,60 +23,178 @@ import java.util.Locale
 import java.util.TimeZone
 
 class WebDavServer(
-    port: Int,
+    private val port: Int,
     private val rootDir: File,
     private val username: String,
     private val password: String
-) : NanoHTTPD(port) {
+) {
+    private var serverSocket: ServerSocket? = null
+    private var running = false
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val dateFormat = SimpleDateFormat(
-        "EEE, dd MMM yyyy HH:mm:ss 'GMT'",
-        Locale.US
+        "EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US
     ).apply {
         timeZone = TimeZone.getTimeZone("GMT")
     }
 
-    override fun serve(session: IHTTPSession): Response {
-        if (!checkAuth(session)) {
-            return newFixedLengthResponse(
-                Response.Status.UNAUTHORIZED,
-                "text/plain",
-                "Unauthorized"
-            ).apply {
-                addHeader("WWW-Authenticate", "Basic realm=\"MTFM WebDAV\"")
-            }
-        }
+    fun start() {
+        running = true
+        serverSocket = ServerSocket(port)
+        scope.launch {
+            while (running) {
+                val socket = try {
+                    serverSocket?.accept()
+                } catch (e: Exception) {
+                    if (running) null else break
+                } ?: continue
 
-        val uri = session.uri ?: "/"
-        return try {
-            when (session.method) {
-                Method.OPTIONS -> handleOptions()
-                Method.GET -> handleGet(uri)
-                Method.HEAD -> handleHead(uri)
-                Method.PUT -> handlePut(uri, session)
-                Method.DELETE -> handleDelete(uri)
-                Method.PROPFIND -> handlePropfind(uri, session)
-                Method.MKCOL -> handleMkcol(uri)
-                Method.MOVE -> handleMove(uri, session)
-                Method.COPY -> handleCopy(uri, session)
-                else -> newFixedLengthResponse(
-                    Response.Status.METHOD_NOT_ALLOWED,
-                    "text/plain",
-                    "Method not allowed"
-                )
+                launch {
+                    try {
+                        handleClient(socket)
+                    } catch (_: Exception) {
+                    } finally {
+                        try { socket.close() } catch (_: Exception) {}
+                    }
+                }
             }
-        } catch (e: Exception) {
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "text/plain",
-                "Error: ${e.message}"
-            )
         }
     }
 
-    private fun checkAuth(session: IHTTPSession): Boolean {
-        val auth = session.headers["authorization"] ?: return false
-        if (!auth.startsWith("Basic ")) return false
+    fun stop() {
+        running = false
+        try { serverSocket?.close() } catch (_: Exception) {}
+        serverSocket = null
+        scope.cancel()
+    }
+
+    // ==================== 请求处理 ====================
+
+    private fun handleClient(socket: Socket) {
+        socket.soTimeout = 30000
+        val input = socket.getInputStream().buffered()
+        val output = socket.getOutputStream().buffered()
+
+        val requestLine = readLine(input) ?: return
+        val parts = requestLine.split(" ")
+        if (parts.size < 3) return
+        val method = parts[0].uppercase()
+        val rawUri = parts[1]
+
+        val headers = mutableMapOf<String, String>()
+        while (true) {
+            val line = readLine(input) ?: break
+            if (line.isEmpty()) break
+            val idx = line.indexOf(':')
+            if (idx > 0) {
+                headers[line.substring(0, idx).trim().lowercase()] =
+                    line.substring(idx + 1).trim()
+            }
+        }
+
+        if (!checkAuth(headers)) {
+            writeResponse(
+                output, 401, "text/plain",
+                "Unauthorized".toByteArray(),
+                mapOf("WWW-Authenticate" to "Basic realm=\"MTFM WebDAV\"")
+            )
+            return
+        }
+
+        // 读取 PUT body
+        val contentLength = headers["content-length"]?.toLongOrNull() ?: -1L
+        val chunked = headers["transfer-encoding"]
+            ?.contains("chunked", ignoreCase = true) == true
+
+        val response: HttpResp = when (method) {
+            "OPTIONS" -> HttpResp(
+                200, "text/plain", ByteArray(0), mapOf(
+                    "DAV" to "1, 2",
+                    "Allow" to "OPTIONS, GET, HEAD, PUT, DELETE, " +
+                            "PROPFIND, MKCOL, MOVE, COPY",
+                    "MS-Author-Via" to "DAV"
+                )
+            )
+            "GET" -> handleGet(rawUri)
+            "HEAD" -> handleHead(rawUri)
+            "PUT" -> handlePut(rawUri, input, contentLength, chunked)
+            "DELETE" -> handleDelete(rawUri)
+            "PROPFIND" -> handlePropfind(rawUri, headers)
+            "MKCOL" -> handleMkcol(rawUri)
+            "MOVE" -> handleMove(rawUri, headers)
+            "COPY" -> handleCopy(rawUri, headers)
+            else -> HttpResp(
+                405, "text/plain",
+                "Method Not Allowed".toByteArray()
+            )
+        }
+
+        writeResponse(output, response.status, response.contentType,
+            response.body, response.extraHeaders)
+    }
+
+    private data class HttpResp(
+        val status: Int,
+        val contentType: String,
+        val body: ByteArray,
+        val extraHeaders: Map<String, String> = emptyMap()
+    )
+
+    private fun readLine(input: InputStream): String? {
+        val sb = StringBuilder()
+        while (true) {
+            val b = input.read()
+            if (b < 0) return if (sb.isEmpty()) null else sb.toString()
+            if (b == '\r'.code) {
+                val next = input.read()
+                if (next == '\n'.code) return sb.toString()
+                if (next >= 0) sb.append(next.toChar())
+                return sb.toString()
+            }
+            if (b == '\n'.code) return sb.toString()
+            sb.append(b.toChar())
+        }
+    }
+
+    private fun writeResponse(
+        output: OutputStream,
+        status: Int,
+        contentType: String,
+        body: ByteArray,
+        extraHeaders: Map<String, String> = emptyMap()
+    ) {
+        val statusText = when (status) {
+            200 -> "OK"
+            201 -> "Created"
+            204 -> "No Content"
+            207 -> "Multi-Status"
+            400 -> "Bad Request"
+            401 -> "Unauthorized"
+            403 -> "Forbidden"
+            404 -> "Not Found"
+            405 -> "Method Not Allowed"
+            500 -> "Internal Server Error"
+            else -> "OK"
+        }
+        val headers = buildString {
+            append("HTTP/1.1 $status $statusText\r\n")
+            append("Content-Type: $contentType\r\n")
+            append("Content-Length: ${body.size}\r\n")
+            append("Connection: close\r\n")
+            append("Server: MTFM-WebDAV\r\n")
+            extraHeaders.forEach { (k, v) ->
+                append("$k: $v\r\n")
+            }
+            append("\r\n")
+        }
+        output.write(headers.toByteArray(Charsets.US_ASCII))
+        if (body.isNotEmpty()) output.write(body)
+        output.flush()
+    }
+
+    private fun checkAuth(headers: Map<String, String>): Boolean {
+        val auth = headers["authorization"] ?: return false
+        if (!auth.startsWith("Basic ", ignoreCase = true)) return false
         val decoded = try {
             String(Base64.decode(auth.substring(6).trim(), Base64.DEFAULT))
         } catch (e: Exception) {
@@ -77,24 +203,18 @@ class WebDavServer(
         return decoded == "$username:$password"
     }
 
-    private fun handleOptions(): Response {
-        return newFixedLengthResponse(Response.Status.OK, "text/plain", "")
-            .apply {
-                addHeader("DAV", "1, 2")
-                addHeader(
-                    "Allow",
-                    "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, MKCOL, MOVE, COPY"
-                )
-                addHeader("MS-Author-Via", "DAV")
-            }
+    private fun decodeUri(uri: String): String {
+        // 去掉 query
+        val path = uri.substringBefore('?')
+        return try {
+            URLDecoder.decode(path, "UTF-8")
+        } catch (e: Exception) {
+            path
+        }
     }
 
     private fun resolveFile(uri: String): File? {
-        val decoded = try {
-            URLDecoder.decode(uri, "UTF-8")
-        } catch (e: Exception) {
-            uri
-        }
+        val decoded = decodeUri(uri)
         val rel = decoded.trimStart('/')
         val file = File(rootDir, rel)
         return try {
@@ -106,140 +226,152 @@ class WebDavServer(
         }
     }
 
-    private fun handleGet(uri: String): Response {
-        val file = resolveFile(uri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Forbidden"
-            )
+    // ==================== 各 HTTP 方法 ====================
+
+    private fun handleGet(uri: String): HttpResp {
+        val file = resolveFile(uri) ?: return HttpResp(
+            403, "text/plain", "Forbidden".toByteArray()
+        )
         if (!file.exists() || !file.isFile) {
-            return newFixedLengthResponse(
-                Response.Status.NOT_FOUND, "text/plain", "Not found"
-            )
+            return HttpResp(404, "text/plain", "Not Found".toByteArray())
         }
-        val mime = getMimeType(file.name)
-        val input = FileInputStream(file)
-        return newChunkedResponse(Response.Status.OK, mime, input)
-            .apply {
-                addHeader("Content-Length", file.length().toString())
-                addHeader(
-                    "Last-Modified",
-                    dateFormat.format(Date(file.lastModified()))
-                )
-            }
-    }
-
-    private fun handleHead(uri: String): Response {
-        val file = resolveFile(uri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", ""
-            )
-        if (!file.exists()) {
-            return newFixedLengthResponse(
-                Response.Status.NOT_FOUND, "text/plain", ""
-            )
-        }
-        return newFixedLengthResponse(
-            Response.Status.OK, getMimeType(file.name), ""
-        ).apply {
-            addHeader("Content-Length", file.length().toString())
-            addHeader(
-                "Last-Modified",
-                dateFormat.format(Date(file.lastModified()))
-            )
-        }
-    }
-
-    private fun handlePut(uri: String, session: IHTTPSession): Response {
-        val file = resolveFile(uri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Forbidden"
-            )
-        file.parentFile?.mkdirs()
-
-        return try {
-            session.inputStream.use { input ->
-                file.outputStream().use { output ->
-                    input.copyTo(output, 64 * 1024)
-                }
-            }
-            newFixedLengthResponse(
-                Response.Status.CREATED, "text/plain", "Created"
-            )
+        val bytes = try {
+            file.readBytes()
         } catch (e: Exception) {
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "text/plain",
-                "Upload failed: ${e.message}"
-            )
+            return HttpResp(500, "text/plain",
+                "Read error: ${e.message}".toByteArray())
         }
-    }
-
-    private fun handleDelete(uri: String): Response {
-        val file = resolveFile(uri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Forbidden"
+        return HttpResp(
+            status = 200,
+            contentType = getMimeType(file.name),
+            body = bytes,
+            extraHeaders = mapOf(
+                "Last-Modified" to
+                        dateFormat.format(Date(file.lastModified()))
             )
-        if (!file.exists()) {
-            return newFixedLengthResponse(
-                Response.Status.NOT_FOUND, "text/plain", "Not found"
-            )
-        }
-        val ok = if (file.isDirectory) {
-            file.deleteRecursively()
-        } else {
-            file.delete()
-        }
-        return if (ok) {
-            newFixedLengthResponse(
-                Response.Status.NO_CONTENT, "text/plain", ""
-            )
-        } else {
-            newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Delete failed"
-            )
-        }
-    }
-
-    private fun handlePropfind(uri: String, session: IHTTPSession): Response {
-        val file = resolveFile(uri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Forbidden"
-            )
-        if (!file.exists()) {
-            return newFixedLengthResponse(
-                Response.Status.NOT_FOUND, "text/plain", "Not found"
-            )
-        }
-
-        val depth = session.headers["depth"]?.toIntOrNull() ?: 1
-        val sb = StringBuilder()
-        sb.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
-        sb.append("<D:multistatus xmlns:D=\"DAV:\">")
-        appendPropfindResponse(sb, file, uri)
-        if (file.isDirectory && depth > 0) {
-            file.listFiles()?.forEach { child ->
-                val childUri = if (uri.endsWith("/")) {
-                    "$uri${child.name}"
-                } else {
-                    "$uri/${child.name}"
-                }
-                appendPropfindResponse(sb, child, childUri)
-            }
-        }
-        sb.append("</D:multistatus>")
-
-        return newFixedLengthResponse(
-            MultiStatus,
-            "application/xml; charset=utf-8",
-            sb.toString()
         )
     }
 
-    private fun appendPropfindResponse(
-        sb: StringBuilder,
-        file: File,
-        uri: String
-    ) {
+    private fun handleHead(uri: String): HttpResp {
+        val file = resolveFile(uri) ?: return HttpResp(
+            403, "text/plain", ByteArray(0)
+        )
+        if (!file.exists()) {
+            return HttpResp(404, "text/plain", ByteArray(0))
+        }
+        return HttpResp(
+            status = 200,
+            contentType = getMimeType(file.name),
+            body = ByteArray(0),
+            extraHeaders = mapOf(
+                "Content-Length" to file.length().toString(),
+                "Last-Modified" to
+                        dateFormat.format(Date(file.lastModified()))
+            )
+        )
+    }
+
+    private fun handlePut(
+        uri: String,
+        input: InputStream,
+        contentLength: Long,
+        chunked: Boolean
+    ): HttpResp {
+        val file = resolveFile(uri) ?: return HttpResp(
+            403, "text/plain", "Forbidden".toByteArray()
+        )
+        file.parentFile?.mkdirs()
+        return try {
+            file.outputStream().buffered().use { out ->
+                if (chunked) {
+                    readChunkedBody(input, out)
+                } else if (contentLength > 0) {
+                    val buf = ByteArray(64 * 1024)
+                    var remaining = contentLength
+                    while (remaining > 0) {
+                        val toRead = minOf(buf.size.toLong(), remaining).toInt()
+                        val n = input.read(buf, 0, toRead)
+                        if (n < 0) break
+                        out.write(buf, 0, n)
+                        remaining -= n
+                    }
+                } else {
+                    // 无长度，读到 EOF
+                    input.copyTo(out, 64 * 1024)
+                }
+            }
+            HttpResp(201, "text/plain", "Created".toByteArray())
+        } catch (e: Exception) {
+            HttpResp(500, "text/plain",
+                "Upload failed: ${e.message}".toByteArray())
+        }
+    }
+
+    private fun readChunkedBody(input: InputStream, out: OutputStream) {
+        while (true) {
+            val sizeLine = readLine(input) ?: break
+            val sizeStr = sizeLine.substringBefore(';').trim()
+            val size = sizeStr.toIntOrNull(16) ?: break
+            if (size == 0) {
+                readLine(input) // trailing CRLF
+                break
+            }
+            val buf = ByteArray(size)
+            var read = 0
+            while (read < size) {
+                val n = input.read(buf, read, size - read)
+                if (n < 0) break
+                read += n
+            }
+            out.write(buf, 0, read)
+            readLine(input) // CRLF after chunk
+        }
+    }
+
+    private fun handleDelete(uri: String): HttpResp {
+        val file = resolveFile(uri) ?: return HttpResp(
+            403, "text/plain", "Forbidden".toByteArray()
+        )
+        if (!file.exists()) {
+            return HttpResp(404, "text/plain", "Not Found".toByteArray())
+        }
+        val ok = if (file.isDirectory) file.deleteRecursively()
+        else file.delete()
+        return if (ok) HttpResp(204, "text/plain", ByteArray(0))
+        else HttpResp(403, "text/plain", "Delete failed".toByteArray())
+    }
+
+    private fun handlePropfind(
+        uri: String,
+        headers: Map<String, String>
+    ): HttpResp {
+        val file = resolveFile(uri) ?: return HttpResp(
+            403, "text/plain", "Forbidden".toByteArray()
+        )
+        if (!file.exists()) {
+            return HttpResp(404, "text/plain", "Not Found".toByteArray())
+        }
+        val depth = headers["depth"]?.toIntOrNull() ?: 1
+        val sb = StringBuilder()
+        sb.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+        sb.append("<D:multistatus xmlns:D=\"DAV:\">")
+        appendPropfind(sb, file, uri)
+        if (file.isDirectory && depth > 0) {
+            file.listFiles()?.forEach { child ->
+                val childUri = if (uri.endsWith("/")) "$uri${child.name}"
+                else "$uri/${child.name}"
+                appendPropfind(sb, child, childUri)
+            }
+        }
+        sb.append("</D:multistatus>")
+        return HttpResp(
+            status = 207,
+            contentType = "application/xml; charset=utf-8",
+            body = sb.toString().toByteArray(Charsets.UTF_8)
+        )
+    }
+
+    private fun appendPropfind(sb: StringBuilder, file: File, uri: String) {
         val href = encodeUri(uri)
         sb.append("<D:response>")
         sb.append("<D:href>").append(escapeXml(href)).append("</D:href>")
@@ -268,129 +400,87 @@ class WebDavServer(
         sb.append("</D:response>")
     }
 
-    private fun handleMkcol(uri: String): Response {
-        val file = resolveFile(uri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Forbidden"
-            )
+    private fun handleMkcol(uri: String): HttpResp {
+        val file = resolveFile(uri) ?: return HttpResp(
+            403, "text/plain", "Forbidden".toByteArray()
+        )
         if (file.exists()) {
-            return newFixedLengthResponse(
-                Response.Status.METHOD_NOT_ALLOWED,
-                "text/plain",
-                "Already exists"
-            )
+            return HttpResp(405, "text/plain", "Exists".toByteArray())
         }
         return if (file.mkdirs()) {
-            newFixedLengthResponse(
-                Response.Status.CREATED, "text/plain", "Created"
-            )
+            HttpResp(201, "text/plain", "Created".toByteArray())
         } else {
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "text/plain",
-                "Create failed"
-            )
+            HttpResp(500, "text/plain", "Create failed".toByteArray())
         }
     }
 
-    private fun handleMove(uri: String, session: IHTTPSession): Response {
-        val src = resolveFile(uri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Forbidden"
-            )
-        val destHeader = session.headers["destination"]
-            ?: return newFixedLengthResponse(
-                Response.Status.BAD_REQUEST,
-                "text/plain",
-                "No destination"
-            )
-        val destUri = destHeaderToUri(destHeader)
-        val dst = resolveFile(destUri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Forbidden"
-            )
+    private fun handleMove(
+        uri: String,
+        headers: Map<String, String>
+    ): HttpResp {
+        val src = resolveFile(uri) ?: return HttpResp(
+            403, "text/plain", "Forbidden".toByteArray()
+        )
+        val destHeader = headers["destination"] ?: return HttpResp(
+            400, "text/plain", "No Destination".toByteArray()
+        )
+        val dst = resolveFile(destHeaderToPath(destHeader))
+            ?: return HttpResp(403, "text/plain", "Forbidden".toByteArray())
         if (!src.exists()) {
-            return newFixedLengthResponse(
-                Response.Status.NOT_FOUND, "text/plain", "Not found"
-            )
+            return HttpResp(404, "text/plain", "Not Found".toByteArray())
         }
         dst.parentFile?.mkdirs()
-        val overwrite = session.headers["overwrite"] != "F"
-        if (dst.exists() && overwrite) dst.deleteRecursively()
-
-        val ok = src.renameTo(dst)
-        return if (ok) {
-            newFixedLengthResponse(
-                Response.Status.CREATED, "text/plain", "Moved"
-            )
+        if (dst.exists() && headers["overwrite"] != "F") {
+            dst.deleteRecursively()
+        }
+        return if (src.renameTo(dst)) {
+            HttpResp(201, "text/plain", "Moved".toByteArray())
         } else {
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "text/plain",
-                "Move failed"
-            )
+            HttpResp(500, "text/plain", "Move failed".toByteArray())
         }
     }
 
-    private fun handleCopy(uri: String, session: IHTTPSession): Response {
-        val src = resolveFile(uri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Forbidden"
-            )
-        val destHeader = session.headers["destination"]
-            ?: return newFixedLengthResponse(
-                Response.Status.BAD_REQUEST,
-                "text/plain",
-                "No destination"
-            )
-        val destUri = destHeaderToUri(destHeader)
-        val dst = resolveFile(destUri)
-            ?: return newFixedLengthResponse(
-                Response.Status.FORBIDDEN, "text/plain", "Forbidden"
-            )
+    private fun handleCopy(
+        uri: String,
+        headers: Map<String, String>
+    ): HttpResp {
+        val src = resolveFile(uri) ?: return HttpResp(
+            403, "text/plain", "Forbidden".toByteArray()
+        )
+        val destHeader = headers["destination"] ?: return HttpResp(
+            400, "text/plain", "No Destination".toByteArray()
+        )
+        val dst = resolveFile(destHeaderToPath(destHeader))
+            ?: return HttpResp(403, "text/plain", "Forbidden".toByteArray())
         if (!src.exists()) {
-            return newFixedLengthResponse(
-                Response.Status.NOT_FOUND, "text/plain", "Not found"
-            )
+            return HttpResp(404, "text/plain", "Not Found".toByteArray())
         }
-        val overwrite = session.headers["overwrite"] != "F"
-        if (dst.exists() && overwrite) dst.deleteRecursively()
-
-        val ok = try {
+        if (dst.exists() && headers["overwrite"] != "F") {
+            dst.deleteRecursively()
+        }
+        return try {
             copyRecursive(src, dst)
-            true
+            HttpResp(201, "text/plain", "Copied".toByteArray())
         } catch (e: Exception) {
-            false
-        }
-        return if (ok) {
-            newFixedLengthResponse(
-                Response.Status.CREATED, "text/plain", "Copied"
-            )
-        } else {
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "text/plain",
-                "Copy failed"
-            )
+            HttpResp(500, "text/plain",
+                "Copy failed: ${e.message}".toByteArray())
         }
     }
 
     private fun copyRecursive(src: File, dst: File) {
         if (src.isDirectory) {
             dst.mkdirs()
-            src.listFiles()?.forEach { child ->
-                copyRecursive(child, File(dst, child.name))
-            }
+            src.listFiles()?.forEach { copyRecursive(it, File(dst, it.name)) }
         } else {
             dst.parentFile?.mkdirs()
             src.copyTo(dst, overwrite = true)
         }
     }
 
-    private fun destHeaderToUri(dest: String): String {
+    private fun destHeaderToPath(dest: String): String {
         return try {
             val url = java.net.URL(dest)
-            url.path
+            url.path ?: "/"
         } catch (e: Exception) {
             dest
         }
@@ -434,11 +524,6 @@ class WebDavServer(
     }
 
     companion object {
-        val MultiStatus: Response.IStatus = object : Response.IStatus {
-            override fun getRequestStatus(): Int = 207
-            override fun getDescription(): String = "Multi-Status"
-        }
-
         fun getLocalIpAddress(): String {
             try {
                 val interfaces = NetworkInterface.getNetworkInterfaces()
