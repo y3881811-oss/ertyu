@@ -42,9 +42,7 @@ object DexDecompiler {
 
             if (!smaliFile.exists()) {
                 val dex = loadDex(apkFile, dexName)
-                val options = BaksmaliOptions().apply {
-                    jobs = 4
-                }
+                val options = BaksmaliOptions()
                 Baksmali.disassembleDexFile(dex, outDir, 4, options)
             }
 
@@ -57,12 +55,13 @@ object DexDecompiler {
     }
 
     private fun loadDex(apkFile: File, dexName: String): DexFile {
-        return DexFileFactory.loadDexEntry(
+        val entry = DexFileFactory.loadDexEntry(
             apkFile,
             dexName,
             true,
             Opcodes.getDefault()
         )
+        return entry.dexFile
     }
 
     fun clearCache(cacheDir: File) {
