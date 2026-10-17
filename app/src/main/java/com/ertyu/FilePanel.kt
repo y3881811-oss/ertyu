@@ -168,6 +168,7 @@ private fun FileToolbar(
     onSwitchPanel: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val settings by vm.settingsState.collectAsState()
 
     Row(
         modifier = Modifier
@@ -227,6 +228,20 @@ private fun FileToolbar(
                     onClick = {
                         menuExpanded = false
                         vm.openInstalledApps()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("WebDAV 服务器") },
+                    onClick = {
+                        menuExpanded = false
+                        WebDavStateHolder.state.value =
+                            WebDavStateHolder.state.value.copy(
+                                sharePath = settings.webDavSharePath,
+                                port = settings.webDavPort,
+                                username = settings.webDavUsername,
+                                password = settings.webDavPassword
+                            )
+                        vm.openWebDav()
                     }
                 )
                 DropdownMenuItem(
