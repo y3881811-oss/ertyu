@@ -19,7 +19,6 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // 只保留 32 位（armeabi-v7a）+ 64 位（arm64-v8a）
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
@@ -107,4 +106,7 @@ dependencies {
     implementation(libs.xz)
     implementation(libs.zstd.jni)
     implementation(libs.junrar)
+
+    implementation(libs.apksig)
+    implementation(libs.baksmali)
 }
