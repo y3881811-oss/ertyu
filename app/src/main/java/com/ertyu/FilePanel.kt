@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.MoreVert
@@ -25,11 +27,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +48,35 @@ fun FilePanel(
 ) {
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
     val state by panelFlow.collectAsState()
+
+    // ==================== 滚动位置记忆 ====================
+
+    val currentUriStr = state.currentUri?.toString() ?: ""
+    val savedUri = FilePanelScrollStore.savedUri(isLeft)
+    val isSameDir = currentUriStr.isNotEmpty() && currentUriStr == savedUri
+
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = if (isSameDir) {
+            FilePanelScrollStore.savedIndex(isLeft)
+        } else 0,
+        initialFirstVisibleItemScrollOffset = if (isSameDir) {
+            FilePanelScrollStore.savedOffset(isLeft)
+        } else 0
+    )
+
+    // 用户滚动时持续保存位置（同目录才有效）
+    LaunchedEffect(listState, currentUriStr) {
+        snapshotFlow {
+            listState.firstVisibleItemIndex to
+                    listState.firstVisibleItemScrollOffset
+        }.collect { (idx, offset) ->
+            if (currentUriStr.isNotEmpty()) {
+                FilePanelScrollStore.save(isLeft, currentUriStr, idx, offset)
+            }
+        }
+    }
+
+    // ==================== UI ====================
 
     Column(modifier = modifier.fillMaxHeight()) {
         if (state.isSelectionMode) {
@@ -93,6 +126,7 @@ fun FilePanel(
                 )
             }
             else -> LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(vertical = 4.dp)
             ) {
@@ -109,6 +143,10 @@ fun FilePanel(
                             if (state.isSelectionMode) {
                                 vm.toggleSelection(isLeft, item.uriString)
                             } else if (item.isDirectory) {
+                                // 进新目录前清空本面板的滚动记录
+                                FilePanelScrollStore.save(
+                                    isLeft, "", 0, 0
+                                )
                                 vm.openDirectory(isLeft, item.uri)
                             } else {
                                 vm.openFile(item)
