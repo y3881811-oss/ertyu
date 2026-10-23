@@ -13,7 +13,7 @@ object StorageScanner {
 
     /**
      * 扫描所有本地存储卷
-     * 返回：内部存储、根目录、所有外置SD卡/U盘、Termux目录（如果存在）
+     * 返回：内部存储、根目录、所有外置SD卡/U盘、标准公共目录、Termux
      */
     fun scanAll(): List<StorageVolume> {
         val result = mutableListOf<StorageVolume>()
@@ -22,7 +22,8 @@ object StorageScanner {
         result.add(StorageVolume("根目录", "/"))
 
         // 2. 内部存储
-        val internal = Environment.getExternalStorageDirectory().absolutePath
+        val internalDir = Environment.getExternalStorageDirectory()
+        val internal = internalDir.absolutePath
         result.add(StorageVolume("内部存储", internal, isInternal = true))
 
         // 3. 外置存储（SD卡、U盘）
@@ -42,10 +43,23 @@ object StorageScanner {
             }
         }
 
-        // 4. 检查常见特殊目录（如 Termux）
-        val termuxDir = File(internal, "Termux")
-        if (termuxDir.exists() && termuxDir.isDirectory) {
-            result.add(StorageVolume("Termux Home", termuxDir.absolutePath))
+        // 4. 智能识别标准公共目录 (这些是 Android 默认的)
+        // 只有当目录真实存在时才加入，避免空列表
+        val commonDirs = listOf(
+            "Download" to "下载",
+            "Documents" to "文档",
+            "Pictures" to "图片",
+            "DCIM" to "相机",
+            "Music" to "音乐",
+            "Movies" to "影片",
+            "Termux" to "Termux"
+        )
+
+        for ((dirName, displayName) in commonDirs) {
+            val dir = File(internal, dirName)
+            if (dir.exists() && dir.isDirectory) {
+                result.add(StorageVolume(displayName, dir.absolutePath))
+            }
         }
 
         return result
