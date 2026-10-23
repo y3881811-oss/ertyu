@@ -58,6 +58,9 @@ private val AUDIO_EXTS = setOf(
     "mp3", "wav", "flac", "ogg", "m4a", "aac", "wma"
 )
 
+// 图片扩展名，用于触发画廊
+private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
+
 @Composable
 fun FilePanel(
     isLeft: Boolean,
@@ -94,7 +97,6 @@ fun FilePanel(
     }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        // 标签栏
         FileTabBar(
             isLeft = isLeft,
             tabs = tabs,
@@ -124,7 +126,7 @@ fun FilePanel(
                 showHidden = state.showHidden,
                 showSwitch = onSwitchPanel != null,
                 onSwitchPanel = { onSwitchPanel?.invoke() },
-                onOpenDrawer = onOpenDrawer // 传递抽屉事件
+                onOpenDrawer = onOpenDrawer
             )
         }
         HorizontalDivider()
@@ -165,6 +167,12 @@ fun FilePanel(
                                 vm.openVideoPlayer(item)
                             } else if (item.name.substringAfterLast('.', "").lowercase() in AUDIO_EXTS) {
                                 vm.openAudioPlayer(item)
+                            } else if (item.name.substringAfterLast('.', "").lowercase() in IMAGE_EXTS) {
+                                // 进入画廊
+                                vm.openGallery(isLeft, item)
+                            } else if (item.name.endsWith(".db") || item.name.endsWith(".sqlite")) {
+                                // 查看 SQLite
+                                vm.openSqlite(item)
                             } else {
                                 vm.openFile(item)
                             }
@@ -278,11 +286,9 @@ private fun FileToolbar(
             .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 汉堡菜单按钮
         IconButton(onClick = onOpenDrawer) {
             Icon(Icons.Default.Menu, contentDescription = "菜单")
         }
-        
         IconButton(onClick = { vm.goUp(isLeft) }, enabled = canGoUp) {
             Icon(Icons.Default.ArrowUpward, contentDescription = "上级")
         }
@@ -336,7 +342,6 @@ private fun FileToolbar(
                     text = { Text("刷新") },
                     onClick = { menuExpanded = false; vm.refresh(isLeft) }
                 )
-                // 设置和 WebDAV 移到左侧抽屉里了，这里就不留了
             }
         }
     }
