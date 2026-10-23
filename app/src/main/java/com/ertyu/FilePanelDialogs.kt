@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Verified
@@ -67,7 +68,8 @@ fun FileActionDialog(
     onHexView: () -> Unit,
     onChecksum: () -> Unit,
     onApkSign: () -> Unit,
-    onApkClone: () -> Unit
+    onApkClone: () -> Unit,
+    onCrypto: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -99,10 +101,11 @@ fun FileActionDialog(
                 ActionRow("压缩为…", Icons.Default.FolderZip, onZipThis)
                 ActionRow("HEX 查看", Icons.Default.Search, onHexView)
                 if (!item.isDirectory) {
+                    ActionRow("校验和（MD5/SHA）", Icons.Default.Verified, onChecksum)
                     ActionRow(
-                        "校验和（MD5/SHA）",
-                        Icons.Default.Verified,
-                        onChecksum
+                        if (item.name.endsWith(".enc")) "解密文件" else "加密文件（AES）",
+                        Icons.Default.Lock,
+                        onCrypto
                     )
                 }
                 ActionRow("属性", Icons.Default.Info, onInfo)
@@ -265,12 +268,9 @@ fun CompressFormatDialog(
         title = { Text("选择压缩格式") },
         text = {
             Column {
-                FormatRow("ZIP", ".zip（兼容性最好）",
-                    ArchiveFormat.ZIP, onSelect)
-                FormatRow("TAR", ".tar（不压缩）",
-                    ArchiveFormat.TAR, onSelect)
-                FormatRow("TAR.GZ", ".tar.gz（Linux 常见）",
-                    ArchiveFormat.TAR_GZ, onSelect)
+                FormatRow("ZIP", ".zip（兼容性最好）", ArchiveFormat.ZIP, onSelect)
+                FormatRow("TAR", ".tar（不压缩）", ArchiveFormat.TAR, onSelect)
+                FormatRow("TAR.GZ", ".tar.gz（Linux 常见）", ArchiveFormat.TAR_GZ, onSelect)
             }
         },
         confirmButton = {
