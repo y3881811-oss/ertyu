@@ -26,20 +26,34 @@ fun AppRoot(vm: MainViewModel) {
     val videoPlayerState by VideoPlayerStateHolder.state.collectAsState()
     val audioPlayerState by AudioPlayerStateHolder.state.collectAsState()
 
+    // 新增的 3 个状态
+    val galleryState by GalleryStateHolder.state.collectAsState()
+    val sqliteState by SqliteStateHolder.state.collectAsState()
+
     AppDialogs(vm)
+    CryptoDialog(vm)
 
     when {
         editor.isOpen -> {
             BackHandler { vm.closeEditor() }
             EditorScreen(vm)
         }
+        // 原先的单图查看器被画廊替代，保留以防有的地方调用
         imageViewer.isOpen -> {
             BackHandler { vm.closeImageViewer() }
             ImageViewerScreen(vm)
         }
+        // 新增画廊路由
+        galleryState.visible -> {
+            GalleryScreen(vm)
+        }
         hexViewerState.visible -> {
             BackHandler { vm.closeHexViewer() }
             HexViewerScreen(vm)
+        }
+        // 新增 SQLite 路由
+        sqliteState.visible -> {
+            SqliteViewerScreen(vm)
         }
         signerState.visible -> {
             BackHandler { vm.closeApkSigner() }
