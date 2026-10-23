@@ -273,10 +273,10 @@ fun AppDialogs(vm: MainViewModel) {
     val actionTarget by vm.actionDialogTarget.collectAsState()
     val actionIsLeft by vm.actionDialogIsLeft.collectAsState()
     val settingsState by vm.settingsState.collectAsState()
+    
     actionTarget?.let { target ->
         val format = ArchiveFormat.detect(target.name)
-        val isApk = target.name.substringAfterLast('.', "")
-            .lowercase() == "apk"
+        val isApk = target.name.substringAfterLast('.', "").lowercase() == "apk"
         val showCrossPanel = settingsState.panelMode != PanelMode.SINGLE
         FileActionDialog(
             item = target,
@@ -344,6 +344,10 @@ fun AppDialogs(vm: MainViewModel) {
             onApkClone = {
                 vm.dismissActionDialog()
                 vm.openApkClone(target)
+            },
+            onCrypto = {
+                vm.dismissActionDialog()
+                vm.openCrypto(actionIsLeft, target)
             }
         )
     }
