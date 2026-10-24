@@ -4,7 +4,9 @@ import com.ertyu.model.ArchiveFormat
 import com.github.junrar.Junrar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
+import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
@@ -21,11 +23,6 @@ import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-/**
- * 统一处理 zip / tar / tar.gz / tar.bz2 / tar.xz / tar.zst / 7z / rar 等格式。
- * - 解压：全部支持
- * - 压缩：ZIP / TAR / TAR.GZ
- */
 object ArchiveEngine {
 
     private const val BUF_SIZE = 16 * 1024
@@ -118,7 +115,6 @@ object ArchiveEngine {
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            // 收集所有条目
             val entries = mutableListOf<Pair<File, String>>()
             sources.forEach { src -> collect(src, src.name, entries) }
             if (entries.isEmpty()) throw IllegalArgumentException("没有可压缩的内容")
@@ -133,11 +129,44 @@ object ArchiveEngine {
                     compressTar(entries, targetFile, null, onProgress)
                 ArchiveFormat.TAR_GZ ->
                     compressTar(entries, targetFile, "gz", onProgress)
+                ArchiveFormat.SEVEN_Z ->
+                    compress7z(entries, targetFile, onProgress)
                 else ->
-                    throw IllegalArgumentException("不支持压缩为 ${format.label}（仅支持 ZIP / TAR / TAR.GZ）")
+                    throw IllegalArgumentException("不支持压缩为 ${format.label}")
             }
         }
     }
+
+    private fun compress7z(
+        entries: List<Pair<File, String>>,
+        target: File,
+        onProgress: (Int, Int) -> Unit
+    ) {
+        SevenZOutputFile(target).use { out ->
+            var current = 0
+            for ((file, name) in entries) {
+                val entryName = if (file.isDirectory) "$name/" else name
+                val entry = SevenZArchiveEntry().apply {
+                    this.name = entryName
+                    this.isDirectory = file.isDirectory
+                    if (file.isFile) {
+                        this.size = file.length()
+                    }
+                }
+                out.putArchiveEntry(entry)
+                if (file.isFile) {
+                    BufferedInputStream(file.inputStream()).use { input ->
+                        input.copyTo(out, BUF_SIZE)
+                    }
+                }
+                out.closeArchiveEntry()
+                current++
+                onProgress(current, entries.size)
+            }
+        }
+    }
+
+    // ==================== 其他辅助方法 ====================
 
     private fun compressZip(
         entries: List<Pair<File, String>>,
@@ -206,8 +235,6 @@ object ArchiveEngine {
         }
     }
 
-    // ==================== tar 解压辅助 ====================
-
     private fun openTar(archiveFile: File, compressor: String?): TarArchiveInputStream {
         val base: InputStream = BufferedInputStream(archiveFile.inputStream())
         val decompressed: InputStream = when (compressor) {
@@ -256,8 +283,6 @@ object ArchiveEngine {
         }
     }
 
-    // ==================== 7z ====================
-
     private fun extract7z(
         archiveFile: File,
         targetDir: File,
@@ -292,8 +317,6 @@ object ArchiveEngine {
             }
         }
     }
-
-    // ==================== rar ====================
 
     private fun extractRar(
         archiveFile: File,
