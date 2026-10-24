@@ -31,6 +31,11 @@ fun MainViewModel.setSortModeDefault(sort: SortMode) {
     persistSettings()
 }
 
+fun MainViewModel.toggleGridMode() {
+    _settingsState.update { it.copy(isGridMode = !it.isGridMode) }
+    persistSettings()
+}
+
 fun MainViewModel.setWebDavSharePath(path: String) {
     _settingsState.update { it.copy(webDavSharePath = path) }
     persistSettings()
@@ -68,7 +73,6 @@ fun MainViewModel.removeCustomPath(path: String) {
     persistSettings()
 }
 
-// 切换引擎
 fun MainViewModel.switchEngine(useShizuku: Boolean) {
     engine = if (useShizuku) ShizukuFileEngine() else DirectFileEngine()
     _toast.value = if (useShizuku) "已切换到 Shizuku 引擎" else "已切换到普通引擎"
