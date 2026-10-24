@@ -156,7 +156,12 @@ object ArchiveEngine {
                 out.putArchiveEntry(entry)
                 if (file.isFile) {
                     BufferedInputStream(file.inputStream()).use { input ->
-                        input.copyTo(out, BUF_SIZE)
+                        // 关键修复：不能直接用 copyTo，需要手动 read/write
+                        val buf = ByteArray(BUF_SIZE)
+                        var len: Int
+                        while (input.read(buf).also { len = it } != -1) {
+                            out.write(buf, 0, len)
+                        }
                     }
                 }
                 out.closeArchiveEntry()
