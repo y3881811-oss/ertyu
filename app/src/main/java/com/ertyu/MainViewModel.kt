@@ -50,9 +50,8 @@ internal val IMAGE_FILE_EXTS = setOf(
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
-    internal val engine: FileEngine = DirectFileEngine()
-
-    // ==================== 面板 / 查看器 ====================
+    // 改为 var 以便设置里切换 Shizuku
+    internal var engine: FileEngine = DirectFileEngine()
 
     internal val _leftPanel = MutableStateFlow(PanelState())
     val leftPanel: StateFlow<PanelState> = _leftPanel.asStateFlow()
@@ -67,10 +66,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val imageViewer: StateFlow<ImageViewerState> = _imageViewer.asStateFlow()
 
     internal val _hexViewerState = MutableStateFlow(HexViewerState())
-    val hexViewerState: StateFlow<HexViewerState> =
-        _hexViewerState.asStateFlow()
-
-    // ==================== 压缩 ====================
+    val hexViewerState: StateFlow<HexViewerState> = _hexViewerState.asStateFlow()
 
     internal val _zipProgress = MutableStateFlow(ZipProgress())
     val zipProgress: StateFlow<ZipProgress> = _zipProgress.asStateFlow()
@@ -79,33 +75,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val zipPrompt: StateFlow<ZipPrompt> = _zipPrompt.asStateFlow()
 
     internal val _compressPromptVisible = MutableStateFlow(false)
-    val compressPromptVisible: StateFlow<Boolean> =
-        _compressPromptVisible.asStateFlow()
+    val compressPromptVisible: StateFlow<Boolean> = _compressPromptVisible.asStateFlow()
     internal val _compressPanelIsLeft = MutableStateFlow(true)
 
-    // ==================== 属性 ====================
-
     internal val _folderSizeState = MutableStateFlow(FolderSizeState())
-    val folderSizeState: StateFlow<FolderSizeState> =
-        _folderSizeState.asStateFlow()
-
-    // ==================== 搜索 / 书签 ====================
+    val folderSizeState: StateFlow<FolderSizeState> = _folderSizeState.asStateFlow()
 
     internal val _searchState = MutableStateFlow(SearchState())
     val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
 
     internal val _bookmarkPanelState = MutableStateFlow(BookmarkPanelState())
-    val bookmarkPanelState: StateFlow<BookmarkPanelState> =
-        _bookmarkPanelState.asStateFlow()
-
-    // ==================== APK ====================
+    val bookmarkPanelState: StateFlow<BookmarkPanelState> = _bookmarkPanelState.asStateFlow()
 
     internal val _apkInfoState = MutableStateFlow(ApkInfoState())
     val apkInfoState: StateFlow<ApkInfoState> = _apkInfoState.asStateFlow()
 
     internal val _apkBrowserState = MutableStateFlow(ApkBrowserState())
-    val apkBrowserState: StateFlow<ApkBrowserState> =
-        _apkBrowserState.asStateFlow()
+    val apkBrowserState: StateFlow<ApkBrowserState> = _apkBrowserState.asStateFlow()
 
     internal val _pendingInstall = MutableStateFlow<File?>(null)
     val pendingInstall: StateFlow<File?> = _pendingInstall.asStateFlow()
@@ -113,42 +99,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _installState = MutableStateFlow(InstallState())
     val installState: StateFlow<InstallState> = _installState.asStateFlow()
 
-    // ==================== 已安装应用 ====================
-
     internal val _installedAppsState = MutableStateFlow(InstalledAppsState())
-    val installedAppsState: StateFlow<InstalledAppsState> =
-        _installedAppsState.asStateFlow()
-
-    // ==================== 设置 ====================
+    val installedAppsState: StateFlow<InstalledAppsState> = _installedAppsState.asStateFlow()
 
     internal val _settingsState = MutableStateFlow(AppSettings())
-    val settingsState: StateFlow<AppSettings> =
-        _settingsState.asStateFlow()
+    val settingsState: StateFlow<AppSettings> = _settingsState.asStateFlow()
 
     internal val _settingsVisible = MutableStateFlow(false)
-    val settingsVisible: StateFlow<Boolean> =
-        _settingsVisible.asStateFlow()
+    val settingsVisible: StateFlow<Boolean> = _settingsVisible.asStateFlow()
 
     internal val _helpVisible = MutableStateFlow(false)
     val helpVisible: StateFlow<Boolean> = _helpVisible.asStateFlow()
 
-    // ==================== 提示 ====================
-
     internal val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
-
-    // ==================== FilePanel 弹窗状态 ====================
 
     internal val _newFilePrompt = MutableStateFlow(false)
     val newFilePrompt: StateFlow<Boolean> = _newFilePrompt.asStateFlow()
     internal val _newFilePanelIsLeft = MutableStateFlow(true)
 
     internal val _newFolderDialogVisible = MutableStateFlow(false)
-    val newFolderDialogVisible: StateFlow<Boolean> =
-        _newFolderDialogVisible.asStateFlow()
+    val newFolderDialogVisible: StateFlow<Boolean> = _newFolderDialogVisible.asStateFlow()
     internal val _newFolderDialogIsLeft = MutableStateFlow(true)
-    val newFolderDialogIsLeft: StateFlow<Boolean> =
-        _newFolderDialogIsLeft.asStateFlow()
+    val newFolderDialogIsLeft: StateFlow<Boolean> = _newFolderDialogIsLeft.asStateFlow()
 
     internal val _jumpDialogVisible = MutableStateFlow(false)
     val jumpDialogVisible: StateFlow<Boolean> = _jumpDialogVisible.asStateFlow()
@@ -161,24 +134,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val sortDialogIsLeft: StateFlow<Boolean> = _sortDialogIsLeft.asStateFlow()
 
     internal val _actionDialogTarget = MutableStateFlow<FileItem?>(null)
-    val actionDialogTarget: StateFlow<FileItem?> =
-        _actionDialogTarget.asStateFlow()
+    val actionDialogTarget: StateFlow<FileItem?> = _actionDialogTarget.asStateFlow()
     internal val _actionDialogIsLeft = MutableStateFlow(true)
-    val actionDialogIsLeft: StateFlow<Boolean> =
-        _actionDialogIsLeft.asStateFlow()
+    val actionDialogIsLeft: StateFlow<Boolean> = _actionDialogIsLeft.asStateFlow()
 
     internal val _infoDialogTarget = MutableStateFlow<FileItem?>(null)
-    val infoDialogTarget: StateFlow<FileItem?> =
-        _infoDialogTarget.asStateFlow()
+    val infoDialogTarget: StateFlow<FileItem?> = _infoDialogTarget.asStateFlow()
 
     internal val _renameDialogTarget = MutableStateFlow<FileItem?>(null)
-    val renameDialogTarget: StateFlow<FileItem?> =
-        _renameDialogTarget.asStateFlow()
+    val renameDialogTarget: StateFlow<FileItem?> = _renameDialogTarget.asStateFlow()
     internal val _renameDialogIsLeft = MutableStateFlow(true)
-    val renameDialogIsLeft: StateFlow<Boolean> =
-        _renameDialogIsLeft.asStateFlow()
-
-    // ==================== Jobs ====================
+    val renameDialogIsLeft: StateFlow<Boolean> = _renameDialogIsLeft.asStateFlow()
 
     internal var folderSizeJob: Job? = null
     internal var searchJob: Job? = null
@@ -190,10 +156,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var hexFile: File? = null
     private var hexLoadedBytes = 0
 
-    internal fun flowOf(isLeft: Boolean) =
-        if (isLeft) _leftPanel else _rightPanel
-
-    // ==================== 初始化 ====================
+    internal fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
     fun initDefaultDirs() {
         val root = Uri.fromFile(Environment.getExternalStorageDirectory())
@@ -203,8 +166,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             openDirectory(false, root)
         }
     }
-
-    // ==================== 浏览 ====================
 
     fun openDirectory(isLeft: Boolean, uri: Uri) {
         val flow = flowOf(isLeft)
@@ -250,50 +211,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         else raw.filter { !it.name.startsWith(".") }
 
         val cmp: Comparator<FileItem> = when (sort) {
-            SortMode.NAME_ASC ->
-                compareBy<FileItem> { !it.isDirectory }
-                    .thenBy { it.name.lowercase() }
-            SortMode.NAME_DESC ->
-                compareBy<FileItem> { !it.isDirectory }
-                    .thenByDescending { it.name.lowercase() }
-            SortMode.SIZE_ASC ->
-                compareBy<FileItem> { !it.isDirectory }.thenBy { it.size }
-            SortMode.SIZE_DESC ->
-                compareBy<FileItem> { !it.isDirectory }
-                    .thenByDescending { it.size }
-            SortMode.TIME_ASC ->
-                compareBy<FileItem> { !it.isDirectory }
-                    .thenBy { it.lastModified }
-            SortMode.TIME_DESC ->
-                compareBy<FileItem> { !it.isDirectory }
-                    .thenByDescending { it.lastModified }
-            SortMode.TYPE_ASC ->
-                compareBy<FileItem> { !it.isDirectory }
-                    .thenBy { it.name.substringAfterLast('.', "").lowercase() }
-            SortMode.TYPE_DESC ->
-                compareBy<FileItem> { !it.isDirectory }
-                    .thenByDescending {
-                        it.name.substringAfterLast('.', "").lowercase()
-                    }
+            SortMode.NAME_ASC -> compareBy<FileItem> { !it.isDirectory }.thenBy { it.name.lowercase() }
+            SortMode.NAME_DESC -> compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.name.lowercase() }
+            SortMode.SIZE_ASC -> compareBy<FileItem> { !it.isDirectory }.thenBy { it.size }
+            SortMode.SIZE_DESC -> compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.size }
+            SortMode.TIME_ASC -> compareBy<FileItem> { !it.isDirectory }.thenBy { it.lastModified }
+            SortMode.TIME_DESC -> compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.lastModified }
+            SortMode.TYPE_ASC -> compareBy<FileItem> { !it.isDirectory }.thenBy { it.name.substringAfterLast('.', "").lowercase() }
+            SortMode.TYPE_DESC -> compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.name.substringAfterLast('.', "").lowercase() }
         }
         return filtered.sortedWith(cmp)
     }
 
     fun setSortMode(isLeft: Boolean, mode: SortMode) {
         flowOf(isLeft).update {
-            it.copy(
-                sortMode = mode,
-                items = process(it.rawItems, mode, it.showHidden)
-            )
+            it.copy(sortMode = mode, items = process(it.rawItems, mode, it.showHidden))
         }
     }
 
     fun setShowHidden(isLeft: Boolean, show: Boolean) {
         flowOf(isLeft).update {
-            it.copy(
-                showHidden = show,
-                items = process(it.rawItems, it.sortMode, show)
-            )
+            it.copy(showHidden = show, items = process(it.rawItems, it.sortMode, show))
         }
     }
 
@@ -306,8 +244,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val parent = engine.getParent(current) ?: return
         openDirectory(isLeft, parent)
     }
-
-    // ==================== 基础文件操作 ====================
 
     fun delete(isLeft: Boolean, item: FileItem) {
         viewModelScope.launch {
@@ -348,8 +284,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ==================== 新建文件 ====================
-
     fun openNewFilePrompt(isLeft: Boolean) {
         _newFilePanelIsLeft.value = isLeft
         _newFilePrompt.value = true
@@ -380,47 +314,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ==================== FilePanel 弹窗控制 ====================
-
     fun openNewFolderDialog(isLeft: Boolean) {
         _newFolderDialogIsLeft.value = isLeft
         _newFolderDialogVisible.value = true
     }
 
-    fun dismissNewFolderDialog() {
-        _newFolderDialogVisible.value = false
-    }
+    fun dismissNewFolderDialog() { _newFolderDialogVisible.value = false }
 
     fun openJumpDialog(isLeft: Boolean) {
         _jumpDialogIsLeft.value = isLeft
         _jumpDialogVisible.value = true
     }
 
-    fun dismissJumpDialog() {
-        _jumpDialogVisible.value = false
-    }
+    fun dismissJumpDialog() { _jumpDialogVisible.value = false }
 
     fun openSortDialog(isLeft: Boolean) {
         _sortDialogIsLeft.value = isLeft
         _sortDialogVisible.value = true
     }
 
-    fun dismissSortDialog() {
-        _sortDialogVisible.value = false
-    }
+    fun dismissSortDialog() { _sortDialogVisible.value = false }
 
     fun openActionDialog(isLeft: Boolean, item: FileItem) {
         _actionDialogIsLeft.value = isLeft
         _actionDialogTarget.value = item
     }
 
-    fun dismissActionDialog() {
-        _actionDialogTarget.value = null
-    }
+    fun dismissActionDialog() { _actionDialogTarget.value = null }
 
-    fun openInfoDialog(item: FileItem) {
-        _infoDialogTarget.value = item
-    }
+    fun openInfoDialog(item: FileItem) { _infoDialogTarget.value = item }
 
     fun dismissInfoDialog() {
         _infoDialogTarget.value = null
@@ -432,11 +354,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _renameDialogTarget.value = item
     }
 
-    fun dismissRenameDialog() {
-        _renameDialogTarget.value = null
-    }
-
-    // ==================== 多选 ====================
+    fun dismissRenameDialog() { _renameDialogTarget.value = null }
 
     fun enterSelection(isLeft: Boolean, uriString: String) {
         flowOf(isLeft).update {
@@ -448,19 +366,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         flowOf(isLeft).update { state ->
             val set = state.selectedUris.toMutableSet()
             if (!set.add(uriString)) set.remove(uriString)
-            state.copy(
-                selectedUris = set,
-                isSelectionMode = set.isNotEmpty()
-            )
+            state.copy(selectedUris = set, isSelectionMode = set.isNotEmpty())
         }
     }
 
     fun selectAll(isLeft: Boolean) {
         flowOf(isLeft).update { state ->
-            state.copy(
-                selectedUris = state.items.map { it.uriString }.toSet(),
-                isSelectionMode = true
-            )
+            state.copy(selectedUris = state.items.map { it.uriString }.toSet(), isSelectionMode = true)
         }
     }
 
@@ -472,9 +384,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun batchDelete(isLeft: Boolean) {
         val state = flowOf(isLeft).value
-        val targets = state.items.filter {
-            state.selectedUris.contains(it.uriString)
-        }
+        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
         viewModelScope.launch {
             targets.forEach { engine.delete(it.uri) }
             clearSelection(isLeft)
@@ -485,9 +395,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun batchCopy(fromLeft: Boolean) {
         val state = flowOf(fromLeft).value
         val target = flowOf(!fromLeft).value.currentUri ?: return
-        val targets = state.items.filter {
-            state.selectedUris.contains(it.uriString)
-        }
+        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
         viewModelScope.launch {
             targets.forEach { engine.copy(it.uri, target) }
             clearSelection(fromLeft)
@@ -498,9 +406,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun batchMove(fromLeft: Boolean) {
         val state = flowOf(fromLeft).value
         val target = flowOf(!fromLeft).value.currentUri ?: return
-        val targets = state.items.filter {
-            state.selectedUris.contains(it.uriString)
-        }
+        val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
         viewModelScope.launch {
             targets.forEach { engine.move(it.uri, target) }
             clearSelection(fromLeft)
@@ -509,14 +415,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ==================== 打开文件 ====================
-
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
         when {
             ext == "apk" -> openApkInfo(item)
-            com.ertyu.model.ArchiveFormat.isArchive(item.name) ->
-                _zipPrompt.value = ZipPrompt(item)
+            com.ertyu.model.ArchiveFormat.isArchive(item.name) -> _zipPrompt.value = ZipPrompt(item)
             ext in TEXT_FILE_EXTS -> openInEditor(item)
             ext in IMAGE_FILE_EXTS -> openInImageViewer(item)
         }
@@ -540,11 +443,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (text == null) {
                     s.copy(isLoading = false, error = "无法读取文件")
                 } else {
-                    s.copy(
-                        content = text,
-                        originalContent = text,
-                        isLoading = false
-                    )
+                    s.copy(content = text, originalContent = text, isLoading = false)
                 }
             }
         }
@@ -573,15 +472,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun closeEditor() {
-        _editor.value = EditorState()
-    }
-
-    fun closeImageViewer() {
-        _imageViewer.value = ImageViewerState()
-    }
-
-    // ==================== HEX 查看器 ====================
+    fun closeEditor() { _editor.value = EditorState() }
+    fun closeImageViewer() { _imageViewer.value = ImageViewerState() }
 
     fun openHexViewer(item: FileItem) {
         val file = item.uri.path?.let(::File) ?: run {
@@ -616,8 +508,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val chunk = withContext(Dispatchers.IO) {
                     RandomAccessFile(file, "r").use { raf ->
-                        val remaining = (file.length() - hexLoadedBytes)
-                            .coerceAtMost(hexLoadChunk.toLong())
+                        val remaining = (file.length() - hexLoadedBytes).coerceAtMost(hexLoadChunk.toLong())
                         if (remaining <= 0) return@withContext ByteArray(0)
                         raf.seek(hexLoadedBytes.toLong())
                         val buf = ByteArray(remaining.toInt())
@@ -625,23 +516,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         buf
                     }
                 }
-
                 val oldBytes = _hexViewerState.value.bytes
                 val newBytes = oldBytes + chunk
                 hexLoadedBytes += chunk.size
-
                 _hexViewerState.update {
-                    it.copy(
-                        bytes = newBytes,
-                        loadedBytes = hexLoadedBytes,
-                        isLoading = false,
-                        error = null
-                    )
+                    it.copy(bytes = newBytes, loadedBytes = hexLoadedBytes, isLoading = false, error = null)
                 }
             } catch (e: Exception) {
-                _hexViewerState.update {
-                    it.copy(isLoading = false, error = e.message ?: "读取失败")
-                }
+                _hexViewerState.update { it.copy(isLoading = false, error = e.message ?: "读取失败") }
             }
         }
     }
@@ -652,34 +534,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _hexViewerState.value = HexViewerState()
     }
 
-    // ==================== 文件夹大小 ====================
-
     fun calculateFolderSize(item: FileItem) {
         folderSizeJob?.cancel()
         val folder = item.uri.path?.let(::File) ?: return
         _folderSizeState.value = FolderSizeState(isCalculating = true)
         folderSizeJob = viewModelScope.launch {
             try {
-                val (bytes, count) = FolderSizeCalculator.calculate(folder) {
-                        scanned, totalBytes ->
-                    _folderSizeState.value = FolderSizeState(
-                        isCalculating = true,
-                        scanned = scanned,
-                        totalBytes = totalBytes
-                    )
+                val (bytes, count) = FolderSizeCalculator.calculate(folder) { scanned, totalBytes ->
+                    _folderSizeState.value = FolderSizeState(isCalculating = true, scanned = scanned, totalBytes = totalBytes)
                 }
-                _folderSizeState.value = FolderSizeState(
-                    isCalculating = false,
-                    scanned = count,
-                    totalBytes = bytes,
-                    done = true
-                )
+                _folderSizeState.value = FolderSizeState(isCalculating = false, scanned = count, totalBytes = bytes, done = true)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _folderSizeState.value = FolderSizeState(
-                    error = e.message ?: "计算失败"
-                )
+                _folderSizeState.value = FolderSizeState(error = e.message ?: "计算失败")
             }
         }
     }
@@ -696,7 +564,5 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _folderSizeState.value = FolderSizeState()
     }
 
-    fun clearToast() {
-        _toast.value = null
-    }
+    fun clearToast() { _toast.value = null }
 }
