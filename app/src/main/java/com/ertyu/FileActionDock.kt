@@ -25,11 +25,12 @@ import androidx.compose.ui.unit.dp
 fun FileActionDock(
     isLeft: Boolean,
     vm: MainViewModel,
-    onScrollToTop: () -> Unit
+    onScrollToTop: () -> Unit,
+    modifier: Modifier = Modifier // <-- 补上了这行
 ) {
     // 使用 Surface 包裹，增加一点圆角和阴影，看起来像个悬浮栏
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(24.dp),
