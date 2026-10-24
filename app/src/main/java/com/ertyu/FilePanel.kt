@@ -148,7 +148,6 @@ fun FilePanel(
                 else -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    // 增加底部 padding 防止最后一项被 Dock 遮挡
                     contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
                 ) {
                     items(
@@ -162,7 +161,8 @@ fun FilePanel(
                             isSelectionMode = state.isSelectionMode,
                             onClick = {
                                 if (state.isSelectionMode) {
-                                    vm.toggleSelection(isLeft, item.uriString)
+                                    // 使用区间选择逻辑
+                                    vm.handleSelectionClick(isLeft, item)
                                 } else if (item.isDirectory) {
                                     FilePanelScrollStore.save(isLeft, "", 0, 0)
                                     vm.openDirectory(isLeft, item.uri)
@@ -184,7 +184,7 @@ fun FilePanel(
                             },
                             onLongClick = {
                                 if (!state.isSelectionMode) {
-                                    vm.openActionDialog(isLeft, item)
+                                    vm.enterSelection(isLeft, item.uriString)
                                 }
                             },
                             onMoreClick = { vm.openActionDialog(isLeft, item) }
@@ -193,7 +193,7 @@ fun FilePanel(
                 }
             }
 
-            // 底部悬浮 Dock 栏 (仅在非多选模式下显示)
+            // 底部悬浮 Dock 栏
             if (!state.isSelectionMode) {
                 FileActionDock(
                     isLeft = isLeft,
@@ -339,6 +339,14 @@ private fun FileToolbar(
                 DropdownMenuItem(
                     text = { Text("添加书签") },
                     onClick = { menuExpanded = false; vm.addBookmark(isLeft) }
+                )
+                DropdownMenuItem(
+                    text = { Text("新建文件夹") },
+                    onClick = { menuExpanded = false; vm.openNewFolderDialog(isLeft) }
+                )
+                DropdownMenuItem(
+                    text = { Text("新建文件") },
+                    onClick = { menuExpanded = false; vm.openNewFilePrompt(isLeft) }
                 )
                 DropdownMenuItem(
                     text = { Text("排序方式") },
