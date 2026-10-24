@@ -3,7 +3,6 @@ package com.ertyu
 import android.net.Uri
 import android.os.Environment
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +22,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share // 新增 Share 图标
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -153,6 +153,12 @@ fun DrawerContent(
                     password = settings.webDavPassword
                 )
                 vm.openWebDav()
+            }
+            
+            // 新增：局域网共享入口
+            DrawerItem("局域网共享 (FTP/Web)", Icons.Default.Share) {
+                onDismiss()
+                vm.openNetworkShare()
             }
 
             Spacer(Modifier.height(8.dp))
