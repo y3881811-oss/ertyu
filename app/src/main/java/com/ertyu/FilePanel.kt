@@ -39,6 +39,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.PanelState
+import kotlinx.coroutines.launch
 import java.io.File
 
 private val VIDEO_EXTS = setOf(
@@ -84,6 +86,7 @@ fun FilePanel(
         initialFirstVisibleItemIndex = if (isSameDir) FilePanelScrollStore.savedIndex(isLeft) else 0,
         initialFirstVisibleItemScrollOffset = if (isSameDir) FilePanelScrollStore.savedOffset(isLeft) else 0
     )
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(listState, currentUriStr) {
         snapshotFlow {
@@ -130,60 +133,78 @@ fun FilePanel(
         }
         HorizontalDivider()
 
-        when {
-            state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("错误: ${state.error}")
-            }
-            state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(if (state.showHidden) "空目录" else "空目录（可尝试显示隐藏文件）")
-            }
-            else -> LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 4.dp)
-            ) {
-                items(
-                    items = state.items,
-                    key = { it.uriString },
-                    contentType = { if (it.isDirectory) "dir" else "file" }
-                ) { item ->
-                    FileRow(
-                        item = item,
-                        isSelected = state.selectedUris.contains(item.uriString),
-                        isSelectionMode = state.isSelectionMode,
-                        onClick = {
-                            if (state.isSelectionMode) {
-                                vm.toggleSelection(isLeft, item.uriString)
-                            } else if (item.isDirectory) {
-                                FilePanelScrollStore.save(isLeft, "", 0, 0)
-                                vm.openDirectory(isLeft, item.uri)
-                            } else if (ArchiveFormat.isArchive(item.name)) {
-                                vm.openArchiveViewer(isLeft, item)
-                            } else if (item.name.substringAfterLast('.', "").lowercase() in VIDEO_EXTS) {
-                                vm.openVideoPlayer(item)
-                            } else if (item.name.substringAfterLast('.', "").lowercase() in AUDIO_EXTS) {
-                                vm.openAudioPlayer(item)
-                            } else if (item.name.substringAfterLast('.', "").lowercase() in IMAGE_EXTS) {
-                                vm.openGallery(isLeft, item)
-                            } else if (item.name.endsWith(".db") || item.name.endsWith(".sqlite")) {
-                                vm.openSqlite(item)
-                            } else if (item.name.endsWith(".ttf") || item.name.endsWith(".otf")) {
-                                vm.openFontPreview(item)
-                            } else {
-                                vm.openFile(item)
-                            }
-                        },
-                        onLongClick = {
-                            if (!state.isSelectionMode) {
-                                vm.openActionDialog(isLeft, item)
-                            }
-                        },
-                        onMoreClick = { vm.openActionDialog(isLeft, item) }
-                    )
+        // 列表区域
+        Box(modifier = Modifier.weight(1f)) {
+            when {
+                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
+                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("错误: ${state.error}")
+                }
+                state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(if (state.showHidden) "空目录" else "空目录（可尝试显示隐藏文件）")
+                }
+                else -> LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    // 增加底部 padding 防止最后一项被 Dock 遮挡
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
+                ) {
+                    items(
+                        items = state.items,
+                        key = { it.uriString },
+                        contentType = { if (it.isDirectory) "dir" else "file" }
+                    ) { item ->
+                        FileRow(
+                            item = item,
+                            isSelected = state.selectedUris.contains(item.uriString),
+                            isSelectionMode = state.isSelectionMode,
+                            onClick = {
+                                if (state.isSelectionMode) {
+                                    vm.toggleSelection(isLeft, item.uriString)
+                                } else if (item.isDirectory) {
+                                    FilePanelScrollStore.save(isLeft, "", 0, 0)
+                                    vm.openDirectory(isLeft, item.uri)
+                                } else if (ArchiveFormat.isArchive(item.name)) {
+                                    vm.openArchiveViewer(isLeft, item)
+                                } else if (item.name.substringAfterLast('.', "").lowercase() in VIDEO_EXTS) {
+                                    vm.openVideoPlayer(item)
+                                } else if (item.name.substringAfterLast('.', "").lowercase() in AUDIO_EXTS) {
+                                    vm.openAudioPlayer(item)
+                                } else if (item.name.substringAfterLast('.', "").lowercase() in IMAGE_EXTS) {
+                                    vm.openGallery(isLeft, item)
+                                } else if (item.name.endsWith(".db") || item.name.endsWith(".sqlite")) {
+                                    vm.openSqlite(item)
+                                } else if (item.name.endsWith(".ttf") || item.name.endsWith(".otf")) {
+                                    vm.openFontPreview(item)
+                                } else {
+                                    vm.openFile(item)
+                                }
+                            },
+                            onLongClick = {
+                                if (!state.isSelectionMode) {
+                                    vm.openActionDialog(isLeft, item)
+                                }
+                            },
+                            onMoreClick = { vm.openActionDialog(isLeft, item) }
+                        )
+                    }
+                }
+            }
+
+            // 底部悬浮 Dock 栏 (仅在非多选模式下显示)
+            if (!state.isSelectionMode) {
+                FileActionDock(
+                    isLeft = isLeft,
+                    vm = vm,
+                    onScrollToTop = {
+                        coroutineScope.launch {
+                            listState.animateScrollToItem(0)
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
             }
         }
     }
@@ -318,14 +339,6 @@ private fun FileToolbar(
                 DropdownMenuItem(
                     text = { Text("添加书签") },
                     onClick = { menuExpanded = false; vm.addBookmark(isLeft) }
-                )
-                DropdownMenuItem(
-                    text = { Text("新建文件夹") },
-                    onClick = { menuExpanded = false; vm.openNewFolderDialog(isLeft) }
-                )
-                DropdownMenuItem(
-                    text = { Text("新建文件") },
-                    onClick = { menuExpanded = false; vm.openNewFilePrompt(isLeft) }
                 )
                 DropdownMenuItem(
                     text = { Text("排序方式") },
