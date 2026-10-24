@@ -271,6 +271,7 @@ fun CompressFormatDialog(
                 FormatRow("ZIP", ".zip（兼容性最好）", ArchiveFormat.ZIP, onSelect)
                 FormatRow("TAR", ".tar（不压缩）", ArchiveFormat.TAR, onSelect)
                 FormatRow("TAR.GZ", ".tar.gz（Linux 常见）", ArchiveFormat.TAR_GZ, onSelect)
+                FormatRow("7Z", ".7z（高压缩比，不支持加密）", ArchiveFormat.SEVEN_Z, onSelect)
             }
         },
         confirmButton = {
