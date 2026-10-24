@@ -11,16 +11,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
-// ==================== 解压 ====================
-
 fun MainViewModel.dismissZipPrompt() {
     _zipPrompt.value = ZipPrompt()
 }
 
 fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem) {
     _zipPrompt.value = ZipPrompt()
-    val currentDir = flowOf(isLeft)
-        .value.currentUri?.path?.let(::File) ?: return
+    val currentDir = flowOf(isLeft).value.currentUri?.path?.let(::File) ?: return
     val archiveFile = item.uri.path?.let(::File) ?: return
     val targetDir = File(currentDir, archiveBaseName(archiveFile.name))
 
@@ -31,8 +28,7 @@ fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem) {
             message = archiveFile.name
         )
         val result = ArchiveEngine.extract(archiveFile, targetDir) { cur, total ->
-            _zipProgress.value = _zipProgress.value
-                .copy(current = cur, total = total)
+            _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
         }
         result.onSuccess {
             _zipProgress.value = _zipProgress.value.copy(
@@ -50,8 +46,7 @@ fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem) {
 
 fun MainViewModel.extractZipToOtherPanel(isLeft: Boolean, item: FileItem) {
     _zipPrompt.value = ZipPrompt()
-    val targetDir = flowOf(!isLeft)
-        .value.currentUri?.path?.let(::File) ?: return
+    val targetDir = flowOf(!isLeft).value.currentUri?.path?.let(::File) ?: return
     val archiveFile = item.uri.path?.let(::File) ?: return
     val finalDir = File(targetDir, archiveBaseName(archiveFile.name))
 
@@ -62,8 +57,7 @@ fun MainViewModel.extractZipToOtherPanel(isLeft: Boolean, item: FileItem) {
             message = archiveFile.name
         )
         val result = ArchiveEngine.extract(archiveFile, finalDir) { cur, total ->
-            _zipProgress.value = _zipProgress.value
-                .copy(current = cur, total = total)
+            _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
         }
         result.onSuccess {
             _zipProgress.value = _zipProgress.value.copy(
@@ -96,8 +90,6 @@ private fun archiveBaseName(fileName: String): String {
     }
 }
 
-// ==================== 压缩 ====================
-
 fun MainViewModel.requestCompress(isLeft: Boolean) {
     val state = flowOf(isLeft).value
     if (state.selectedUris.isEmpty()) return
@@ -115,9 +107,7 @@ fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
     val isLeft = _compressPanelIsLeft.value
     val state = flowOf(isLeft).value
     val currentDir = state.currentUri?.path?.let(::File) ?: return
-    val targets = state.items.filter {
-        state.selectedUris.contains(it.uriString)
-    }
+    val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
     if (targets.isEmpty()) return
 
     val sources = targets.mapNotNull { it.uri.path?.let(::File) }
@@ -127,6 +117,7 @@ fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
         ArchiveFormat.ZIP -> ".zip"
         ArchiveFormat.TAR -> ".tar"
         ArchiveFormat.TAR_GZ -> ".tar.gz"
+        ArchiveFormat.SEVEN_Z -> ".7z"
         else -> ".zip"
     }
 
@@ -145,11 +136,8 @@ fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
             title = "压缩中",
             message = fileName
         )
-        val result = ArchiveEngine.compress(
-            sources, targetFile, format
-        ) { cur, total ->
-            _zipProgress.value = _zipProgress.value
-                .copy(current = cur, total = total)
+        val result = ArchiveEngine.compress(sources, targetFile, format) { cur, total ->
+            _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
         }
         result.onSuccess {
             _zipProgress.value = _zipProgress.value.copy(
