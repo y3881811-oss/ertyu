@@ -26,10 +26,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.PanelMode
@@ -38,6 +43,7 @@ import com.ertyu.model.PanelMode
 @Composable
 fun SettingsScreen(vm: MainViewModel) {
     val settings by vm.settingsState.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -97,6 +103,58 @@ fun SettingsScreen(vm: MainViewModel) {
             HorizontalDivider()
 
             Spacer(Modifier.height(16.dp))
+            SectionTitle("高级引擎")
+            var useShizuku by remember { mutableStateOf(false) }
+            var shizukuStatus by remember { mutableStateOf("未授权") }
+
+            LaunchedEffect(Unit) {
+                if (ShizukuManager.isAvailable()) {
+                    if (ShizukuManager.hasPermission()) {
+                        shizukuStatus = "已授权"
+                    } else {
+                        shizukuStatus = "需要授权"
+                    }
+                } else {
+                    shizukuStatus = "服务未运行"
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("使用 Shizuku 引擎", style = MaterialTheme.typography.bodyLarge)
+                    Text("访问 Android/data 等受限目录 (状态: $shizukuStatus)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(
+                    checked = useShizuku,
+                    onCheckedChange = { checked ->
+                        if (checked) {
+                            if (!ShizukuManager.isAvailable()) {
+                                vm.showToast("请先安装并启动 Shizuku")
+                                return@Switch
+                            }
+                            if (!ShizukuManager.hasPermission()) {
+                                ShizukuManager.requestPermission()
+                                vm.showToast("请在弹窗中授权")
+                                // 这里只是一个简单的处理，用户授权后需要重新打开设置页面才会更新状态
+                            } else {
+                                useShizuku = true
+                                vm.switchEngine(useShizuku = true)
+                            }
+                        } else {
+                            useShizuku = false
+                            vm.switchEngine(useShizuku = false)
+                        }
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+
+            Spacer(Modifier.height(16.dp))
             SectionTitle("浏览")
             Row(
                 modifier = Modifier
@@ -124,15 +182,8 @@ fun SettingsScreen(vm: MainViewModel) {
             Spacer(Modifier.height(16.dp))
             SectionTitle("WebDAV 服务器")
 
-            Text(
-                "默认共享目录",
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Text(
-                "开启 WebDAV 服务器时默认使用此目录",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("默认共享目录", style = MaterialTheme.typography.bodyLarge)
+            Text("开启 WebDAV 服务器时默认使用此目录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
             OutlinedTextField(
                 value = settings.webDavSharePath,
