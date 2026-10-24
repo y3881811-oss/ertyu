@@ -200,13 +200,13 @@ class WebShareServer(
                     async function handleFiles(files) {
                         for (let i = 0; i < files.length; i++) {
                             const file = files[i];
-                            status.innerText = `正在上传 (${i+1}/${files.length}): ${file.name}`;
+                            status.innerText = `正在上传 (${'$'}{i+1}/${'$'}{files.length}): ${'$'}{file.name}`;
                             progressContainer.style.display = 'block';
                             
                             try {
                                 await uploadFile(file);
                             } catch (e) {
-                                status.innerText = `上传失败: ${file.name}`;
+                                status.innerText = `上传失败: ${'$'}{file.name}`;
                                 status.style.color = 'red';
                                 return;
                             }
