@@ -52,6 +52,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     internal var engine: FileEngine = DirectFileEngine()
 
+    // ==================== 面板 / 查看器 ====================
+
     internal val _leftPanel = MutableStateFlow(PanelState())
     val leftPanel: StateFlow<PanelState> = _leftPanel.asStateFlow()
 
@@ -67,6 +69,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _hexViewerState = MutableStateFlow(HexViewerState())
     val hexViewerState: StateFlow<HexViewerState> = _hexViewerState.asStateFlow()
 
+    // ==================== 压缩 ====================
+
     internal val _zipProgress = MutableStateFlow(ZipProgress())
     val zipProgress: StateFlow<ZipProgress> = _zipProgress.asStateFlow()
 
@@ -77,14 +81,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val compressPromptVisible: StateFlow<Boolean> = _compressPromptVisible.asStateFlow()
     internal val _compressPanelIsLeft = MutableStateFlow(true)
 
+    // ==================== 属性 ====================
+
     internal val _folderSizeState = MutableStateFlow(FolderSizeState())
     val folderSizeState: StateFlow<FolderSizeState> = _folderSizeState.asStateFlow()
+
+    // ==================== 搜索 / 书签 ====================
 
     internal val _searchState = MutableStateFlow(SearchState())
     val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
 
     internal val _bookmarkPanelState = MutableStateFlow(BookmarkPanelState())
     val bookmarkPanelState: StateFlow<BookmarkPanelState> = _bookmarkPanelState.asStateFlow()
+
+    // ==================== APK ====================
 
     internal val _apkInfoState = MutableStateFlow(ApkInfoState())
     val apkInfoState: StateFlow<ApkInfoState> = _apkInfoState.asStateFlow()
@@ -98,8 +108,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _installState = MutableStateFlow(InstallState())
     val installState: StateFlow<InstallState> = _installState.asStateFlow()
 
+    // ==================== 已安装应用 ====================
+
     internal val _installedAppsState = MutableStateFlow(InstalledAppsState())
     val installedAppsState: StateFlow<InstalledAppsState> = _installedAppsState.asStateFlow()
+
+    // ==================== 设置 ====================
 
     internal val _settingsState = MutableStateFlow(AppSettings())
     val settingsState: StateFlow<AppSettings> = _settingsState.asStateFlow()
@@ -110,8 +124,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _helpVisible = MutableStateFlow(false)
     val helpVisible: StateFlow<Boolean> = _helpVisible.asStateFlow()
 
+    // ==================== 提示 ====================
+
     internal val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
+
+    // ==================== FilePanel 弹窗状态 ====================
 
     internal val _newFilePrompt = MutableStateFlow(false)
     val newFilePrompt: StateFlow<Boolean> = _newFilePrompt.asStateFlow()
@@ -145,6 +163,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _renameDialogIsLeft = MutableStateFlow(true)
     val renameDialogIsLeft: StateFlow<Boolean> = _renameDialogIsLeft.asStateFlow()
 
+    // ==================== Jobs ====================
+
     internal var folderSizeJob: Job? = null
     internal var searchJob: Job? = null
     internal var installJob: Job? = null
@@ -157,6 +177,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     internal fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
+    // ==================== 初始化 ====================
+
     fun initDefaultDirs() {
         val root = Uri.fromFile(Environment.getExternalStorageDirectory())
         openDirectory(true, root)
@@ -166,6 +188,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ==================== 浏览 ====================
+
     fun openDirectory(isLeft: Boolean, uri: Uri) {
         val flow = flowOf(isLeft)
         flow.update {
@@ -174,7 +198,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 error = null,
                 selectedUris = emptySet(),
                 isSelectionMode = false,
-                lastSelectedUri = null
+                lastSelectedUri = null // 切换目录时清空锚点
             )
         }
         viewModelScope.launch {
@@ -245,6 +269,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         openDirectory(isLeft, parent)
     }
 
+    // ==================== 基础文件操作 ====================
+
     fun delete(isLeft: Boolean, item: FileItem) {
         viewModelScope.launch {
             engine.delete(item.uri)
@@ -284,6 +310,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ==================== 新建文件 ====================
+
     fun openNewFilePrompt(isLeft: Boolean) {
         _newFilePanelIsLeft.value = isLeft
         _newFilePrompt.value = true
@@ -313,6 +341,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    // ==================== FilePanel 弹窗控制 ====================
 
     fun openNewFolderDialog(isLeft: Boolean) {
         _newFolderDialogIsLeft.value = isLeft
@@ -380,6 +410,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val uriString = item.uriString
             
             if (currentSelected.contains(uriString)) {
+                // 取消选中当前文件
                 currentSelected.remove(uriString)
                 val newMode = currentSelected.isNotEmpty()
                 state.copy(
@@ -388,6 +419,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     lastSelectedUri = if (newMode) uriString else null
                 )
             } else {
+                // 执行区间选择
                 val lastUri = state.lastSelectedUri
                 val lastIndex = state.items.indexOfFirst { it.uriString == lastUri }
                 val currentIndex = state.items.indexOfFirst { it.uriString == uriString }
@@ -433,6 +465,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun invertSelection(isLeft: Boolean) {
+        flowOf(isLeft).update { state ->
+            val allUris = state.items.map { it.uriString }.toSet()
+            val newSelected = allUris - state.selectedUris
+            state.copy(
+                selectedUris = newSelected,
+                isSelectionMode = newSelected.isNotEmpty(),
+                lastSelectedUri = null
+            )
+        }
+    }
+
+    fun selectByType(isLeft: Boolean, type: String) {
+        flowOf(isLeft).update { state ->
+            val newSelected = state.items.filter {
+                !it.isDirectory && it.name.substringAfterLast('.', "").lowercase() == type
+            }.map { it.uriString }.toSet()
+            state.copy(
+                selectedUris = state.selectedUris + newSelected,
+                isSelectionMode = true,
+                lastSelectedUri = null
+            )
+        }
+    }
+
     fun clearSelection(isLeft: Boolean) {
         flowOf(isLeft).update {
             it.copy(selectedUris = emptySet(), isSelectionMode = false, lastSelectedUri = null)
@@ -472,7 +529,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ==================== 其他功能 ====================
+    // ==================== 打开文件 ====================
 
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
@@ -534,6 +591,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun closeEditor() { _editor.value = EditorState() }
     fun closeImageViewer() { _imageViewer.value = ImageViewerState() }
 
+    // ==================== HEX 查看器 ====================
+
     fun openHexViewer(item: FileItem) {
         val file = item.uri.path?.let(::File) ?: run {
             _toast.value = "无效路径"
@@ -592,6 +651,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         hexLoadedBytes = 0
         _hexViewerState.value = HexViewerState()
     }
+
+    // ==================== 文件夹大小 ====================
 
     fun calculateFolderSize(item: FileItem) {
         folderSizeJob?.cancel()
