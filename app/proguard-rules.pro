@@ -46,6 +46,18 @@
 -dontwarn org.apache.mina.**
 -keep class org.slf4j.** { *; }
 
+# ========== Apache FtpServer / MINA 混淆防护 ==========
+-keep class org.apache.ftpserver.** { *; }
+-keep class org.apache.mina.** { *; }
+-dontwarn org.apache.ftpserver.**
+-dontwarn org.apache.mina.**
+
+# 保留 IO 处理器的带参构造函数（防止反射初始化失败）
+-keepclassmembers class * implements org.apache.mina.core.service.IoProcessor {
+    public <init>(java.util.concurrent.ExecutorService);
+    public <init>(java.util.concurrent.Executor);
+    public <init>();
+}
 # ========== 其他 ==========
 -dontwarn java.awt.**
 -dontwarn org.osgi.**
