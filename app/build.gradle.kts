@@ -112,10 +112,6 @@ dependencies {
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
-// ... 前面的配置保持不变
-dependencies {
-    // ... 其他依赖保持不变
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.ui)
-    implementation(libs.ftpserver.core) // 新增
+    
+    implementation(libs.ftpserver.core)
 }
