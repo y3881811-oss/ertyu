@@ -27,9 +27,8 @@ fun AppRoot(vm: MainViewModel) {
     val audioPlayerState by AudioPlayerStateHolder.state.collectAsState()
     val galleryState by GalleryStateHolder.state.collectAsState()
     val sqliteState by SqliteStateHolder.state.collectAsState()
-    
-    // 新增：局域网共享状态
     val networkState by NetworkShareStateHolder.state.collectAsState()
+    val fontState by FontPreviewStateHolder.state.collectAsState()
 
     AppDialogs(vm)
     CryptoDialog(vm)
@@ -52,6 +51,9 @@ fun AppRoot(vm: MainViewModel) {
         }
         sqliteState.visible -> {
             SqliteViewerScreen(vm)
+        }
+        fontState.visible -> {
+            FontPreviewScreen(vm)
         }
         signerState.visible -> {
             BackHandler { vm.closeApkSigner() }
@@ -88,7 +90,6 @@ fun AppRoot(vm: MainViewModel) {
             }
             WebDavScreen(vm)
         }
-        // 新增：局域网共享路由
         networkState.visible -> {
             BackHandler { vm.closeNetworkShare() }
             NetworkShareScreen(vm)
