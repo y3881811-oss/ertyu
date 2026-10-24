@@ -50,7 +50,6 @@ internal val IMAGE_FILE_EXTS = setOf(
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
-    // 改为 var 以便设置里切换 Shizuku
     internal var engine: FileEngine = DirectFileEngine()
 
     internal val _leftPanel = MutableStateFlow(PanelState())
@@ -174,7 +173,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 isLoading = true,
                 error = null,
                 selectedUris = emptySet(),
-                isSelectionMode = false
+                isSelectionMode = false,
+                lastSelectedUri = null
             )
         }
         viewModelScope.launch {
@@ -356,9 +356,58 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissRenameDialog() { _renameDialogTarget.value = null }
 
+    // ==================== 多选与区间选择 ====================
+
     fun enterSelection(isLeft: Boolean, uriString: String) {
         flowOf(isLeft).update {
-            it.copy(selectedUris = setOf(uriString), isSelectionMode = true)
+            it.copy(
+                selectedUris = setOf(uriString),
+                isSelectionMode = true,
+                lastSelectedUri = uriString
+            )
+        }
+    }
+
+    /**
+     * 处理多选模式下的点击逻辑：
+     * - 如果点击的项已选中：取消该文件的选中。
+     * - 如果点击的项未选中：以 lastSelectedUri 为起点，选中到当前项之间的所有项。
+     */
+    fun handleSelectionClick(isLeft: Boolean, item: FileItem) {
+        val flow = flowOf(isLeft)
+        flow.update { state ->
+            val currentSelected = state.selectedUris.toMutableSet()
+            val uriString = item.uriString
+            
+            if (currentSelected.contains(uriString)) {
+                currentSelected.remove(uriString)
+                val newMode = currentSelected.isNotEmpty()
+                state.copy(
+                    selectedUris = currentSelected,
+                    isSelectionMode = newMode,
+                    lastSelectedUri = if (newMode) uriString else null
+                )
+            } else {
+                val lastUri = state.lastSelectedUri
+                val lastIndex = state.items.indexOfFirst { it.uriString == lastUri }
+                val currentIndex = state.items.indexOfFirst { it.uriString == uriString }
+
+                if (lastIndex != -1 && currentIndex != -1) {
+                    val start = minOf(lastIndex, currentIndex)
+                    val end = maxOf(lastIndex, currentIndex)
+                    for (i in start..end) {
+                        currentSelected.add(state.items[i].uriString)
+                    }
+                } else {
+                    currentSelected.add(uriString)
+                }
+
+                state.copy(
+                    selectedUris = currentSelected,
+                    isSelectionMode = true,
+                    lastSelectedUri = uriString
+                )
+            }
         }
     }
 
@@ -366,19 +415,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         flowOf(isLeft).update { state ->
             val set = state.selectedUris.toMutableSet()
             if (!set.add(uriString)) set.remove(uriString)
-            state.copy(selectedUris = set, isSelectionMode = set.isNotEmpty())
+            state.copy(
+                selectedUris = set,
+                isSelectionMode = set.isNotEmpty(),
+                lastSelectedUri = if (set.isNotEmpty()) uriString else null
+            )
         }
     }
 
     fun selectAll(isLeft: Boolean) {
         flowOf(isLeft).update { state ->
-            state.copy(selectedUris = state.items.map { it.uriString }.toSet(), isSelectionMode = true)
+            state.copy(
+                selectedUris = state.items.map { it.uriString }.toSet(),
+                isSelectionMode = true,
+                lastSelectedUri = null
+            )
         }
     }
 
     fun clearSelection(isLeft: Boolean) {
         flowOf(isLeft).update {
-            it.copy(selectedUris = emptySet(), isSelectionMode = false)
+            it.copy(selectedUris = emptySet(), isSelectionMode = false, lastSelectedUri = null)
         }
     }
 
@@ -414,6 +471,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             openDirectory(!fromLeft, target)
         }
     }
+
+    // ==================== 其他功能 ====================
 
     fun openFile(item: FileItem) {
         val ext = item.name.substringAfterLast('.', "").lowercase()
