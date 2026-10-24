@@ -36,14 +36,18 @@
 -dontwarn org.smali.**
 -dontwarn javax.annotation.**
 
+# ========== Media3 ==========
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+
+# ========== FTP Server ==========
+-keep class org.apache.ftpserver.** { *; }
+-dontwarn org.apache.ftpserver.**
+-dontwarn org.apache.mina.**
+-keep class org.slf4j.** { *; }
+
 # ========== 其他 ==========
 -dontwarn java.awt.**
 -dontwarn org.osgi.**
 -dontwarn aQute.**
 -dontwarn org.apache.harmony.**
-# ========== FTP Server ==========
--keep class org.apache.ftpserver.** { *; }
--dontwarn org.apache.ftpserver.**
--dontwarn org.apache.mina.**
--dontwarn org.slf4j.**
--keep class org.slf4j.** { *; }
