@@ -41,3 +41,9 @@
 -dontwarn org.osgi.**
 -dontwarn aQute.**
 -dontwarn org.apache.harmony.**
+# ========== FTP Server ==========
+-keep class org.apache.ftpserver.** { *; }
+-dontwarn org.apache.ftpserver.**
+-dontwarn org.apache.mina.**
+-dontwarn org.slf4j.**
+-keep class org.slf4j.** { *; }
