@@ -11,3 +11,7 @@ fun MainViewModel.openFontPreview(item: FileItem) {
         fontName = item.name
     )
 }
+
+fun MainViewModel.closeFontPreview() {
+    FontPreviewStateHolder.state.value = FontPreviewState()
+}
