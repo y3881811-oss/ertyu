@@ -5,6 +5,7 @@ import com.ertyu.model.FileItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
+import rikka.shizuku.ShizukuRemoteProcess
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -16,11 +17,24 @@ class ShizukuFileEngine : FileEngine {
     private fun sh(cmd: String): String {
         if (!Shizuku.pingBinder()) return ""
         return try {
-            val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
-            val output = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            output
+            // 使用反射调用因为 13.x 版本将其标记为 private
+            val method = Shizuku::class.java.getDeclaredMethod(
+                "newProcess",
+                Array<String>::class.java,
+                Array<String>::class.java,
+                String::class.java
+            )
+            method.isAccessible = true
+            val process = method.invoke(null, arrayOf("sh", "-c", cmd), null, null) as? ShizukuRemoteProcess
+            if (process != null) {
+                val output = process.inputStream.bufferedReader().readText()
+                process.waitFor()
+                output
+            } else {
+                ""
+            }
         } catch (e: Exception) {
+            e.printStackTrace()
             ""
         }
     }
@@ -28,6 +42,8 @@ class ShizukuFileEngine : FileEngine {
     override suspend fun list(uri: Uri): List<FileItem> = withContext(Dispatchers.IO) {
         val path = uri.path ?: return@withContext emptyList()
         val raw = sh("ls -la '$path'")
+        if (raw.isEmpty()) return@withContext emptyList()
+        
         val lines = raw.split("\n")
         val result = ArrayList<FileItem>()
         
