@@ -12,5 +12,6 @@ data class PanelState(
     val sortMode: SortMode = SortMode.NAME_ASC,
     val showHidden: Boolean = false,
     val selectedUris: Set<String> = emptySet(),
-    val isSelectionMode: Boolean = false
+    val isSelectionMode: Boolean = false,
+    val lastSelectedUri: String? = null           // 记录多选时的锚点
 )
