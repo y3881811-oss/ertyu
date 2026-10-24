@@ -10,11 +10,12 @@ data class AppSettings(
     val panelMode: PanelMode = PanelMode.AUTO,
     val showHiddenByDefault: Boolean = false,
     val sortModeDefault: SortMode = SortMode.NAME_ASC,
+    val isGridMode: Boolean = false, // 新增：网格视图
     val webDavSharePath: String = "",
     val webDavPort: Int = 7326,
     val webDavUsername: String = "mtfm",
     val webDavPassword: String = "mtfm123",
-    val customPaths: List<String> = emptyList() // 新增：自定义快捷路径
+    val customPaths: List<String> = emptyList()
 ) {
     val isSinglePanel: Boolean get() = panelMode == PanelMode.SINGLE
     val isDualPanel: Boolean get() = panelMode == PanelMode.DUAL
