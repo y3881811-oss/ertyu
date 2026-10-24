@@ -12,6 +12,7 @@ object SettingsStore {
     private const val KEY_PANEL_MODE = "panel_mode"
     private const val KEY_SHOW_HIDDEN = "show_hidden"
     private const val KEY_SORT_MODE = "sort_mode"
+    private const val KEY_IS_GRID_MODE = "is_grid_mode"
     private const val KEY_WEBDAV_PATH = "webdav_path"
     private const val KEY_WEBDAV_PORT = "webdav_port"
     private const val KEY_WEBDAV_USER = "webdav_user"
@@ -21,15 +22,10 @@ object SettingsStore {
     fun load(context: Context): AppSettings {
         val sp = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
         val modeName = sp.getString(KEY_PANEL_MODE, PanelMode.AUTO.name)
-        val mode = runCatching {
-            PanelMode.valueOf(modeName ?: PanelMode.AUTO.name)
-        }.getOrDefault(PanelMode.AUTO)
+        val mode = runCatching { PanelMode.valueOf(modeName ?: PanelMode.AUTO.name) }.getOrDefault(PanelMode.AUTO)
         val sortName = sp.getString(KEY_SORT_MODE, SortMode.NAME_ASC.name)
-        val sort = runCatching {
-            SortMode.valueOf(sortName ?: SortMode.NAME_ASC.name)
-        }.getOrDefault(SortMode.NAME_ASC)
+        val sort = runCatching { SortMode.valueOf(sortName ?: SortMode.NAME_ASC.name) }.getOrDefault(SortMode.NAME_ASC)
 
-        // 读取自定义路径
         val customPathsJson = sp.getString(KEY_CUSTOM_PATHS, "[]") ?: "[]"
         val customPaths = mutableListOf<String>()
         try {
@@ -43,6 +39,7 @@ object SettingsStore {
             panelMode = mode,
             showHiddenByDefault = sp.getBoolean(KEY_SHOW_HIDDEN, false),
             sortModeDefault = sort,
+            isGridMode = sp.getBoolean(KEY_IS_GRID_MODE, false),
             webDavSharePath = sp.getString(KEY_WEBDAV_PATH, "") ?: "",
             webDavPort = sp.getInt(KEY_WEBDAV_PORT, 7326),
             webDavUsername = sp.getString(KEY_WEBDAV_USER, "mtfm") ?: "mtfm",
@@ -60,6 +57,7 @@ object SettingsStore {
             .putString(KEY_PANEL_MODE, s.panelMode.name)
             .putBoolean(KEY_SHOW_HIDDEN, s.showHiddenByDefault)
             .putString(KEY_SORT_MODE, s.sortModeDefault.name)
+            .putBoolean(KEY_IS_GRID_MODE, s.isGridMode)
             .putString(KEY_WEBDAV_PATH, s.webDavSharePath)
             .putInt(KEY_WEBDAV_PORT, s.webDavPort)
             .putString(KEY_WEBDAV_USER, s.webDavUsername)
