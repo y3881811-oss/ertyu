@@ -94,7 +94,9 @@ fun NetworkShareScreen(vm: MainViewModel) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = state.ftpPort.toString(),
-                    onValueChange = { vm.updateNetworkShare { it.copy(ftpPort = it.toString().toIntOrNull() ?: 2121) } },
+                    onValueChange = { v -> 
+                        vm.updateNetworkShare { it.copy(ftpPort = v.toIntOrNull() ?: 2121) } 
+                    },
                     label = { Text("FTP 端口") },
                     singleLine = true,
                     enabled = !state.isRunning,
@@ -103,7 +105,9 @@ fun NetworkShareScreen(vm: MainViewModel) {
                 Spacer(Modifier.padding(horizontal = 4.dp))
                 OutlinedTextField(
                     value = state.httpPort.toString(),
-                    onValueChange = { vm.updateNetworkShare { it.copy(httpPort = it.toString().toIntOrNull() ?: 7333) } },
+                    onValueChange = { v -> 
+                        vm.updateNetworkShare { it.copy(httpPort = v.toIntOrNull() ?: 7333) } 
+                    },
                     label = { Text("Web 端口") },
                     singleLine = true,
                     enabled = !state.isRunning,
@@ -115,7 +119,7 @@ fun NetworkShareScreen(vm: MainViewModel) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = state.ftpUsername,
-                    onValueChange = { vm.updateNetworkShare { it.copy(ftpUsername = it) } },
+                    onValueChange = { v -> vm.updateNetworkShare { it.copy(ftpUsername = v) } },
                     label = { Text("FTP 用户名") },
                     singleLine = true,
                     enabled = !state.isRunning,
@@ -124,7 +128,7 @@ fun NetworkShareScreen(vm: MainViewModel) {
                 Spacer(Modifier.padding(horizontal = 4.dp))
                 OutlinedTextField(
                     value = state.ftpPassword,
-                    onValueChange = { vm.updateNetworkShare { it.copy(ftpPassword = it) } },
+                    onValueChange = { v -> vm.updateNetworkShare { it.copy(ftpPassword = v) } },
                     label = { Text("FTP 密码") },
                     singleLine = true,
                     enabled = !state.isRunning,
