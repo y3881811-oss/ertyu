@@ -2,6 +2,8 @@ package com.ertyu
 
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.SettingsStore
+import com.ertyu.engine.ShizukuFileEngine
+import com.ertyu.engine.DirectFileEngine
 import com.ertyu.model.PanelMode
 import com.ertyu.model.SortMode
 import kotlinx.coroutines.flow.update
@@ -49,7 +51,6 @@ fun MainViewModel.setWebDavPassword(p: String) {
     persistSettings()
 }
 
-// 新增路径
 fun MainViewModel.addCustomPath(path: String) {
     if (path.isBlank()) return
     val current = _settingsState.value.customPaths
@@ -61,11 +62,18 @@ fun MainViewModel.addCustomPath(path: String) {
     persistSettings()
 }
 
-// 删除路径
 fun MainViewModel.removeCustomPath(path: String) {
     val current = _settingsState.value.customPaths
     _settingsState.update { it.copy(customPaths = current - path) }
     persistSettings()
+}
+
+// 切换引擎
+fun MainViewModel.switchEngine(useShizuku: Boolean) {
+    engine = if (useShizuku) ShizukuFileEngine() else DirectFileEngine()
+    _toast.value = if (useShizuku) "已切换到 Shizuku 引擎" else "已切换到普通引擎"
+    refresh(true)
+    refresh(false)
 }
 
 private fun MainViewModel.persistSettings() {
@@ -74,22 +82,8 @@ private fun MainViewModel.persistSettings() {
     }
 }
 
-fun MainViewModel.openSettings() {
-    _settingsVisible.value = true
-}
-
-fun MainViewModel.closeSettings() {
-    _settingsVisible.value = false
-}
-
-fun MainViewModel.openHelp() {
-    _helpVisible.value = true
-}
-
-fun MainViewModel.closeHelp() {
-    _helpVisible.value = false
-}
-
-fun MainViewModel.showToast(msg: String) {
-    _toast.value = msg
-}
+fun MainViewModel.openSettings() { _settingsVisible.value = true }
+fun MainViewModel.closeSettings() { _settingsVisible.value = false }
+fun MainViewModel.openHelp() { _helpVisible.value = true }
+fun MainViewModel.closeHelp() { _helpVisible.value = false }
+fun MainViewModel.showToast(msg: String) { _toast.value = msg }
