@@ -25,10 +25,11 @@ fun AppRoot(vm: MainViewModel) {
     val archiveViewerState by ArchiveViewerStateHolder.state.collectAsState()
     val videoPlayerState by VideoPlayerStateHolder.state.collectAsState()
     val audioPlayerState by AudioPlayerStateHolder.state.collectAsState()
-
-    // 新增的 3 个状态
     val galleryState by GalleryStateHolder.state.collectAsState()
     val sqliteState by SqliteStateHolder.state.collectAsState()
+    
+    // 新增：局域网共享状态
+    val networkState by NetworkShareStateHolder.state.collectAsState()
 
     AppDialogs(vm)
     CryptoDialog(vm)
@@ -38,12 +39,10 @@ fun AppRoot(vm: MainViewModel) {
             BackHandler { vm.closeEditor() }
             EditorScreen(vm)
         }
-        // 原先的单图查看器被画廊替代，保留以防有的地方调用
         imageViewer.isOpen -> {
             BackHandler { vm.closeImageViewer() }
             ImageViewerScreen(vm)
         }
-        // 新增画廊路由
         galleryState.visible -> {
             GalleryScreen(vm)
         }
@@ -51,7 +50,6 @@ fun AppRoot(vm: MainViewModel) {
             BackHandler { vm.closeHexViewer() }
             HexViewerScreen(vm)
         }
-        // 新增 SQLite 路由
         sqliteState.visible -> {
             SqliteViewerScreen(vm)
         }
@@ -89,6 +87,11 @@ fun AppRoot(vm: MainViewModel) {
                 vm.closeWebDav()
             }
             WebDavScreen(vm)
+        }
+        // 新增：局域网共享路由
+        networkState.visible -> {
+            BackHandler { vm.closeNetworkShare() }
+            NetworkShareScreen(vm)
         }
         searchState.visible -> {
             BackHandler { vm.closeSearch() }
