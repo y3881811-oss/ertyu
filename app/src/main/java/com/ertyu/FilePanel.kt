@@ -58,7 +58,6 @@ private val AUDIO_EXTS = setOf(
     "mp3", "wav", "flac", "ogg", "m4a", "aac", "wma"
 )
 
-// 图片扩展名，用于触发画廊
 private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
 
 @Composable
@@ -168,11 +167,11 @@ fun FilePanel(
                             } else if (item.name.substringAfterLast('.', "").lowercase() in AUDIO_EXTS) {
                                 vm.openAudioPlayer(item)
                             } else if (item.name.substringAfterLast('.', "").lowercase() in IMAGE_EXTS) {
-                                // 进入画廊
                                 vm.openGallery(isLeft, item)
                             } else if (item.name.endsWith(".db") || item.name.endsWith(".sqlite")) {
-                                // 查看 SQLite
                                 vm.openSqlite(item)
+                            } else if (item.name.endsWith(".ttf") || item.name.endsWith(".otf")) {
+                                vm.openFontPreview(item)
                             } else {
                                 vm.openFile(item)
                             }
@@ -189,8 +188,6 @@ fun FilePanel(
         }
     }
 }
-
-// ==================== 标签栏 UI ====================
 
 @Composable
 private fun FileTabBar(
