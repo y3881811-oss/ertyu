@@ -158,6 +158,9 @@ fun EditorScreen(vm: MainViewModel) {
                                 cursorBrush = SolidColor(
                                     MaterialTheme.colorScheme.primary
                                 ),
+                                visualTransformation = SyntaxHighlightTransformation(
+                                    state.fileName.substringAfterLast('.', "").lowercase()
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
