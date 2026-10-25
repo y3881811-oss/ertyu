@@ -28,6 +28,9 @@ fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem, password: Stri
         }
         result.onSuccess {
             _zipProgress.value = _zipProgress.value.copy(done = true, message = "解压完成：${targetDir.name}")
+            refresh(isLeft)
+            // 自动打开解压出来的目录
+            openDirectory(isLeft, Uri.fromFile(targetDir))
         }.onFailure { e ->
             if (e.message == "PASSWORD_REQUIRED") {
                 _zipProgress.value = _zipProgress.value.copy(
@@ -38,10 +41,9 @@ fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem, password: Stri
                     pendingTargetIsLeft = isLeft
                 )
             } else {
-                _zipProgress.value = _zipProgress.value.copy(error = e.message ?: "解压失败")
+                _zipProgress.value = _zipProgress.value.copy(error = "解压失败: ${e.message ?: "未知错误"}")
             }
         }
-        if (_zipProgress.value.error == null) refresh(isLeft)
     }
 }
 
@@ -58,6 +60,9 @@ fun MainViewModel.extractZipToOtherPanel(isLeft: Boolean, item: FileItem, passwo
         }
         result.onSuccess {
             _zipProgress.value = _zipProgress.value.copy(done = true, message = "解压完成：${finalDir.name}")
+            openDirectory(!isLeft, Uri.fromFile(targetDir))
+            // 自动跳转进解压目录
+            openDirectory(!isLeft, Uri.fromFile(finalDir))
         }.onFailure { e ->
             if (e.message == "PASSWORD_REQUIRED") {
                 _zipProgress.value = _zipProgress.value.copy(
@@ -68,10 +73,9 @@ fun MainViewModel.extractZipToOtherPanel(isLeft: Boolean, item: FileItem, passwo
                     pendingTargetIsLeft = !isLeft
                 )
             } else {
-                _zipProgress.value = _zipProgress.value.copy(error = e.message ?: "解压失败")
+                _zipProgress.value = _zipProgress.value.copy(error = "解压失败: ${e.message ?: "未知错误"}")
             }
         }
-        if (_zipProgress.value.error == null) openDirectory(!isLeft, Uri.fromFile(targetDir))
     }
 }
 
@@ -137,7 +141,6 @@ fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
         else -> ".zip"
     }
     
-    // 修复：将多行逻辑提取到字符串模板外
     val fileName = if (sources.size == 1) {
         val n = sources[0].name
         val base = if (n.contains('.')) n.substringBeforeLast('.') else n
@@ -156,7 +159,7 @@ fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
         result.onSuccess {
             _zipProgress.value = _zipProgress.value.copy(done = true, message = "压缩完成：$fileName")
         }.onFailure { e ->
-            _zipProgress.value = _zipProgress.value.copy(error = e.message ?: "压缩失败")
+            _zipProgress.value = _zipProgress.value.copy(error = "压缩失败: ${e.message ?: "未知错误"}")
         }
         clearSelection(isLeft)
         refresh(isLeft)
