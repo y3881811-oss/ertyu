@@ -75,14 +75,23 @@ fun AppDialogs(vm: MainViewModel) {
                     } else {
                         Text(zipProgress.message, maxLines = 2)
                         Spacer(Modifier.height(8.dp))
+                        
                         if (zipProgress.total > 0) {
+                            // 修复闪退核心：计算时增加 double 保护，并 coerceIn 限制范围
+                            val progressValue = (zipProgress.current.toFloat() / zipProgress.total.toFloat()).coerceIn(0f, 1f)
                             LinearProgressIndicator(
-                                progress = { zipProgress.current.toFloat() / zipProgress.total },
+                                progress = { if (progressValue.isNaN()) 0f else progressValue },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(Modifier.height(4.dp))
                             Text("${zipProgress.current} / ${zipProgress.total}")
+                        } else if (zipProgress.current > 0) {
+                            // 处理 total <= 0 但 current > 0 的情况（无限循环进度）
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Spacer(Modifier.height(4.dp))
+                            Text("已处理 ${zipProgress.current} 项")
                         }
+
                         zipProgress.error?.let {
                             Spacer(Modifier.height(8.dp))
                             Text("错误: $it", color = MaterialTheme.colorScheme.error)
@@ -122,14 +131,15 @@ fun AppDialogs(vm: MainViewModel) {
                 Column {
                     Text(installState.fileName, maxLines = 2)
                     Spacer(Modifier.height(8.dp))
-                    // 判断是否显示进度条（如果 total > 0）
                     if (installState.total > 0) {
+                        // 同样增加 NaN 保护
+                        val progressValue = (installState.copied.toFloat() / installState.total.toFloat()).coerceIn(0f, 1f)
                         LinearProgressIndicator(
-                            progress = { installState.copied.toFloat() / installState.total },
+                            progress = { if (progressValue.isNaN()) 0f else progressValue },
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(4.dp))
-                        Text("${installState.copied} / ${installState.total}")
+                        Text("${installState.percent}%")
                     } else {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
