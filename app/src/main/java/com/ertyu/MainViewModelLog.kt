@@ -40,5 +40,6 @@ fun MainViewModel.refreshLogList() {
 
 fun MainViewModel.openLogFile(item: com.ertyu.model.FileItem) {
     closeLogViewer()
-    openInEditor(item)
+    // 调用 public 的 openFile，内部会自动识别 txt 扩展名并进入编辑器
+    openFile(item)
 }
