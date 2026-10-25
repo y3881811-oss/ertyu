@@ -1,5 +1,6 @@
 package com.ertyu.engine
 
+import android.util.Log
 import com.ertyu.model.ArchiveFormat
 import com.github.junrar.Junrar
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,7 @@ import java.io.OutputStream
 
 object ArchiveEngine {
 
+    private const val TAG = "ArchiveEngine"
     private const val BUF_SIZE = 16 * 1024
 
     suspend fun extract(
@@ -31,7 +33,7 @@ object ArchiveEngine {
         password: String? = null,
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             val format = ArchiveFormat.detect(archiveFile.name)
                 ?: throw IllegalArgumentException("不支持的格式: ${archiveFile.name}")
             if (!targetDir.exists()) targetDir.mkdirs()
@@ -39,7 +41,7 @@ object ArchiveEngine {
 
             when (format) {
                 ArchiveFormat.ZIP ->
-                    ZipEngine.extract(archiveFile, targetDir, password, onProgress).getOrThrow()
+                    return@withContext ZipEngine.extract(archiveFile, targetDir, password, onProgress)
                 ArchiveFormat.TAR -> openTar(archiveFile, null).use { extractTar(it, targetDir, canonicalTarget, onProgress) }
                 ArchiveFormat.TAR_GZ -> openTar(archiveFile, "gz").use { extractTar(it, targetDir, canonicalTarget, onProgress) }
                 ArchiveFormat.TAR_BZ2 -> openTar(archiveFile, "bz2").use { extractTar(it, targetDir, canonicalTarget, onProgress) }
@@ -52,6 +54,10 @@ object ArchiveEngine {
                 ArchiveFormat.SEVEN_Z -> extract7z(archiveFile, targetDir, canonicalTarget, onProgress)
                 ArchiveFormat.RAR -> extractRar(archiveFile, targetDir, canonicalTarget)
             }
+            Result.success(Unit)
+        } catch (t: Throwable) {
+            Log.e(TAG, "解压崩溃: ${archiveFile.name}", t)
+            Result.failure(t)
         }
     }
 
@@ -61,18 +67,22 @@ object ArchiveEngine {
         format: ArchiveFormat,
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             val entries = mutableListOf<Pair<File, String>>()
             sources.forEach { src -> collect(src, src.name, entries) }
             if (entries.isEmpty()) throw IllegalArgumentException("没有可压缩的内容")
             
             when (format) {
-                ArchiveFormat.ZIP -> ZipEngine.compress(sources, targetFile, onProgress).getOrThrow()
+                ArchiveFormat.ZIP -> return@withContext ZipEngine.compress(sources, targetFile, onProgress)
                 ArchiveFormat.TAR -> compressTar(entries, targetFile, null, onProgress)
                 ArchiveFormat.TAR_GZ -> compressTar(entries, targetFile, "gz", onProgress)
                 ArchiveFormat.SEVEN_Z -> compress7z(entries, targetFile, onProgress)
                 else -> throw IllegalArgumentException("不支持压缩为 ${format.label}")
             }
+            Result.success(Unit)
+        } catch (t: Throwable) {
+            Log.e(TAG, "压缩崩溃", t)
+            Result.failure(t)
         }
     }
 
