@@ -1,7 +1,5 @@
 package com.ertyu.model
 
-import android.net.Uri
-
 data class ZipProgress(
     val visible: Boolean = false,
     val title: String = "",
@@ -9,10 +7,14 @@ data class ZipProgress(
     val current: Int = 0,
     val total: Int = 0,
     val done: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // 新增：密码相关
+    val needsPassword: Boolean = false,
+    val pendingFileItem: FileItem? = null,
+    val pendingIsLeft: Boolean = true,
+    val pendingTargetIsLeft: Boolean = true // 用于区分是解压到当前还是另一侧
 )
 
-/** 点击 zip 时询问用户要做什么 */
 data class ZipPrompt(
     val item: FileItem? = null
 )
