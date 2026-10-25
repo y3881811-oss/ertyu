@@ -28,84 +28,89 @@ import java.io.File
 fun AppDialogs(vm: MainViewModel) {
     val context = LocalContext.current
 
-    // ==================== 批量工具 ====================
     BatchRenameDialog(vm)
     ChecksumDialog(vm)
     ApkCloneDialog(vm)
 
-    // ==================== ZIP 解压位置 ====================
+    // ZIP 解压位置选择
     val zipPrompt by vm.zipPrompt.collectAsState()
     zipPrompt.item?.let { item ->
         val format = ArchiveFormat.detect(item.name)
         AlertDialog(
             onDismissRequest = { vm.dismissZipPrompt() },
             title = { Text(item.name, maxLines = 2) },
-            text = {
-                Text(
-                    if (format != null)
-                        "格式：${format.label}\n选择解压位置"
-                    else "选择解压位置"
-                )
-            },
+            text = { Text(if (format != null) "格式：${format.label}\n选择解压位置" else "选择解压位置") },
             confirmButton = {
-                TextButton(onClick = {
-                    vm.extractZipToOtherPanel(true, item)
-                }) { Text("解压到另一侧") }
+                TextButton(onClick = { vm.extractZipToOtherPanel(true, item) }) { Text("解压到另一侧") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    vm.extractZipHere(true, item)
-                }) { Text("解压到当前目录") }
+                TextButton(onClick = { vm.extractZipHere(true, item) }) { Text("解压到当前目录") }
             }
         )
     }
 
-    // ==================== 压缩/解压进度 ====================
+    // ZIP 进度与密码输入
     val zipProgress by vm.zipProgress.collectAsState()
     if (zipProgress.visible) {
+        var passwordInput by remember { mutableStateOf("") }
+        
         AlertDialog(
             onDismissRequest = {
-                if (zipProgress.done || zipProgress.error != null) {
+                if (zipProgress.done || zipProgress.error != null || zipProgress.needsPassword) {
                     vm.dismissZipProgress()
                 }
             },
-            title = { Text(zipProgress.title) },
+            title = { Text(if (zipProgress.needsPassword) "需要密码" else zipProgress.title) },
             text = {
                 Column {
-                    Text(zipProgress.message, maxLines = 2)
-                    Spacer(Modifier.height(8.dp))
-                    if (zipProgress.total > 0) {
-                        LinearProgressIndicator(
-                            progress = {
-                                zipProgress.current.toFloat() / zipProgress.total
-                            },
+                    if (zipProgress.needsPassword) {
+                        Text("此压缩包已加密，请输入密码：", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = passwordInput,
+                            onValueChange = { passwordInput = it },
+                            singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text("${zipProgress.current} / ${zipProgress.total}")
-                    } else if (zipProgress.current > 0) {
-                        Text("已处理 ${zipProgress.current} 项")
-                    }
-                    zipProgress.error?.let {
+                    } else {
+                        Text(zipProgress.message, maxLines = 2)
                         Spacer(Modifier.height(8.dp))
-                        Text(
-                            "错误: $it",
-                            color = MaterialTheme.colorScheme.error
-                        )
+                        if (zipProgress.total > 0) {
+                            LinearProgressIndicator(
+                                progress = { zipProgress.current.toFloat() / zipProgress.total },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text("${zipProgress.current} / ${zipProgress.total}")
+                        }
+                        zipProgress.error?.let {
+                            Spacer(Modifier.height(8.dp))
+                            Text("错误: $it", color = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
             },
             confirmButton = {
-                if (zipProgress.done || zipProgress.error != null) {
+                if (zipProgress.needsPassword) {
+                    TextButton(
+                        onClick = { vm.submitZipPassword(passwordInput) },
+                        enabled = passwordInput.isNotEmpty()
+                    ) { Text("解密") }
+                } else if (zipProgress.done || zipProgress.error != null) {
                     TextButton(onClick = { vm.dismissZipProgress() }) {
                         Text(if (zipProgress.error != null) "关闭" else "完成")
                     }
                 }
+            },
+            dismissButton = {
+                if (zipProgress.needsPassword) {
+                    TextButton(onClick = { vm.dismissZipProgress() }) { Text("取消") }
+                }
             }
         )
     }
 
-    // ==================== 安装进度 ====================
+    // 安装进度
     val installState by vm.installState.collectAsState()
     if (installState.visible) {
         AlertDialog(
@@ -119,17 +124,13 @@ fun AppDialogs(vm: MainViewModel) {
                     Spacer(Modifier.height(8.dp))
                     if (installState.total > 0) {
                         LinearProgressIndicator(
-                            progress = {
-                                installState.copied.toFloat() / installState.total
-                            },
+                            progress = { installState.copied.toFloat() / installState.total },
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(4.dp))
                         Text("${installState.percent}%")
                     } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -139,35 +140,26 @@ fun AppDialogs(vm: MainViewModel) {
                     )
                     installState.error?.let {
                         Spacer(Modifier.height(8.dp))
-                        Text(
-                            "错误: $it",
-                            color = MaterialTheme.colorScheme.error
-                        )
+                        Text("错误: $it", color = MaterialTheme.colorScheme.error)
                     }
                 }
             },
             confirmButton = {
                 if (installState.error != null) {
-                    TextButton(onClick = { vm.dismissInstallProgress() }) {
-                        Text("关闭")
-                    }
+                    TextButton(onClick = { vm.dismissInstallProgress() }) { Text("关闭") }
                 }
             }
         )
     }
 
-    // ==================== 安装权限引导 ====================
+    // 安装权限引导
     val pendingInstall by vm.pendingInstall.collectAsState()
     if (pendingInstall != null) {
         AlertDialog(
             onDismissRequest = { vm.dismissInstallPermissionPrompt() },
             title = { Text("需要安装权限") },
             text = {
-                Text(
-                    "本应用需要「安装未知应用」权限才能安装 APK。\n\n" +
-                            "点击「去授权」后，在系统设置里开启本应用的开关，" +
-                            "返回后再次点击安装即可。"
-                )
+                Text("本应用需要「安装未知应用」权限才能安装 APK。\n\n点击「去授权」后，在系统设置里开启本应用的开关，返回后再次点击安装即可。")
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -176,14 +168,12 @@ fun AppDialogs(vm: MainViewModel) {
                 }) { Text("去授权") }
             },
             dismissButton = {
-                TextButton(onClick = { vm.dismissInstallPermissionPrompt() }) {
-                    Text("取消")
-                }
+                TextButton(onClick = { vm.dismissInstallPermissionPrompt() }) { Text("取消") }
             }
         )
     }
 
-    // ==================== 新建文件 ====================
+    // 新建文件
     val newFilePrompt by vm.newFilePrompt.collectAsState()
     if (newFilePrompt) {
         var text by remember { mutableStateOf("") }
@@ -206,14 +196,12 @@ fun AppDialogs(vm: MainViewModel) {
                 }) { Text("创建") }
             },
             dismissButton = {
-                TextButton(onClick = { vm.dismissNewFilePrompt() }) {
-                    Text("取消")
-                }
+                TextButton(onClick = { vm.dismissNewFilePrompt() }) { Text("取消") }
             }
         )
     }
 
-    // ==================== 新建文件夹 ====================
+    // 新建文件夹
     val newFolderVisible by vm.newFolderDialogVisible.collectAsState()
     val newFolderIsLeft by vm.newFolderDialogIsLeft.collectAsState()
     if (newFolderVisible) {
@@ -229,7 +217,7 @@ fun AppDialogs(vm: MainViewModel) {
         )
     }
 
-    // ==================== 跳转路径 ====================
+    // 跳转路径
     val jumpVisible by vm.jumpDialogVisible.collectAsState()
     val jumpIsLeft by vm.jumpDialogIsLeft.collectAsState()
     if (jumpVisible) {
@@ -242,10 +230,7 @@ fun AppDialogs(vm: MainViewModel) {
                 if (input.isNotBlank()) {
                     val dir = File(input)
                     if (dir.exists() && dir.isDirectory) {
-                        vm.openDirectory(
-                            jumpIsLeft,
-                            android.net.Uri.fromFile(dir)
-                        )
+                        vm.openDirectory(jumpIsLeft, android.net.Uri.fromFile(dir))
                     }
                 }
                 vm.dismissJumpDialog()
@@ -254,7 +239,7 @@ fun AppDialogs(vm: MainViewModel) {
         )
     }
 
-    // ==================== 排序方式 ====================
+    // 排序方式
     val sortVisible by vm.sortDialogVisible.collectAsState()
     val sortIsLeft by vm.sortDialogIsLeft.collectAsState()
     if (sortVisible) {
@@ -269,7 +254,7 @@ fun AppDialogs(vm: MainViewModel) {
         )
     }
 
-    // ==================== 文件操作菜单 ====================
+    // 文件操作菜单
     val actionTarget by vm.actionDialogTarget.collectAsState()
     val actionIsLeft by vm.actionDialogIsLeft.collectAsState()
     val settingsState by vm.settingsState.collectAsState()
@@ -352,7 +337,7 @@ fun AppDialogs(vm: MainViewModel) {
         )
     }
 
-    // ==================== 属性对话框 ====================
+    // 属性对话框
     val infoTarget by vm.infoDialogTarget.collectAsState()
     infoTarget?.let { target ->
         FileInfoDialog(
@@ -362,7 +347,7 @@ fun AppDialogs(vm: MainViewModel) {
         )
     }
 
-    // ==================== 重命名 ====================
+    // 重命名
     val renameTarget by vm.renameDialogTarget.collectAsState()
     val renameIsLeft by vm.renameDialogIsLeft.collectAsState()
     renameTarget?.let { target ->
@@ -380,7 +365,7 @@ fun AppDialogs(vm: MainViewModel) {
         )
     }
 
-    // ==================== 压缩格式选择 ====================
+    // 压缩格式选择
     val compressVisible by vm.compressPromptVisible.collectAsState()
     if (compressVisible) {
         CompressFormatDialog(
