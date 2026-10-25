@@ -1,14 +1,17 @@
 package com.ertyu.engine
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.lingala.zip4j.ZipFile
 import net.lingala.zip4j.exception.ZipException
 import net.lingala.zip4j.model.ZipParameters
-import java.io.BufferedInputStream
 import java.io.File
+import java.nio.charset.Charset
 
 object ZipEngine {
+
+    private const val TAG = "ZipEngine"
 
     suspend fun extract(
         zipFile: File,
@@ -16,33 +19,55 @@ object ZipEngine {
         password: String? = null,
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             if (!targetDir.exists()) targetDir.mkdirs()
 
             val zip = ZipFile(zipFile)
+            try {
+                zip.setCharset(Charset.forName("UTF-8"))
+            } catch (e: Exception) {
+                zip.setCharset(Charset.forName("GBK"))
+            }
+
             if (zip.isEncrypted && password.isNullOrEmpty()) {
-                throw IllegalStateException("PASSWORD_REQUIRED")
+                return@withContext Result.failure(IllegalStateException("PASSWORD_REQUIRED"))
             }
 
             if (!password.isNullOrEmpty()) {
                 zip.setPassword(password.toCharArray())
             }
 
-            val total = zip.fileHeaders.size
+            val headers = zip.fileHeaders
+            val total = headers.size
             onProgress(0, total)
 
-            try {
-                zip.extractAll(targetDir.absolutePath)
-            } catch (e: ZipException) {
-                // zip4j 密码错误通常会抛出 ZipException
-                if (e.message?.contains("Wrong Password", ignoreCase = true) == true) {
-                    throw IllegalStateException("密码错误")
-                } else {
-                    throw e
+            var current = 0
+            for (header in headers) {
+                val outFile = File(targetDir, header.fileName)
+                // 防 Zip Slip 路径穿越
+                if (!outFile.canonicalPath.startsWith(targetDir.canonicalPath)) {
+                    continue
                 }
+                
+                try {
+                    zip.extractFile(header, targetDir.absolutePath)
+                } catch (e: ZipException) {
+                    if (e.message?.contains("Wrong Password", ignoreCase = true) == true) {
+                        return@withContext Result.failure(IllegalStateException("密码错误"))
+                    }
+                    // 记录错误但不中断
+                    Log.e(TAG, "解压单个文件失败: ${header.fileName}", e)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "未知错误: ${header.fileName}", t)
+                }
+                
+                current++
+                onProgress(current, total)
             }
-            
-            onProgress(total, total)
+            Result.success(Unit)
+        } catch (t: Throwable) {
+            Log.e(TAG, "解压过程发生严重错误", t)
+            Result.failure(t)
         }
     }
 
@@ -51,7 +76,7 @@ object ZipEngine {
         targetZip: File,
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             if (targetZip.exists()) targetZip.delete()
             
             val zip = ZipFile(targetZip)
@@ -73,6 +98,10 @@ object ZipEngine {
                 current++
                 onProgress(current, total)
             }
+            Result.success(Unit)
+        } catch (t: Throwable) {
+            Log.e(TAG, "压缩过程发生严重错误", t)
+            Result.failure(t)
         }
     }
 
