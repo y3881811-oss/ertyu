@@ -35,7 +35,7 @@ fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem, password: Stri
                     error = "文件已加密",
                     pendingFileItem = item,
                     pendingIsLeft = isLeft,
-                    pendingTargetIsLeft = isLeft // 解压到当前面板
+                    pendingTargetIsLeft = isLeft
                 )
             } else {
                 _zipProgress.value = _zipProgress.value.copy(error = e.message ?: "解压失败")
@@ -65,7 +65,7 @@ fun MainViewModel.extractZipToOtherPanel(isLeft: Boolean, item: FileItem, passwo
                     error = "文件已加密",
                     pendingFileItem = item,
                     pendingIsLeft = isLeft,
-                    pendingTargetIsLeft = !isLeft // 解压到另一侧
+                    pendingTargetIsLeft = !isLeft
                 )
             } else {
                 _zipProgress.value = _zipProgress.value.copy(error = e.message ?: "解压失败")
@@ -83,7 +83,6 @@ fun MainViewModel.submitZipPassword(password: String) {
     
     _zipProgress.update { it.copy(needsPassword = false, error = null) }
     
-    // 重试
     if (isLeft == targetIsLeft) {
         extractZipHere(isLeft, item, password)
     } else {
@@ -129,6 +128,7 @@ fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
     if (targets.isEmpty()) return
     val sources = targets.mapNotNull { it.uri.path?.let(::File) }
     if (sources.isEmpty()) return
+    
     val ext = when (format) {
         ArchiveFormat.ZIP -> ".zip"
         ArchiveFormat.TAR -> ".tar"
@@ -136,12 +136,18 @@ fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
         ArchiveFormat.SEVEN_Z -> ".7z"
         else -> ".zip"
     }
-    val fileName = if (sources.size == 1) "${
+    
+    // 修复：将多行逻辑提取到字符串模板外
+    val fileName = if (sources.size == 1) {
         val n = sources[0].name
-        if (n.contains('.')) n.substringBeforeLast('.') else n
-    }$ext" else "archive_${System.currentTimeMillis()}$ext"
+        val base = if (n.contains('.')) n.substringBeforeLast('.') else n
+        "$base$ext"
+    } else {
+        "archive_${System.currentTimeMillis()}$ext"
+    }
     
     val targetFile = File(currentDir, fileName)
+    
     viewModelScope.launch {
         _zipProgress.value = ZipProgress(visible = true, title = "压缩中", message = fileName)
         val result = ArchiveEngine.compress(sources, targetFile, format) { cur, total ->
