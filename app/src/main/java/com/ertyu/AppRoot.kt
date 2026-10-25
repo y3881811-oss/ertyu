@@ -29,6 +29,7 @@ fun AppRoot(vm: MainViewModel) {
     val sqliteState by SqliteStateHolder.state.collectAsState()
     val networkState by NetworkShareStateHolder.state.collectAsState()
     val fontState by FontPreviewStateHolder.state.collectAsState()
+    val logState by LogStateHolder.state.collectAsState()
 
     AppDialogs(vm)
     CryptoDialog(vm)
@@ -113,6 +114,10 @@ fun AppRoot(vm: MainViewModel) {
         installedAppsState.visible -> {
             BackHandler { vm.closeInstalledApps() }
             InstalledAppsScreen(vm)
+        }
+        logState.visible -> {
+            BackHandler { vm.closeLogViewer() }
+            LogViewerScreen(vm)
         }
         settingsVisible -> {
             BackHandler { vm.closeSettings() }
