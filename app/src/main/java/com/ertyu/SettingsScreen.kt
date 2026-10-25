@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -43,7 +44,6 @@ import com.ertyu.model.PanelMode
 @Composable
 fun SettingsScreen(vm: MainViewModel) {
     val settings by vm.settingsState.collectAsState()
-    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -51,10 +51,7 @@ fun SettingsScreen(vm: MainViewModel) {
                 title = { Text("设置") },
                 navigationIcon = {
                     IconButton(onClick = { vm.closeSettings() }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 }
             )
@@ -138,7 +135,6 @@ fun SettingsScreen(vm: MainViewModel) {
                             if (!ShizukuManager.hasPermission()) {
                                 ShizukuManager.requestPermission()
                                 vm.showToast("请在弹窗中授权")
-                                // 这里只是一个简单的处理，用户授权后需要重新打开设置页面才会更新状态
                             } else {
                                 useShizuku = true
                                 vm.switchEngine(useShizuku = true)
@@ -225,6 +221,32 @@ fun SettingsScreen(vm: MainViewModel) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+
+            // =========== 新增：日志区域 ===========
+            Spacer(Modifier.height(16.dp))
+            SectionTitle("日志")
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { vm.openLogViewer() }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.BugReport, contentDescription = null)
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("查看/抓取日志", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "浏览已保存的日志，或抓取当前运行日志",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             Spacer(Modifier.height(16.dp))
             HorizontalDivider()
