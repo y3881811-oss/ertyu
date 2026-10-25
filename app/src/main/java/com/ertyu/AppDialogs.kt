@@ -122,13 +122,14 @@ fun AppDialogs(vm: MainViewModel) {
                 Column {
                     Text(installState.fileName, maxLines = 2)
                     Spacer(Modifier.height(8.dp))
+                    // 判断是否显示进度条（如果 total > 0）
                     if (installState.total > 0) {
                         LinearProgressIndicator(
                             progress = { installState.copied.toFloat() / installState.total },
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(4.dp))
-                        Text("${installState.percent}%")
+                        Text("${installState.copied} / ${installState.total}")
                     } else {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
@@ -261,7 +262,7 @@ fun AppDialogs(vm: MainViewModel) {
     
     actionTarget?.let { target ->
         val format = ArchiveFormat.detect(target.name)
-        val isApk = target.name.substringAfterLast('.', "").lowercase() == "apk"
+        val isApk = target.name.substringAfterLast('.', "").lowercase() in listOf("apk", "apks", "xapk", "apkm")
         val showCrossPanel = settingsState.panelMode != PanelMode.SINGLE
         FileActionDialog(
             item = target,
