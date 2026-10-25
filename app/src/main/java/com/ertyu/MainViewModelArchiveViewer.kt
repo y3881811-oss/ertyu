@@ -67,3 +67,17 @@ fun MainViewModel.extractArchiveEntry(entry: ArchiveEntry) {
         }
     }
 }
+
+/** 新增：从压缩包浏览界面一键全部解压 */
+fun MainViewModel.extractAllFromViewer() {
+    val state = ArchiveViewerStateHolder.state.value
+    val item = FileItem(
+        name = state.archiveName,
+        uri = android.net.Uri.fromFile(java.io.File(state.archivePath)),
+        isDirectory = false,
+        path = state.archivePath
+    )
+    closeArchiveViewer()
+    // 调用解压到当前目录的方法
+    extractZipHere(state.sourceIsLeft, item)
+}
