@@ -15,61 +15,79 @@ fun MainViewModel.dismissZipPrompt() {
     _zipPrompt.value = ZipPrompt()
 }
 
-fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem) {
+fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem, password: String? = null) {
     _zipPrompt.value = ZipPrompt()
     val currentDir = flowOf(isLeft).value.currentUri?.path?.let(::File) ?: return
     val archiveFile = item.uri.path?.let(::File) ?: return
     val targetDir = File(currentDir, archiveBaseName(archiveFile.name))
 
     viewModelScope.launch {
-        _zipProgress.value = ZipProgress(
-            visible = true,
-            title = "解压中",
-            message = archiveFile.name
-        )
-        val result = ArchiveEngine.extract(archiveFile, targetDir) { cur, total ->
+        _zipProgress.value = ZipProgress(visible = true, title = "解压中", message = archiveFile.name)
+        val result = ArchiveEngine.extract(archiveFile, targetDir, password) { cur, total ->
             _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
         }
         result.onSuccess {
-            _zipProgress.value = _zipProgress.value.copy(
-                done = true,
-                message = "解压完成：${targetDir.name}"
-            )
+            _zipProgress.value = _zipProgress.value.copy(done = true, message = "解压完成：${targetDir.name}")
         }.onFailure { e ->
-            _zipProgress.value = _zipProgress.value.copy(
-                error = e.message ?: "解压失败"
-            )
+            if (e.message == "PASSWORD_REQUIRED") {
+                _zipProgress.value = _zipProgress.value.copy(
+                    needsPassword = true, 
+                    error = "文件已加密",
+                    pendingFileItem = item,
+                    pendingIsLeft = isLeft,
+                    pendingTargetIsLeft = isLeft // 解压到当前面板
+                )
+            } else {
+                _zipProgress.value = _zipProgress.value.copy(error = e.message ?: "解压失败")
+            }
         }
-        refresh(isLeft)
+        if (_zipProgress.value.error == null) refresh(isLeft)
     }
 }
 
-fun MainViewModel.extractZipToOtherPanel(isLeft: Boolean, item: FileItem) {
+fun MainViewModel.extractZipToOtherPanel(isLeft: Boolean, item: FileItem, password: String? = null) {
     _zipPrompt.value = ZipPrompt()
     val targetDir = flowOf(!isLeft).value.currentUri?.path?.let(::File) ?: return
     val archiveFile = item.uri.path?.let(::File) ?: return
     val finalDir = File(targetDir, archiveBaseName(archiveFile.name))
 
     viewModelScope.launch {
-        _zipProgress.value = ZipProgress(
-            visible = true,
-            title = "解压中",
-            message = archiveFile.name
-        )
-        val result = ArchiveEngine.extract(archiveFile, finalDir) { cur, total ->
+        _zipProgress.value = ZipProgress(visible = true, title = "解压中", message = archiveFile.name)
+        val result = ArchiveEngine.extract(archiveFile, finalDir, password) { cur, total ->
             _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
         }
         result.onSuccess {
-            _zipProgress.value = _zipProgress.value.copy(
-                done = true,
-                message = "解压完成：${finalDir.name}"
-            )
+            _zipProgress.value = _zipProgress.value.copy(done = true, message = "解压完成：${finalDir.name}")
         }.onFailure { e ->
-            _zipProgress.value = _zipProgress.value.copy(
-                error = e.message ?: "解压失败"
-            )
+            if (e.message == "PASSWORD_REQUIRED") {
+                _zipProgress.value = _zipProgress.value.copy(
+                    needsPassword = true, 
+                    error = "文件已加密",
+                    pendingFileItem = item,
+                    pendingIsLeft = isLeft,
+                    pendingTargetIsLeft = !isLeft // 解压到另一侧
+                )
+            } else {
+                _zipProgress.value = _zipProgress.value.copy(error = e.message ?: "解压失败")
+            }
         }
-        openDirectory(!isLeft, Uri.fromFile(targetDir))
+        if (_zipProgress.value.error == null) openDirectory(!isLeft, Uri.fromFile(targetDir))
+    }
+}
+
+fun MainViewModel.submitZipPassword(password: String) {
+    val state = _zipProgress.value
+    val item = state.pendingFileItem ?: return
+    val isLeft = state.pendingIsLeft
+    val targetIsLeft = state.pendingTargetIsLeft
+    
+    _zipProgress.update { it.copy(needsPassword = false, error = null) }
+    
+    // 重试
+    if (isLeft == targetIsLeft) {
+        extractZipHere(isLeft, item, password)
+    } else {
+        extractZipToOtherPanel(isLeft, item, password)
     }
 }
 
@@ -109,10 +127,8 @@ fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
     val currentDir = state.currentUri?.path?.let(::File) ?: return
     val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
     if (targets.isEmpty()) return
-
     val sources = targets.mapNotNull { it.uri.path?.let(::File) }
     if (sources.isEmpty()) return
-
     val ext = when (format) {
         ArchiveFormat.ZIP -> ".zip"
         ArchiveFormat.TAR -> ".tar"
@@ -120,34 +136,21 @@ fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
         ArchiveFormat.SEVEN_Z -> ".7z"
         else -> ".zip"
     }
-
-    val fileName = if (sources.size == 1) {
+    val fileName = if (sources.size == 1) "${
         val n = sources[0].name
-        val base = if (n.contains('.')) n.substringBeforeLast('.') else n
-        "$base$ext"
-    } else {
-        "archive_${System.currentTimeMillis()}$ext"
-    }
+        if (n.contains('.')) n.substringBeforeLast('.') else n
+    }$ext" else "archive_${System.currentTimeMillis()}$ext"
+    
     val targetFile = File(currentDir, fileName)
-
     viewModelScope.launch {
-        _zipProgress.value = ZipProgress(
-            visible = true,
-            title = "压缩中",
-            message = fileName
-        )
+        _zipProgress.value = ZipProgress(visible = true, title = "压缩中", message = fileName)
         val result = ArchiveEngine.compress(sources, targetFile, format) { cur, total ->
             _zipProgress.value = _zipProgress.value.copy(current = cur, total = total)
         }
         result.onSuccess {
-            _zipProgress.value = _zipProgress.value.copy(
-                done = true,
-                message = "压缩完成：$fileName"
-            )
+            _zipProgress.value = _zipProgress.value.copy(done = true, message = "压缩完成：$fileName")
         }.onFailure { e ->
-            _zipProgress.value = _zipProgress.value.copy(
-                error = e.message ?: "压缩失败"
-            )
+            _zipProgress.value = _zipProgress.value.copy(error = e.message ?: "压缩失败")
         }
         clearSelection(isLeft)
         refresh(isLeft)
