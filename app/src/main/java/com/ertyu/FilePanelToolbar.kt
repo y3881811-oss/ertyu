@@ -49,10 +49,9 @@ fun FileToolbar(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
-            .padding(horizontal = 0.dp), // 紧凑模式下减少边距
+            .padding(horizontal = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 紧凑模式下只有单面板显示汉堡菜单，双面板不显示以节省空间
         if (!isCompact) {
             IconButton(onClick = onOpenDrawer) {
                 Icon(Icons.Default.Menu, contentDescription = "菜单")
@@ -79,13 +78,9 @@ fun FileToolbar(
             }
         }
         
-        // 紧凑模式下隐藏视图切换，腾出空间
         if (!isCompact) {
             IconButton(onClick = onToggleGrid) {
-                Icon(
-                    if (isGridMode) Icons.Default.List else Icons.Default.GridView,
-                    contentDescription = "切换视图"
-                )
+                Icon(if (isGridMode) Icons.Default.List else Icons.Default.GridView, contentDescription = "切换视图")
             }
         }
         
@@ -125,13 +120,21 @@ fun FileToolbar(
                     text = { Text("刷新") },
                     onClick = { menuExpanded = false; vm.refresh(isLeft) }
                 )
-                // 紧凑模式下将视图切换放进菜单里
+                
                 if (isCompact) {
                     DropdownMenuItem(
                         text = { Text("切换网格/列表") },
                         onClick = { menuExpanded = false; onToggleGrid() }
                     )
                 }
+                DropdownMenuItem(
+                    text = { Text("设置") },
+                    onClick = { menuExpanded = false; vm.openSettings() }
+                )
+                DropdownMenuItem(
+                    text = { Text("回收站") },
+                    onClick = { menuExpanded = false; vm.openRecycleBin() }
+                )
             }
         }
     }
