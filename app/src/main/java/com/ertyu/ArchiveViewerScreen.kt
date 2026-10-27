@@ -67,7 +67,7 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            "共 ${state.entries.size} 个条目",
+                            if (state.currentDir.isEmpty()) "/" else "/${state.currentDir}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -75,87 +75,72 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
                 },
                 navigationIcon = {
                     IconButton(onClick = { vm.closeArchiveViewer() }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
-                    // 新增：全部解压按钮
                     IconButton(onClick = { vm.extractAllFromViewer() }) {
-                        Icon(
-                            Icons.Default.FolderOpen,
-                            contentDescription = "全部解压到当前目录"
-                        )
+                        Icon(Icons.Default.FolderOpen, contentDescription = "全部解压到当前目录")
                     }
                 }
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             OutlinedTextField(
                 value = state.filter,
                 onValueChange = { vm.updateArchiveViewerFilter(it) },
-                placeholder = { Text("过滤路径…") },
+                placeholder = { Text("全局过滤路径…") },
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = {
                     if (state.filter.isNotEmpty()) {
-                        IconButton(
-                            onClick = { vm.updateArchiveViewerFilter("") }
-                        ) {
+                        IconButton(onClick = { vm.updateArchiveViewerFilter("") }) {
                             Icon(Icons.Default.Close, null)
                         }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
             )
             HorizontalDivider()
 
             when {
-                state.isLoading -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
-                state.error != null -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "错误: ${state.error}",
-                        color = MaterialTheme.colorScheme.error
-                    )
+                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("错误: ${state.error}", color = MaterialTheme.colorScheme.error)
                 }
-                state.entries.isEmpty() -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "压缩包为空",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                state.displayEntries.isEmpty() && state.currentDir.isNotEmpty() && state.filter.isEmpty() -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("空文件夹")
+                    }
                 }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
-                    items(
-                        items = state.filteredEntries,
-                        key = { it.path }
-                    ) { entry ->
+                    // 如果有过滤词，不显示返回上级；如果没有过滤词且不在根目录，显示返回上级
+                    if (state.filter.isEmpty() && state.currentDir.isNotEmpty()) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { vm.goUpArchiveDir() }.padding(horizontal = 12.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Folder, contentDescription = "..", tint = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(12.dp))
+                                Text("..", style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                    
+                    items(state.displayEntries, key = { it.path }) { entry ->
                         ArchiveEntryRow(
                             entry = entry,
                             onClick = {
-                                if (!entry.isDirectory) {
+                                if (entry.isDirectory) {
+                                    vm.enterArchiveDir(entry.path)
+                                } else {
                                     actionTarget = entry
                                 }
                             }
@@ -169,24 +154,12 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
     actionTarget?.let { entry ->
         AlertDialog(
             onDismissRequest = { actionTarget = null },
-            title = {
-                Text(
-                    entry.path,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
+            title = { Text(entry.path, maxLines = 3, overflow = TextOverflow.Ellipsis) },
             text = {
                 Column {
-                    Text(
-                        "大小：${entry.sizeText}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Text("大小：${entry.sizeText}", style = MaterialTheme.typography.bodyMedium)
                     if (entry.compressedSize > 0) {
-                        Text(
-                            "压缩后：${entry.compressedText}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text("压缩后：${entry.compressedText}", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             },
@@ -194,14 +167,10 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
                 TextButton(onClick = {
                     vm.extractArchiveEntry(entry)
                     actionTarget = null
-                }) {
-                    Text("提取到当前目录")
-                }
+                }) { Text("提取到当前目录") }
             },
             dismissButton = {
-                TextButton(onClick = { actionTarget = null }) {
-                    Text("取消")
-                }
+                TextButton(onClick = { actionTarget = null }) { Text("取消") }
             }
         )
     }
@@ -218,28 +187,20 @@ private fun ArchiveEntryRow(
             .fillMaxWidth()
             .background(Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onClick)
-            .padding(
-                start = (12 + entry.depth * 16).dp,
-                end = 12.dp,
-                top = 6.dp,
-                bottom = 6.dp
-            ),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = if (entry.isDirectory) Icons.Default.Folder
-            else Icons.AutoMirrored.Filled.InsertDriveFile,
+            imageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
             contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = if (entry.isDirectory)
-                MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant
+            modifier = Modifier.size(24.dp),
+            tint = if (entry.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = entry.name,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
