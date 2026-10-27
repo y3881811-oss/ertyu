@@ -32,7 +32,6 @@ fun MainScreen(vm: MainViewModel) {
         PanelMode.AUTO -> isLandscape || isWide
     }
 
-    // 抽屉状态
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -48,6 +47,7 @@ fun MainScreen(vm: MainViewModel) {
             Row(modifier = Modifier.fillMaxSize()) {
                 FilePanel(
                     isLeft = true,
+                    isCompact = true, // 紧凑模式
                     vm = vm,
                     onOpenDrawer = { scope.launch { drawerState.open() } },
                     modifier = Modifier.weight(1f)
@@ -55,6 +55,7 @@ fun MainScreen(vm: MainViewModel) {
                 VerticalDivider()
                 FilePanel(
                     isLeft = false,
+                    isCompact = true, // 紧凑模式
                     vm = vm,
                     onOpenDrawer = { scope.launch { drawerState.open() } },
                     modifier = Modifier.weight(1f)
@@ -64,6 +65,7 @@ fun MainScreen(vm: MainViewModel) {
             var activeLeft by remember { mutableStateOf(true) }
             FilePanel(
                 isLeft = activeLeft,
+                isCompact = false, // 单面板使用完整模式
                 vm = vm,
                 onSwitchPanel = { activeLeft = !activeLeft },
                 onOpenDrawer = { scope.launch { drawerState.open() } },
