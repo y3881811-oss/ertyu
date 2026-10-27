@@ -18,11 +18,12 @@ import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share // 新增 Share 图标
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -62,7 +63,6 @@ fun DrawerContent(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
-            // 头部
             Column(modifier = Modifier.padding(20.dp)) {
                 Icon(
                     Icons.Default.Android,
@@ -79,7 +79,6 @@ fun DrawerContent(
             }
             HorizontalDivider()
 
-            // 扫描到的本地存储
             volumes.forEach { vol ->
                 DrawerItem(vol.name, if (vol.isInternal) Icons.Default.PhoneAndroid else Icons.Default.SdCard) {
                     onDismiss()
@@ -87,7 +86,6 @@ fun DrawerContent(
                 }
             }
 
-            // 自定义路径
             if (settings.customPaths.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 HorizontalDivider()
@@ -100,7 +98,6 @@ fun DrawerContent(
                 )
                 settings.customPaths.forEach { path ->
                     val name = File(path).name.ifBlank { path }
-                    // 长按可以删除自定义路径
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -126,7 +123,6 @@ fun DrawerContent(
                 }
             }
 
-            // 添加路径按钮
             DrawerItem("添加本地路径", Icons.Default.Add) {
                 showAddDialog = true
             }
@@ -135,7 +131,10 @@ fun DrawerContent(
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
 
-            // 工具入口
+            DrawerItem("回收站", Icons.Default.DeleteForever) {
+                onDismiss()
+                vm.openRecycleBin()
+            }
             DrawerItem("书签 / 最近访问", Icons.Default.Bookmark) {
                 onDismiss()
                 vm.openBookmarkPanel(true)
@@ -154,8 +153,6 @@ fun DrawerContent(
                 )
                 vm.openWebDav()
             }
-            
-            // 新增：局域网共享入口
             DrawerItem("局域网共享 (FTP/Web)", Icons.Default.Share) {
                 onDismiss()
                 vm.openNetworkShare()
@@ -174,7 +171,6 @@ fun DrawerContent(
         }
     }
 
-    // 添加路径的弹窗
     if (showAddDialog) {
         var inputPath by remember { mutableStateOf("") }
         AlertDialog(
