@@ -19,6 +19,7 @@ fun MainViewModel.openArchiveViewer(isLeft: Boolean, item: FileItem) {
         archivePath = path,
         archiveName = item.name,
         sourceIsLeft = isLeft,
+        currentDir = "",
         isLoading = true
     )
     viewModelScope.launch {
@@ -41,6 +42,21 @@ fun MainViewModel.closeArchiveViewer() {
 
 fun MainViewModel.updateArchiveViewerFilter(q: String) {
     ArchiveViewerStateHolder.state.update { it.copy(filter = q) }
+}
+
+/** 进入子目录 */
+fun MainViewModel.enterArchiveDir(dirPath: String) {
+    ArchiveViewerStateHolder.state.update { it.copy(currentDir = dirPath, filter = "") }
+}
+
+/** 返回上级目录 */
+fun MainViewModel.goUpArchiveDir() {
+    ArchiveViewerStateHolder.state.update { state ->
+        if (state.currentDir.isEmpty()) return@update state
+        val parentPath = state.currentDir.trimEnd('/').substringBeforeLast('/', "")
+        val newPath = if (parentPath.isEmpty()) "" else "$parentPath/"
+        state.copy(currentDir = newPath, filter = "")
+    }
 }
 
 /** 提取单个条目到源面板当前目录 */
@@ -68,7 +84,7 @@ fun MainViewModel.extractArchiveEntry(entry: ArchiveEntry) {
     }
 }
 
-/** 新增：从压缩包浏览界面一键全部解压 */
+/** 从压缩包浏览界面一键全部解压 */
 fun MainViewModel.extractAllFromViewer() {
     val state = ArchiveViewerStateHolder.state.value
     val item = FileItem(
@@ -78,6 +94,5 @@ fun MainViewModel.extractAllFromViewer() {
         path = state.archivePath
     )
     closeArchiveViewer()
-    // 调用解压到当前目录的方法
     extractZipHere(state.sourceIsLeft, item)
 }
