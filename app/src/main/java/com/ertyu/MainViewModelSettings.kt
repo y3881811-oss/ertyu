@@ -36,6 +36,11 @@ fun MainViewModel.toggleGridMode() {
     persistSettings()
 }
 
+fun MainViewModel.setUseRecycleBin(use: Boolean) {
+    _settingsState.update { it.copy(useRecycleBin = use) }
+    persistSettings()
+}
+
 fun MainViewModel.setWebDavSharePath(path: String) {
     _settingsState.update { it.copy(webDavSharePath = path) }
     persistSettings()
