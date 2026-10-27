@@ -10,7 +10,8 @@ data class AppSettings(
     val panelMode: PanelMode = PanelMode.AUTO,
     val showHiddenByDefault: Boolean = false,
     val sortModeDefault: SortMode = SortMode.NAME_ASC,
-    val isGridMode: Boolean = false, // 新增：网格视图
+    val isGridMode: Boolean = false,
+    val useRecycleBin: Boolean = true, // 新增：默认开启回收站
     val webDavSharePath: String = "",
     val webDavPort: Int = 7326,
     val webDavUsername: String = "mtfm",
