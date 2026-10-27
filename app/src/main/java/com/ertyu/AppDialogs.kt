@@ -27,10 +27,39 @@ import java.io.File
 @Composable
 fun AppDialogs(vm: MainViewModel) {
     val context = LocalContext.current
+    val settings by vm.settingsState.collectAsState()
 
     BatchRenameDialog(vm)
     ChecksumDialog(vm)
     ApkCloneDialog(vm)
+
+    // ==================== 删除二次确认 ====================
+    val deleteTarget by vm.deleteTarget.collectAsState()
+    if (deleteTarget != null) {
+        val item = deleteTarget!!
+        val canUseTrash = settings.useRecycleBin
+        AlertDialog(
+            onDismissRequest = { vm.dismissDeleteDialog() },
+            title = { Text("删除确认") },
+            text = { Text("确定要删除「${item.name}」吗？") },
+            confirmButton = {
+                if (canUseTrash) {
+                    TextButton(onClick = { vm.confirmDelete(useTrash = true) }) { Text("放入回收站") }
+                } else {
+                    TextButton(onClick = { vm.confirmDelete(useTrash = false) }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            dismissButton = {
+                if (canUseTrash) {
+                    TextButton(onClick = { vm.confirmDelete(useTrash = false) }) { 
+                        Text("直接删除", color = MaterialTheme.colorScheme.error) 
+                    }
+                } else {
+                    TextButton(onClick = { vm.dismissDeleteDialog() }) { Text("取消") }
+                }
+            }
+        )
+    }
 
     // ZIP 解压位置选择
     val zipPrompt by vm.zipPrompt.collectAsState()
@@ -77,7 +106,6 @@ fun AppDialogs(vm: MainViewModel) {
                         Spacer(Modifier.height(8.dp))
                         
                         if (zipProgress.total > 0) {
-                            // 修复闪退核心：计算时增加 double 保护，并 coerceIn 限制范围
                             val progressValue = (zipProgress.current.toFloat() / zipProgress.total.toFloat()).coerceIn(0f, 1f)
                             LinearProgressIndicator(
                                 progress = { if (progressValue.isNaN()) 0f else progressValue },
@@ -86,7 +114,6 @@ fun AppDialogs(vm: MainViewModel) {
                             Spacer(Modifier.height(4.dp))
                             Text("${zipProgress.current} / ${zipProgress.total}")
                         } else if (zipProgress.current > 0) {
-                            // 处理 total <= 0 但 current > 0 的情况（无限循环进度）
                             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                             Spacer(Modifier.height(4.dp))
                             Text("已处理 ${zipProgress.current} 项")
@@ -132,7 +159,6 @@ fun AppDialogs(vm: MainViewModel) {
                     Text(installState.fileName, maxLines = 2)
                     Spacer(Modifier.height(8.dp))
                     if (installState.total > 0) {
-                        // 同样增加 NaN 保护
                         val progressValue = (installState.copied.toFloat() / installState.total.toFloat()).coerceIn(0f, 1f)
                         LinearProgressIndicator(
                             progress = { if (progressValue.isNaN()) 0f else progressValue },
@@ -268,12 +294,11 @@ fun AppDialogs(vm: MainViewModel) {
     // 文件操作菜单
     val actionTarget by vm.actionDialogTarget.collectAsState()
     val actionIsLeft by vm.actionDialogIsLeft.collectAsState()
-    val settingsState by vm.settingsState.collectAsState()
     
     actionTarget?.let { target ->
         val format = ArchiveFormat.detect(target.name)
         val isApk = target.name.substringAfterLast('.', "").lowercase() in listOf("apk", "apks", "xapk", "apkm")
-        val showCrossPanel = settingsState.panelMode != PanelMode.SINGLE
+        val showCrossPanel = settings.panelMode != PanelMode.SINGLE
         FileActionDialog(
             item = target,
             archiveFormat = format,
@@ -294,7 +319,7 @@ fun AppDialogs(vm: MainViewModel) {
             },
             onDelete = {
                 vm.dismissActionDialog()
-                vm.delete(actionIsLeft, target)
+                vm.requestDelete(actionIsLeft, target) // 改为弹出确认
             },
             onSelect = {
                 vm.dismissActionDialog()
