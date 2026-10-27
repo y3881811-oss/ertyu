@@ -91,6 +91,33 @@ fun MainViewModel.executeApkSign() {
 
 // ==================== DEX 反编译 ====================
 
+/** 从 APK 内部直接打开 DEX 查看器 */
+fun MainViewModel.openDexViewerFromApk(apkPath: String, dexPath: String) {
+    val apkFile = File(apkPath)
+    // 因为传进来的是全路径，这里提取出 dex 文件名，如 classes.dex
+    val dexName = dexPath.substringAfterLast('/')
+
+    ApkToolsState.dexViewerState.value = DexViewerState(
+        visible = true,
+        apkPath = apkPath,
+        apkName = apkFile.name,
+        dexName = dexName,
+        isLoading = true
+    )
+    viewModelScope.launch {
+        val result = DexDecompiler.listClasses(apkFile, dexName)
+        result.onSuccess { classes ->
+            ApkToolsState.dexViewerState.update {
+                it.copy(isLoading = false, classes = classes)
+            }
+        }.onFailure { e ->
+            ApkToolsState.dexViewerState.update {
+                it.copy(isLoading = false, error = e.message ?: "读取失败")
+            }
+        }
+    }
+}
+
 fun MainViewModel.openDexViewer(apkItem: FileItem, dexName: String) {
     val path = apkItem.uri.path ?: return
     ApkToolsState.dexViewerState.value = DexViewerState(
@@ -247,25 +274,7 @@ fun MainViewModel.executeApkClone(keystoreFile: File, storePass: String, keyAlia
                 it.copy(
                     isProcessing = false,
                     error = e.message ?: "克隆失败"
-// 追加到 MainViewModelApkTools.kt 末尾
-
-fun MainViewModel.openDexViewerFromApk(apkPath: String, dexName: String) {
-    ApkToolsState.dexViewerState.value = com.ertyu.model.DexViewerState(
-        visible = true,
-        apkPath = apkPath,
-        apkName = java.io.File(apkPath).name,
-        dexName = dexName,
-        isLoading = true
-    )
-    viewModelScope.launch {
-        val result = com.ertyu.engine.DexDecompiler.listClasses(java.io.File(apkPath), dexName)
-        result.onSuccess { classes ->
-            ApkToolsState.dexViewerState.update {
-                it.copy(isLoading = false, classes = classes)
-            }
-        }.onFailure { e ->
-            ApkToolsState.dexViewerState.update {
-                it.copy(isLoading = false, error = e.message ?: "读取失败")
+                )
             }
         }
     }
