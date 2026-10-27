@@ -13,6 +13,7 @@ object SettingsStore {
     private const val KEY_SHOW_HIDDEN = "show_hidden"
     private const val KEY_SORT_MODE = "sort_mode"
     private const val KEY_IS_GRID_MODE = "is_grid_mode"
+    private const val KEY_USE_RECYCLE_BIN = "use_recycle_bin"
     private const val KEY_WEBDAV_PATH = "webdav_path"
     private const val KEY_WEBDAV_PORT = "webdav_port"
     private const val KEY_WEBDAV_USER = "webdav_user"
@@ -40,6 +41,7 @@ object SettingsStore {
             showHiddenByDefault = sp.getBoolean(KEY_SHOW_HIDDEN, false),
             sortModeDefault = sort,
             isGridMode = sp.getBoolean(KEY_IS_GRID_MODE, false),
+            useRecycleBin = sp.getBoolean(KEY_USE_RECYCLE_BIN, true),
             webDavSharePath = sp.getString(KEY_WEBDAV_PATH, "") ?: "",
             webDavPort = sp.getInt(KEY_WEBDAV_PORT, 7326),
             webDavUsername = sp.getString(KEY_WEBDAV_USER, "mtfm") ?: "mtfm",
@@ -58,6 +60,7 @@ object SettingsStore {
             .putBoolean(KEY_SHOW_HIDDEN, s.showHiddenByDefault)
             .putString(KEY_SORT_MODE, s.sortModeDefault.name)
             .putBoolean(KEY_IS_GRID_MODE, s.isGridMode)
+            .putBoolean(KEY_USE_RECYCLE_BIN, s.useRecycleBin)
             .putString(KEY_WEBDAV_PATH, s.webDavSharePath)
             .putInt(KEY_WEBDAV_PORT, s.webDavPort)
             .putString(KEY_WEBDAV_USER, s.webDavUsername)
