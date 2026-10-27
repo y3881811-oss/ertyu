@@ -163,6 +163,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _renameDialogIsLeft = MutableStateFlow(true)
     val renameDialogIsLeft: StateFlow<Boolean> = _renameDialogIsLeft.asStateFlow()
 
+    // 新增：删除二次确认状态
+    internal val _deleteTarget = MutableStateFlow<FileItem?>(null)
+    val deleteTarget: StateFlow<FileItem?> = _deleteTarget.asStateFlow()
+    internal val _deleteTargetIsLeft = MutableStateFlow(true)
+    val deleteTargetIsLeft: StateFlow<Boolean> = _deleteTargetIsLeft.asStateFlow()
+
     // ==================== Jobs ====================
 
     internal var folderSizeJob: Job? = null
@@ -198,7 +204,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 error = null,
                 selectedUris = emptySet(),
                 isSelectionMode = false,
-                lastSelectedUri = null // 切换目录时清空锚点
+                lastSelectedUri = null
             )
         }
         viewModelScope.launch {
@@ -271,9 +277,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ==================== 基础文件操作 ====================
 
-    fun delete(isLeft: Boolean, item: FileItem) {
+    fun requestDelete(isLeft: Boolean, item: FileItem) {
+        _deleteTargetIsLeft.value = isLeft
+        _deleteTarget.value = item
+    }
+
+    fun dismissDeleteDialog() {
+        _deleteTarget.value = null
+    }
+
+    fun confirmDelete(useTrash: Boolean) {
+        val item = _deleteTarget.value ?: return
+        val isLeft = _deleteTargetIsLeft.value
+        _deleteTarget.value = null
+
         viewModelScope.launch {
-            engine.delete(item.uri)
+            val path = item.uri.path
+            if (useTrash && path != null) {
+                val file = File(path)
+                val ok = com.ertyu.engine.RecycleBinManager.moveToTrash(getApplication(), file, item.isDirectory, item.size)
+                if (ok) {
+                    _toast.value = "已移入回收站"
+                } else {
+                    _toast.value = "移入回收站失败，已直接删除"
+                    engine.delete(item.uri)
+                }
+            } else {
+                engine.delete(item.uri)
+                _toast.value = "已直接删除"
+            }
             refresh(isLeft)
         }
     }
@@ -398,11 +430,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * 处理多选模式下的点击逻辑：
-     * - 如果点击的项已选中：取消该文件的选中。
-     * - 如果点击的项未选中：以 lastSelectedUri 为起点，选中到当前项之间的所有项。
-     */
     fun handleSelectionClick(isLeft: Boolean, item: FileItem) {
         val flow = flowOf(isLeft)
         flow.update { state ->
@@ -410,7 +437,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val uriString = item.uriString
             
             if (currentSelected.contains(uriString)) {
-                // 取消选中当前文件
                 currentSelected.remove(uriString)
                 val newMode = currentSelected.isNotEmpty()
                 state.copy(
@@ -419,7 +445,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     lastSelectedUri = if (newMode) uriString else null
                 )
             } else {
-                // 执行区间选择
                 val lastUri = state.lastSelectedUri
                 val lastIndex = state.items.indexOfFirst { it.uriString == lastUri }
                 val currentIndex = state.items.indexOfFirst { it.uriString == uriString }
@@ -500,9 +525,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val state = flowOf(isLeft).value
         val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
         viewModelScope.launch {
-            targets.forEach { engine.delete(it.uri) }
+            var toTrashCount = 0
+            val useTrash = _settingsState.value.useRecycleBin
+            
+            targets.forEach { item ->
+                val path = item.uri.path
+                if (useTrash && path != null) {
+                    val file = File(path)
+                    val ok = com.ertyu.engine.RecycleBinManager.moveToTrash(getApplication(), file, item.isDirectory, item.size)
+                    if (ok) toTrashCount++
+                    else engine.delete(item.uri)
+                } else {
+                    engine.delete(item.uri)
+                }
+            }
             clearSelection(isLeft)
             refresh(isLeft)
+            if (toTrashCount > 0) {
+                _toast.value = "已处理 $toTrashCount 项到回收站"
+            }
         }
     }
 
