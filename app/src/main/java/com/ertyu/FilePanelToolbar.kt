@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun FileToolbar(
     isLeft: Boolean,
+    isCompact: Boolean,
     vm: MainViewModel,
     isGridMode: Boolean,
     onToggleGrid: () -> Unit,
@@ -48,15 +49,20 @@ fun FileToolbar(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
-            .padding(horizontal = 2.dp),
+            .padding(horizontal = 0.dp), // 紧凑模式下减少边距
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onOpenDrawer) {
-            Icon(Icons.Default.Menu, contentDescription = "菜单")
+        // 紧凑模式下只有单面板显示汉堡菜单，双面板不显示以节省空间
+        if (!isCompact) {
+            IconButton(onClick = onOpenDrawer) {
+                Icon(Icons.Default.Menu, contentDescription = "菜单")
+            }
         }
+        
         IconButton(onClick = { vm.goUp(isLeft) }, enabled = canGoUp) {
             Icon(Icons.Default.ArrowUpward, contentDescription = "上级")
         }
+        
         Text(
             text = path,
             style = MaterialTheme.typography.bodySmall,
@@ -66,18 +72,23 @@ fun FileToolbar(
                 .weight(1f)
                 .clickable { vm.openJumpDialog(isLeft) }
         )
+        
         if (showSwitch) {
             IconButton(onClick = onSwitchPanel) {
                 Icon(Icons.Default.SwapHoriz, contentDescription = "切换")
             }
         }
-        // 视图切换按钮
-        IconButton(onClick = onToggleGrid) {
-            Icon(
-                if (isGridMode) Icons.Default.List else Icons.Default.GridView,
-                contentDescription = "切换视图"
-            )
+        
+        // 紧凑模式下隐藏视图切换，腾出空间
+        if (!isCompact) {
+            IconButton(onClick = onToggleGrid) {
+                Icon(
+                    if (isGridMode) Icons.Default.List else Icons.Default.GridView,
+                    contentDescription = "切换视图"
+                )
+            }
         }
+        
         Box {
             IconButton(onClick = { menuExpanded = true }) {
                 Icon(Icons.Default.MoreVert, contentDescription = "更多")
@@ -114,6 +125,13 @@ fun FileToolbar(
                     text = { Text("刷新") },
                     onClick = { menuExpanded = false; vm.refresh(isLeft) }
                 )
+                // 紧凑模式下将视图切换放进菜单里
+                if (isCompact) {
+                    DropdownMenuItem(
+                        text = { Text("切换网格/列表") },
+                        onClick = { menuExpanded = false; onToggleGrid() }
+                    )
+                }
             }
         }
     }
