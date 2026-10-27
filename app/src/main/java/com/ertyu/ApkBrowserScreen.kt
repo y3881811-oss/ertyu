@@ -53,24 +53,45 @@ import com.ertyu.model.ApkEntry
 fun ApkBrowserScreen(vm: MainViewModel) {
     val state by vm.apkBrowserState.collectAsState()
     var entryActionTarget by remember { mutableStateOf<ApkEntry?>(null) }
-    // 内部层级状态，建议放入 ViewModel，这里为了简单先用局部状态
+    
+    // 层级状态
     var currentDir by remember { mutableStateOf("") }
 
     val displayEntries = remember(state.entries, state.filterQuery, currentDir) {
         if (state.filterQuery.isNotBlank()) {
+            // 如果有过滤词，全局搜索并平铺展示
             state.entries.filter { it.path.contains(state.filterQuery, ignoreCase = true) }
         } else {
+            // 否则展示当前目录层级
             val subEntries = state.entries.filter { it.path.startsWith(currentDir) && it.path != currentDir }
             val folders = mutableSetOf<String>()
             val files = mutableListOf<ApkEntry>()
+            
             subEntries.forEach {
                 val rel = it.path.substring(currentDir.length)
-                if (rel.contains("/")) folders.add(rel.substringBefore("/"))
-                else files.add(it)
+                if (rel.contains("/")) {
+                    folders.add(rel.substringBefore("/"))
+                } else {
+                    files.add(it)
+                }
             }
+            
             val res = mutableListOf<ApkEntry>()
             folders.sorted().forEach {
-                res.add(ApkEntry(path = "$currentDir$it/", name = it, isDirectory = true, size = 0, compressedSize = 0, sizeText = "", compressedText = "", depth = 0, isDex = false))
+                // 虚拟一个文件夹条目
+                res.add(
+                    ApkEntry(
+                        path = "$currentDir$it/", 
+                        name = it, 
+                        isDirectory = true, 
+                        size = 0, 
+                        compressedSize = 0, 
+                        sizeText = "", 
+                        compressedText = "", 
+                        depth = 0, 
+                        isDex = false
+                    )
+                )
             }
             res.addAll(files.sortedBy { it.name.lowercase() })
             res
@@ -83,7 +104,11 @@ fun ApkBrowserScreen(vm: MainViewModel) {
                 title = {
                     Column {
                         Text(state.apkName, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("/$currentDir", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            if (currentDir.isEmpty()) "/" else "/$currentDir",
+                            style = MaterialTheme.typography.bodySmall, 
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 },
                 navigationIcon = {
@@ -98,7 +123,7 @@ fun ApkBrowserScreen(vm: MainViewModel) {
             OutlinedTextField(
                 value = state.filterQuery,
                 onValueChange = { vm.updateApkBrowserFilter(it) },
-                placeholder = { Text("过滤路径…") },
+                placeholder = { Text("全局过滤路径…") },
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = {
@@ -114,13 +139,18 @@ fun ApkBrowserScreen(vm: MainViewModel) {
                 state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("错误: ${state.error}", color = MaterialTheme.colorScheme.error) }
                 else -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 4.dp)) {
+                    
+                    // 返回上级按钮
                     if (state.filterQuery.isEmpty() && currentDir.isNotEmpty()) {
                         item {
                             Row(
-                                modifier = Modifier.fillMaxWidth().clickable { 
-                                    val parent = currentDir.trimEnd('/').substringBeforeLast('/', "")
-                                    currentDir = if (parent.isEmpty()) "" else "$parent/"
-                                }.padding(horizontal = 12.dp, vertical = 12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { 
+                                        val parent = currentDir.trimEnd('/').substringBeforeLast('/', "")
+                                        currentDir = if (parent.isEmpty()) "" else "$parent/"
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(Icons.Default.Folder, contentDescription = "..", tint = MaterialTheme.colorScheme.primary)
@@ -129,6 +159,7 @@ fun ApkBrowserScreen(vm: MainViewModel) {
                             }
                         }
                     }
+                    
                     items(displayEntries, key = { it.path }) { entry ->
                         Row(
                             modifier = Modifier
@@ -136,9 +167,10 @@ fun ApkBrowserScreen(vm: MainViewModel) {
                                 .background(Color.Transparent)
                                 .clickable {
                                     if (entry.isDirectory) {
+                                        // 进入文件夹
                                         currentDir = entry.path
                                     } else {
-                                        // 如果是 dex 文件，直接打开 DEX 查看器
+                                        // 如果是 dex 文件，直接打开
                                         if (entry.name.endsWith(".dex")) {
                                             vm.openDexViewerFromApk(state.apkPath, entry.path)
                                         } else {
