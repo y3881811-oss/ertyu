@@ -30,6 +30,7 @@ fun AppRoot(vm: MainViewModel) {
     val networkState by NetworkShareStateHolder.state.collectAsState()
     val fontState by FontPreviewStateHolder.state.collectAsState()
     val logState by LogStateHolder.state.collectAsState()
+    val recycleBinState by RecycleBinStateHolder.state.collectAsState()
 
     AppDialogs(vm)
     CryptoDialog(vm)
@@ -118,6 +119,10 @@ fun AppRoot(vm: MainViewModel) {
         logState.visible -> {
             BackHandler { vm.closeLogViewer() }
             LogViewerScreen(vm)
+        }
+        recycleBinState.visible -> {
+            BackHandler { vm.closeRecycleBin() }
+            RecycleBinScreen(vm)
         }
         settingsVisible -> {
             BackHandler { vm.closeSettings() }
