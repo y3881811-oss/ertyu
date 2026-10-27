@@ -247,7 +247,25 @@ fun MainViewModel.executeApkClone(keystoreFile: File, storePass: String, keyAlia
                 it.copy(
                     isProcessing = false,
                     error = e.message ?: "克隆失败"
-                )
+// 追加到 MainViewModelApkTools.kt 末尾
+
+fun MainViewModel.openDexViewerFromApk(apkPath: String, dexName: String) {
+    ApkToolsState.dexViewerState.value = com.ertyu.model.DexViewerState(
+        visible = true,
+        apkPath = apkPath,
+        apkName = java.io.File(apkPath).name,
+        dexName = dexName,
+        isLoading = true
+    )
+    viewModelScope.launch {
+        val result = com.ertyu.engine.DexDecompiler.listClasses(java.io.File(apkPath), dexName)
+        result.onSuccess { classes ->
+            ApkToolsState.dexViewerState.update {
+                it.copy(isLoading = false, classes = classes)
+            }
+        }.onFailure { e ->
+            ApkToolsState.dexViewerState.update {
+                it.copy(isLoading = false, error = e.message ?: "读取失败")
             }
         }
     }
