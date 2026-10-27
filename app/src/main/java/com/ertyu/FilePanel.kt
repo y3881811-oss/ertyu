@@ -37,6 +37,7 @@ private val SPLIT_APK_EXTS = setOf("apks", "xapk", "apkm")
 @Composable
 fun FilePanel(
     isLeft: Boolean,
+    isCompact: Boolean = false, // 新增：是否紧凑模式
     vm: MainViewModel,
     onSwitchPanel: (() -> Unit)? = null,
     onOpenDrawer: () -> Unit,
@@ -69,13 +70,16 @@ fun FilePanel(
     }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        FileTabBar(
-            isLeft = isLeft,
-            tabs = tabs,
-            activeIndex = activeIndex,
-            currentState = state,
-            vm = vm
-        )
+        // 紧凑模式下隐藏 TabBar
+        if (!isCompact) {
+            FileTabBar(
+                isLeft = isLeft,
+                tabs = tabs,
+                activeIndex = activeIndex,
+                currentState = state,
+                vm = vm
+            )
+        }
 
         if (state.isSelectionMode) {
             SelectionToolbar(
@@ -94,6 +98,7 @@ fun FilePanel(
         } else {
             FileToolbar(
                 isLeft = isLeft,
+                isCompact = isCompact, // 传给工具栏进行精简
                 vm = vm,
                 isGridMode = settings.isGridMode,
                 onToggleGrid = { vm.toggleGridMode() },
@@ -158,7 +163,8 @@ fun FilePanel(
                 }
             }
 
-            if (!state.isSelectionMode) {
+            // 紧凑模式下隐藏 Dock
+            if (!isCompact && !state.isSelectionMode) {
                 FileActionDock(
                     isLeft = isLeft,
                     vm = vm,
@@ -170,9 +176,6 @@ fun FilePanel(
     }
 }
 
-/**
- * 统一的点击处理逻辑，抽离出来方便维护
- */
 private fun handleItemClick(
     isLeft: Boolean,
     item: com.ertyu.model.FileItem,
@@ -192,7 +195,6 @@ private fun handleItemClick(
 
     val ext = item.name.substringAfterLast('.', "").lowercase()
     when {
-        // 新增：拆分 APK 直接安装
         ext in SPLIT_APK_EXTS -> vm.installApk(item)
         ext == "apk" -> vm.openFile(item)
         ArchiveFormat.isArchive(item.name) -> vm.openArchiveViewer(isLeft, item)
