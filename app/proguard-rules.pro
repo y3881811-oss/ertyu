@@ -23,10 +23,15 @@
 -dontwarn com.github.junrar.**
 -dontwarn org.slf4j.**
 
-# ========== zip4j (关键修复，防止解压闪退) ==========
+# ========== zip4j ==========
 -keep class net.lingala.zip4j.** { *; }
 -keep class net.lingala.zip4j.model.** { *; }
 -dontwarn net.lingala.zip4j.**
+
+# ========== apk-parser ==========
+-keep class net.dongliu.apk.parser.** { *; }
+-dontwarn net.dongliu.apk.parser.**
+-dontwarn org.xmlpull.v1.**
 
 # ========== apksig ==========
 -keep class com.android.apksig.** { *; }
