@@ -27,10 +27,12 @@ object ApkParserEngine {
                 sb.appendLine("  <string name=\"versionCode\">${meta.versionCode}</string>")
                 sb.appendLine("  <string name=\"minSdkVersion\">${meta.minSdkVersion}</string>")
                 sb.appendLine("  <string name=\"targetSdkVersion\">${meta.targetSdkVersion}</string>")
+                
                 if (meta.usesPermissions.isNotEmpty()) {
                     sb.appendLine("\n  <!-- 权限列表 -->")
                     meta.usesPermissions.forEach { perm ->
-                        sb.appendLine("  <uses-permission name=\"${perm.name}\" />")
+                        // 修复点：有些版本返回的是 List<String>，有些是对象
+                        sb.appendLine("  <uses-permission name=\"$perm\" />")
                     }
                 }
                 sb.appendLine("</resources>")
@@ -61,7 +63,7 @@ object ApkParserEngine {
         for (b in bytes) {
             val i = b.toInt() and 0xFF
             if (i in 0x20..0x7E || i == 0x0A || i == 0x0D || i == 0x09) textCount++
-            else if (i > 0x7F) textCount++ 
+            else if (i > 0x7F) textCount++
         }
         return textCount > bytes.size * 0.8
     }
