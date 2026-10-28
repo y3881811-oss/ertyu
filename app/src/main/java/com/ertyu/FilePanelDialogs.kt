@@ -15,12 +15,16 @@ import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -45,13 +49,13 @@ import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
 
-// ==================== 文件操作菜单 ====================
-
 @Composable
 fun FileActionDialog(
     item: FileItem,
     archiveFormat: ArchiveFormat?,
     isApk: Boolean,
+    isImage: Boolean,
+    showCrossPanel: Boolean,
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onCopy: () -> Unit,
@@ -64,7 +68,13 @@ fun FileActionDialog(
     onInfo: () -> Unit,
     onInstall: () -> Unit,
     onBrowseApk: () -> Unit,
-    onHexView: () -> Unit
+    onHexView: () -> Unit,
+    onChecksum: () -> Unit,
+    onApkSign: () -> Unit,
+    onApkClone: () -> Unit,
+    onCrypto: () -> Unit,
+    onImageTools: () -> Unit,
+    onMd5Rename: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -76,6 +86,12 @@ fun FileActionDialog(
                 if (isApk) {
                     ActionRow("安装", Icons.Default.InstallMobile, onInstall)
                     ActionRow("浏览内部", Icons.Default.FolderOpen, onBrowseApk)
+                    ActionRow("APK 签名", Icons.Default.Edit, onApkSign)
+                    ActionRow("共存/克隆", Icons.Default.ContentCopy, onApkClone)
+                }
+                if (isImage) {
+                    ActionRow("图片处理 (压缩)", Icons.Default.Image, onImageTools)
+                    ActionRow("以 MD5 重命名", Icons.Default.Fingerprint, onMd5Rename)
                 }
                 if (archiveFormat != null) {
                     ActionRow(
@@ -83,26 +99,38 @@ fun FileActionDialog(
                         Icons.Default.FolderZip,
                         onExtractHere
                     )
-                    ActionRow(
-                        "解压到另一侧",
-                        Icons.Default.FolderZip,
-                        onExtractOther
-                    )
+                    if (showCrossPanel) {
+                        ActionRow(
+                            "解压到另一侧",
+                            Icons.Default.FolderZip,
+                            onExtractOther
+                        )
+                    }
                 }
                 ActionRow("压缩为…", Icons.Default.FolderZip, onZipThis)
                 ActionRow("HEX 查看", Icons.Default.Search, onHexView)
+                if (!item.isDirectory) {
+                    ActionRow("校验和（MD5/SHA）", Icons.Default.Verified, onChecksum)
+                    ActionRow(
+                        if (item.name.endsWith(".enc")) "解密文件" else "加密文件（AES）",
+                        Icons.Default.Lock,
+                        onCrypto
+                    )
+                }
                 ActionRow("属性", Icons.Default.Info, onInfo)
                 ActionRow("重命名", Icons.Default.Edit, onRename)
-                ActionRow(
-                    "复制到另一侧",
-                    Icons.Default.ContentCopy,
-                    onCopy
-                )
-                ActionRow(
-                    "移动到另一侧",
-                    Icons.AutoMirrored.Filled.DriveFileMove,
-                    onMove
-                )
+                if (showCrossPanel) {
+                    ActionRow(
+                        "复制到另一侧",
+                        Icons.Default.ContentCopy,
+                        onCopy
+                    )
+                    ActionRow(
+                        "移动到另一侧",
+                        Icons.AutoMirrored.Filled.DriveFileMove,
+                        onMove
+                    )
+                }
                 ActionRow("删除", Icons.Default.Delete, onDelete)
                 ActionRow("多选", Icons.Default.SelectAll, onSelect)
             }
@@ -131,8 +159,6 @@ private fun ActionRow(
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
-
-// ==================== 文件属性对话框 ====================
 
 @Composable
 fun FileInfoDialog(
@@ -241,8 +267,6 @@ private fun formatBytes(bytes: Long): String {
     return String.format("%.2f GB", gb)
 }
 
-// ==================== 压缩格式对话框 ====================
-
 @Composable
 fun CompressFormatDialog(
     onSelect: (ArchiveFormat) -> Unit,
@@ -253,12 +277,10 @@ fun CompressFormatDialog(
         title = { Text("选择压缩格式") },
         text = {
             Column {
-                FormatRow("ZIP", ".zip（兼容性最好）",
-                    ArchiveFormat.ZIP, onSelect)
-                FormatRow("TAR", ".tar（不压缩）",
-                    ArchiveFormat.TAR, onSelect)
-                FormatRow("TAR.GZ", ".tar.gz（Linux 常见）",
-                    ArchiveFormat.TAR_GZ, onSelect)
+                FormatRow("ZIP", ".zip（兼容性最好）", ArchiveFormat.ZIP, onSelect)
+                FormatRow("TAR", ".tar（不压缩）", ArchiveFormat.TAR, onSelect)
+                FormatRow("TAR.GZ", ".tar.gz（Linux 常见）", ArchiveFormat.TAR_GZ, onSelect)
+                FormatRow("7Z", ".7z（高压缩比，不支持加密）", ArchiveFormat.SEVEN_Z, onSelect)
             }
         },
         confirmButton = {
@@ -294,8 +316,6 @@ private fun FormatRow(
     }
 }
 
-// ==================== 排序对话框 ====================
-
 @Composable
 fun SortDialog(
     current: SortMode,
@@ -330,8 +350,6 @@ fun SortDialog(
         }
     )
 }
-
-// ==================== 通用输入对话框 ====================
 
 @Composable
 fun TextInputDialog(

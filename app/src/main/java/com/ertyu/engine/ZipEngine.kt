@@ -1,91 +1,107 @@
 package com.ertyu.engine
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
+import net.lingala.zip4j.ZipFile
+import net.lingala.zip4j.exception.ZipException
+import net.lingala.zip4j.model.ZipParameters
 import java.io.File
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
+import java.nio.charset.Charset
 
 object ZipEngine {
 
-    /** 解压 zipFile 到 targetDir，onProgress(current, total) 在 IO 线程回调 */
+    private const val TAG = "ZipEngine"
+
     suspend fun extract(
         zipFile: File,
         targetDir: File,
+        password: String? = null,
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             if (!targetDir.exists()) targetDir.mkdirs()
 
-            // 第一遍：数条目总数
-            var total = 0
-            ZipInputStream(BufferedInputStream(zipFile.inputStream())).use { zis ->
-                while (zis.nextEntry != null) total++
+            val zip = ZipFile(zipFile)
+            try {
+                zip.setCharset(Charset.forName("UTF-8"))
+            } catch (e: Exception) {
+                zip.setCharset(Charset.forName("GBK"))
             }
+
+            if (zip.isEncrypted && password.isNullOrEmpty()) {
+                return@withContext Result.failure(IllegalStateException("PASSWORD_REQUIRED"))
+            }
+
+            if (!password.isNullOrEmpty()) {
+                zip.setPassword(password.toCharArray())
+            }
+
+            val headers = zip.fileHeaders
+            val total = headers.size
             onProgress(0, total)
 
-            val canonicalTarget = targetDir.canonicalPath
             var current = 0
-
-            // 第二遍：真正解压
-            ZipInputStream(BufferedInputStream(zipFile.inputStream())).use { zis ->
-                var entry = zis.nextEntry
-                while (entry != null) {
-                    val outFile = File(targetDir, entry.name)
-                    // 防 zip slip
-                    if (!outFile.canonicalPath.startsWith(canonicalTarget)) {
-                        throw SecurityException("非法路径: ${entry.name}")
-                    }
-                    if (entry.isDirectory) {
-                        outFile.mkdirs()
-                    } else {
-                        outFile.parentFile?.mkdirs()
-                        BufferedOutputStream(outFile.outputStream()).use { out ->
-                            zis.copyTo(out, 8 * 1024)
-                        }
-                    }
-                    current++
-                    onProgress(current, total)
-                    zis.closeEntry()
-                    entry = zis.nextEntry
+            for (header in headers) {
+                val outFile = File(targetDir, header.fileName)
+                // 防 Zip Slip 路径穿越
+                if (!outFile.canonicalPath.startsWith(targetDir.canonicalPath)) {
+                    continue
                 }
+                
+                try {
+                    zip.extractFile(header, targetDir.absolutePath)
+                } catch (e: ZipException) {
+                    if (e.message?.contains("Wrong Password", ignoreCase = true) == true) {
+                        return@withContext Result.failure(IllegalStateException("密码错误"))
+                    }
+                    // 记录错误但不中断
+                    Log.e(TAG, "解压单个文件失败: ${header.fileName}", e)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "未知错误: ${header.fileName}", t)
+                }
+                
+                current++
+                onProgress(current, total)
             }
+            Result.success(Unit)
+        } catch (t: Throwable) {
+            Log.e(TAG, "解压过程发生严重错误", t)
+            Result.failure(t)
         }
     }
 
-    /** 将 sources（文件或目录）压缩到 targetZip */
     suspend fun compress(
         sources: List<File>,
         targetZip: File,
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            // 收集所有要写入的条目
+        try {
+            if (targetZip.exists()) targetZip.delete()
+            
+            val zip = ZipFile(targetZip)
             val entries = mutableListOf<Pair<File, String>>()
-            sources.forEach { src ->
-                collect(src, src.name, entries)
-            }
+            sources.forEach { src -> collect(src, src.name, entries) }
             val total = entries.size
             onProgress(0, total)
 
             var current = 0
-            ZipOutputStream(BufferedOutputStream(targetZip.outputStream())).use { zos ->
-                entries.forEach { (file, entryName) ->
-                    val entry = ZipEntry(entryName + if (file.isDirectory) "/" else "")
-                    zos.putNextEntry(entry)
-                    if (file.isFile) {
-                        BufferedInputStream(file.inputStream()).use { input ->
-                            input.copyTo(zos, 8 * 1024)
-                        }
-                    }
-                    zos.closeEntry()
-                    current++
-                    onProgress(current, total)
+            entries.forEach { (file, entryName) ->
+                val params = ZipParameters().apply {
+                    fileNameInZip = entryName
                 }
+                if (file.isDirectory) {
+                    zip.addFolder(file, params)
+                } else {
+                    zip.addFile(file, params)
+                }
+                current++
+                onProgress(current, total)
             }
+            Result.success(Unit)
+        } catch (t: Throwable) {
+            Log.e(TAG, "压缩过程发生严重错误", t)
+            Result.failure(t)
         }
     }
 

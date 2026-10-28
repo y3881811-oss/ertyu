@@ -2,6 +2,7 @@ package com.ertyu
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,92 +53,136 @@ import com.ertyu.model.ApkEntry
 fun ApkBrowserScreen(vm: MainViewModel) {
     val state by vm.apkBrowserState.collectAsState()
     var entryActionTarget by remember { mutableStateOf<ApkEntry?>(null) }
+    var currentDir by remember { mutableStateOf("") }
+
+    val displayEntries = remember(state.entries, state.filterQuery, currentDir) {
+        if (state.filterQuery.isNotBlank()) {
+            state.entries.filter { it.path.contains(state.filterQuery, ignoreCase = true) }
+        } else {
+            val subEntries = state.entries.filter { it.path.startsWith(currentDir) && it.path != currentDir }
+            val folders = mutableSetOf<String>()
+            val files = mutableListOf<ApkEntry>()
+            
+            subEntries.forEach {
+                val rel = it.path.substring(currentDir.length)
+                if (rel.contains("/")) folders.add(rel.substringBefore("/"))
+                else files.add(it)
+            }
+            
+            val res = mutableListOf<ApkEntry>()
+            folders.sorted().forEach {
+                res.add(ApkEntry(path = "$currentDir$it/", name = it, isDirectory = true, size = 0, compressedSize = 0, sizeText = "", compressedText = "", depth = 0, isDex = false))
+            }
+            res.addAll(files.sortedBy { it.name.lowercase() })
+            res
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text(
-                            state.apkName,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "共 ${state.entries.size} 个条目",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text(state.apkName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (currentDir.isEmpty()) "/" else "/$currentDir", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { vm.closeApkBrowser() }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 }
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             OutlinedTextField(
                 value = state.filterQuery,
                 onValueChange = { vm.updateApkBrowserFilter(it) },
-                placeholder = { Text("过滤路径…") },
+                placeholder = { Text("全局过滤路径…") },
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = {
                     if (state.filterQuery.isNotEmpty()) {
-                        IconButton(onClick = { vm.updateApkBrowserFilter("") }) {
-                            Icon(Icons.Default.Close, null)
-                        }
+                        IconButton(onClick = { vm.updateApkBrowserFilter("") }) { Icon(Icons.Default.Close, null) }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
             )
             HorizontalDivider()
 
             when {
-                state.isLoading -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-                state.error != null -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "错误: ${state.error}",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 4.dp)
-                ) {
-                    items(
-                        items = state.filteredEntries,
-                        key = { it.path }
-                    ) { entry ->
-                        ApkEntryRow(
-                            entry = entry,
-                            onClick = {
+                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("错误: ${state.error}", color = MaterialTheme.colorScheme.error) }
+                else -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 4.dp)) {
+                    if (state.filterQuery.isEmpty() && currentDir.isNotEmpty()) {
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { 
+                                        val parent = currentDir.trimEnd('/').substringBeforeLast('/', "")
+                                        currentDir = if (parent.isEmpty()) "" else "$parent/"
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Folder, contentDescription = "..", tint = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(12.dp))
+                                Text("..", style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                    
+                    items(displayEntries, key = { it.path }) { entry ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Transparent)
+                                .clickable {
+                                    if (entry.isDirectory) {
+                                        currentDir = entry.path
+                                    } else {
+                                        when {
+                                            entry.name.endsWith(".dex") -> {
+                                                vm.openDexViewerFromApk(state.apkPath, entry.path)
+                                            }
+                                            entry.name == "AndroidManifest.xml" -> {
+                                                vm.openApkInternalFile(state.apkPath, entry.path, entry.name)
+                                            }
+                                            entry.name == "resources.arsc" || entry.name.endsWith(".xml") -> {
+                                                vm.requestApkInternalParse(state.apkPath, entry.path, entry.name)
+                                            }
+                                            entry.name.endsWith(".txt") || entry.name.endsWith(".json") -> {
+                                                vm.openApkInternalFile(state.apkPath, entry.path, entry.name)
+                                            }
+                                            else -> {
+                                                entryActionTarget = entry
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = if (entry.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(entry.name, style = MaterialTheme.typography.bodyLarge, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (!entry.isDirectory) {
-                                    entryActionTarget = entry
+                                    Text(
+                                        text = "${entry.sizeText} · 压缩 ${entry.compressedText}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
-                        )
+                        }
                     }
                 }
             }
@@ -147,90 +192,17 @@ fun ApkBrowserScreen(vm: MainViewModel) {
     entryActionTarget?.let { entry ->
         AlertDialog(
             onDismissRequest = { entryActionTarget = null },
-            title = {
-                Text(entry.path, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            },
-            text = {
-                Column {
-                    Text(
-                        "大小：${entry.sizeText}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        "压缩后：${entry.compressedText}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    if (entry.size > 0) {
-                        val ratio = entry.compressedSize.toDouble() / entry.size * 100
-                        Text(
-                            "压缩率：${"%.1f".format(ratio)}%",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            },
+            title = { Text(entry.path, maxLines = 3, overflow = TextOverflow.Ellipsis) },
+            text = { Column { Text("大小：${entry.sizeText}") } },
             confirmButton = {
                 TextButton(onClick = {
                     vm.extractApkEntry(entry)
                     entryActionTarget = null
-                }) {
-                    Text("提取到当前目录")
-                }
+                }) { Text("提取到当前目录") }
             },
             dismissButton = {
-                TextButton(onClick = { entryActionTarget = null }) {
-                    Text("取消")
-                }
+                TextButton(onClick = { entryActionTarget = null }) { Text("取消") }
             }
         )
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun ApkEntryRow(entry: ApkEntry, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.Transparent)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onClick
-            )
-            .padding(
-                start = (12 + entry.depth * 16).dp,
-                end = 12.dp,
-                top = 6.dp,
-                bottom = 6.dp
-            ),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = if (entry.isDirectory)
-                Icons.Default.Folder
-            else
-                Icons.AutoMirrored.Filled.InsertDriveFile,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = if (entry.isDex) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = entry.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (!entry.isDirectory) {
-                Text(
-                    text = "${entry.sizeText} · 压缩 ${entry.compressedText}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 }

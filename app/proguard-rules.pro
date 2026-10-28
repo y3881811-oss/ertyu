@@ -12,28 +12,72 @@
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 
-# ========== 压缩库：保留必要类 ==========
+# ========== 压缩库 ==========
 -keep class org.apache.commons.compress.** { *; }
 -keep class org.tukaani.xz.** { *; }
 -keep class com.github.luben.zstd.** { *; }
 -keep class com.github.junrar.** { *; }
-
-# ========== 忽略压缩库的可选依赖 ==========
 -dontwarn org.apache.commons.compress.**
 -dontwarn org.tukaani.xz.**
 -dontwarn com.github.luben.zstd.**
 -dontwarn com.github.junrar.**
-
-# SLF4J 是可选绑定，运行时不需要
 -dontwarn org.slf4j.**
 
-# 其他可选依赖
+# ========== zip4j ==========
+-keep class net.lingala.zip4j.** { *; }
+-keep class net.lingala.zip4j.model.** { *; }
+-dontwarn net.lingala.zip4j.**
+
+# ========== apk-parser ==========
+-keep class net.dongliu.apk.parser.** { *; }
+-dontwarn net.dongliu.apk.parser.**
+-dontwarn org.xmlpull.v1.**
+
+# ========== SMBJ ==========
+-keep class com.hierynomus.** { *; }
+-keep class org.bouncycastle.** { *; }
+-dontwarn com.hierynomus.**
+-dontwarn org.bouncycastle.**
+
+# ========== apksig ==========
+-keep class com.android.apksig.** { *; }
+-dontwarn com.android.apksig.**
+-dontwarn org.conscrypt.**
+
+# ========== baksmali / dexlib2 ==========
+-keep class org.jf.** { *; }
+-keep class org.smali.** { *; }
+-dontwarn org.jf.**
+-dontwarn org.smali.**
 -dontwarn javax.annotation.**
+
+# ========== Media3 ==========
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+
+# ========== FTP Server / MINA ==========
+-keep class org.apache.ftpserver.** { *; }
+-keep class org.apache.mina.** { *; }
+-dontwarn org.apache.ftpserver.**
+-dontwarn org.apache.mina.**
+-keepclassmembers class * implements org.apache.mina.core.service.IoProcessor {
+    public <init>(java.util.concurrent.ExecutorService);
+    public <init>(java.util.concurrent.Executor);
+    public <init>();
+}
+
+# ========== Shizuku ==========
+-keep class rikka.shizuku.** { *; }
+-dontwarn rikka.shizuku.**
+
+# ========== EL 表达式语言 (mbassy 可选依赖) ==========
+# mbassy 通过反射调用 javax.el.*，仅在使用"条件消息处理器"高级特性时生效；
+# Android 运行时不提供 javax.el 实现，忽略即可。
+-dontwarn javax.el.**
+-dontwarn net.engio.mbassy.**
+
+# ========== 其他 ==========
 -dontwarn java.awt.**
 -dontwarn org.osgi.**
 -dontwarn aQute.**
 -dontwarn org.apache.harmony.**
--dontwarn org.bouncycastle.**
--dontwarn org.conscrypt.**
--dontwarn org.eclipse.jetty.**
--dontwarn org.codehaus.mojo.**

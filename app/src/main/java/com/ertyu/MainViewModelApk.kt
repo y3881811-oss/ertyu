@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.ApkBrowser
 import com.ertyu.engine.ApkInspector
 import com.ertyu.engine.ApkInstaller
+import com.ertyu.engine.SplitApkInstaller
 import com.ertyu.model.ApkBrowserState
 import com.ertyu.model.ApkEntry
 import com.ertyu.model.ApkInfo
@@ -143,7 +144,13 @@ fun MainViewModel.installApk(item: FileItem) {
         _toast.value = "无效的 APK 路径"
         return
     }
-    startInstall(apkFile)
+    
+    val ext = item.name.substringAfterLast('.', "").lowercase()
+    if (ext == "apks" || ext == "xapk" || ext == "apkm") {
+        startSplitInstall(apkFile)
+    } else {
+        startInstall(apkFile)
+    }
 }
 
 fun MainViewModel.installApkFromInfo(info: ApkInfo) {
@@ -191,6 +198,50 @@ private fun MainViewModel.startInstall(apkFile: File) {
             is ApkInstaller.Result.Failure -> {
                 _installState.update {
                     it.copy(stage = "失败", error = result.message)
+                }
+            }
+        }
+    }
+}
+
+private fun MainViewModel.startSplitInstall(archiveFile: File) {
+    installJob?.cancel()
+    _installState.value = InstallState(
+        visible = true,
+        fileName = archiveFile.name,
+        stage = "准备中…"
+    )
+    installJob = viewModelScope.launch {
+        val result = SplitApkInstaller.install(
+            context = getApplication(),
+            archiveFile = archiveFile
+        ) { stageMsg, cur, total ->
+            _installState.update {
+                it.copy(
+                    stage = stageMsg,
+                    copied = cur.toLong(),
+                    total = total.toLong()
+                )
+            }
+        }
+
+        when (result) {
+            is SplitApkInstaller.Result.Success -> {
+                _installState.update {
+                    it.copy(stage = "安装包已提交，请确认")
+                }
+                delay(1500)
+                _installState.value = InstallState()
+            }
+            is SplitApkInstaller.Result.Failure -> {
+                if (result.message == "NEED_PERMISSION") {
+                    _installState.value = InstallState()
+                    _pendingInstall.value = archiveFile
+                    _toast.value = "请先允许本应用安装未知应用"
+                } else {
+                    _installState.update {
+                        it.copy(stage = "失败", error = result.message)
+                    }
                 }
             }
         }

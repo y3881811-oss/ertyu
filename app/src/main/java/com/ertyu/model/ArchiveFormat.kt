@@ -15,7 +15,7 @@ enum class ArchiveFormat(val label: String) {
     RAR("RAR");
 
     val canCompress: Boolean
-        get() = this == ZIP || this == TAR || this == TAR_GZ
+        get() = this == ZIP || this == TAR || this == TAR_GZ || this == SEVEN_Z
 
     companion object {
         fun detect(fileName: String): ArchiveFormat? {
