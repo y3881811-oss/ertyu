@@ -70,6 +70,12 @@
 -keep class rikka.shizuku.** { *; }
 -dontwarn rikka.shizuku.**
 
+# ========== EL 表达式语言 (mbassy 可选依赖) ==========
+# mbassy 通过反射调用 javax.el.*，仅在使用"条件消息处理器"高级特性时生效；
+# Android 运行时不提供 javax.el 实现，忽略即可。
+-dontwarn javax.el.**
+-dontwarn net.engio.mbassy.**
+
 # ========== 其他 ==========
 -dontwarn java.awt.**
 -dontwarn org.osgi.**
