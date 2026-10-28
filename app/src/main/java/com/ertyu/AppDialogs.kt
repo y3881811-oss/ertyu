@@ -11,5 +11,7 @@ fun AppDialogs(vm: MainViewModel) {
     DialogFileActions(vm)
     DialogApkParse(vm)
     DialogParseProgress(vm)
-    DialogTransferProgress(vm) // 新增：传输进度
+    DialogTransferProgress(vm)
+    SmbConnectDialog(vm)
+    ImageToolsDialog(vm)
 }
