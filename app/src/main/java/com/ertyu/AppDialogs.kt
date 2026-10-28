@@ -9,4 +9,5 @@ fun AppDialogs(vm: MainViewModel) {
     DialogInstall(vm)
     DialogInputs(vm)
     DialogFileActions(vm)
+    DialogApkParse(vm) // 挂载解析确认弹窗
 }
