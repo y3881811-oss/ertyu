@@ -95,7 +95,22 @@ class SmbFileEngine(private val config: SmbConfig) : FileEngine {
         val path = uri.toSmbPath()
         val parentPath = path.substringBeforeLast('/', "")
         val newPath = if (parentPath.isEmpty()) newName else "$parentPath/$newName"
-        share.rename(path, newPath)
+
+        // DiskShare 没有 rename 方法，必须通过 File 句柄调用
+        // SMB2 协议中重命名本质是 SET_INFO 操作，需要 DELETE 权限
+        share.openFile(
+            path,
+            EnumSet.of(AccessMask.DELETE),
+            null,
+            SMB2ShareAccess.ALL,
+            SMB2CreateDisposition.FILE_OPEN,
+            null
+        ).use { file ->
+            // 这里的 file 是 com.hierynomus.smbj.share.File
+            // 参数是相对于共享根目录的完整新路径
+            file.rename(newPath)
+        }
+
         Uri.parse("smb://${config.host}/${config.shareName}/$newPath")
     }
 
