@@ -15,9 +15,11 @@ fun DialogFileActions(vm: MainViewModel) {
     actionTarget?.let { target ->
         val format = ArchiveFormat.detect(target.name)
         val isApk = target.name.substringAfterLast('.', "").lowercase() in listOf("apk", "apks", "xapk", "apkm")
+        val isImage = target.name.substringAfterLast('.', "").lowercase() in listOf("jpg", "jpeg", "png", "webp")
         val showCrossPanel = settings.panelMode != PanelMode.SINGLE
+        
         FileActionDialog(
-            item = target, archiveFormat = format, isApk = isApk, showCrossPanel = showCrossPanel,
+            item = target, archiveFormat = format, isApk = isApk, isImage = isImage, showCrossPanel = showCrossPanel,
             onDismiss = { vm.dismissActionDialog() },
             onRename = { vm.dismissActionDialog(); vm.openRenameDialog(actionIsLeft, target) },
             onCopy = { vm.dismissActionDialog(); vm.copyToOtherPanel(actionIsLeft, target) },
@@ -34,7 +36,9 @@ fun DialogFileActions(vm: MainViewModel) {
             onChecksum = { vm.dismissActionDialog(); vm.openChecksum(target) },
             onApkSign = { vm.dismissActionDialog(); vm.openApkSigner(target) },
             onApkClone = { vm.dismissActionDialog(); vm.openApkClone(target) },
-            onCrypto = { vm.dismissActionDialog(); vm.openCrypto(actionIsLeft, target) }
+            onCrypto = { vm.dismissActionDialog(); vm.openCrypto(actionIsLeft, target) },
+            onImageTools = { vm.dismissActionDialog(); vm.openImageTools(target) },
+            onMd5Rename = { vm.dismissActionDialog(); vm.renameToMd5(target, actionIsLeft) }
         )
     }
 
