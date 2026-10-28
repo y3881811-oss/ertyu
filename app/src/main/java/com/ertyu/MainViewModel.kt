@@ -119,9 +119,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _deleteTargetIsLeft = MutableStateFlow(true)
     val deleteTargetIsLeft: StateFlow<Boolean> = _deleteTargetIsLeft.asStateFlow()
 
-    // 新增：待确认解析状态
     internal val _pendingParseState = MutableStateFlow(PendingParseState())
     val pendingParseState: StateFlow<PendingParseState> = _pendingParseState.asStateFlow()
+
+    // 新增：解析进度状态
+    internal val _parseProgressState = MutableStateFlow(ParseProgressState())
+    val parseProgressState: StateFlow<ParseProgressState> = _parseProgressState.asStateFlow()
 
     // ==================== Jobs ====================
     internal var folderSizeJob: Job? = null
