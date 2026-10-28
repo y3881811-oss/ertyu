@@ -82,26 +82,3 @@ fun MainViewModel.batchDelete(isLeft: Boolean) {
         if (toTrashCount > 0) _toast.value = "已处理 $toTrashCount 项到回收站"
     }
 }
-
-fun MainViewModel.batchCopy(fromLeft: Boolean) {
-    val state = flowOf(fromLeft).value
-    val target = flowOf(!fromLeft).value.currentUri ?: return
-    val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
-    viewModelScope.launch {
-        targets.forEach { engine.copy(it.uri, target) }
-        clearSelection(fromLeft)
-        openDirectory(!fromLeft, target)
-    }
-}
-
-fun MainViewModel.batchMove(fromLeft: Boolean) {
-    val state = flowOf(fromLeft).value
-    val target = flowOf(!fromLeft).value.currentUri ?: return
-    val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
-    viewModelScope.launch {
-        targets.forEach { engine.move(it.uri, target) }
-        clearSelection(fromLeft)
-        refresh(fromLeft)
-        openDirectory(!fromLeft, target)
-    }
-}
