@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.ApkParserEngine
 import com.ertyu.model.FileItem
+import com.ertyu.model.ParseProgressState
 import com.ertyu.model.PendingParseState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.update
@@ -35,7 +36,6 @@ fun MainViewModel.confirmApkInternalParse() {
     doApkInternalParse(apkPath, entryPath, entryName)
 }
 
-// 补充：如果是 Manifest 或普通文本，直接调用
 fun MainViewModel.openApkInternalFile(apkPath: String, entryPath: String, entryName: String) {
     doApkInternalParse(apkPath, entryPath, entryName)
 }
@@ -43,27 +43,33 @@ fun MainViewModel.openApkInternalFile(apkPath: String, entryPath: String, entryN
 private fun MainViewModel.doApkInternalParse(apkPath: String, entryPath: String, entryName: String) {
     val apkFile = File(apkPath)
     viewModelScope.launch {
-        _toast.value = "正在解析：$entryName"
-        val result = when {
-            entryName == "AndroidManifest.xml" -> ApkParserEngine.getManifest(apkFile)
-            entryName == "resources.arsc" -> ApkParserEngine.getResourcesArsc(apkFile)
-            else -> ApkParserEngine.getInternalFileContent(apkFile, entryPath)
-        }
-
-        result.onSuccess { text ->
-            val cacheFile = File(getApplication<Application>().cacheDir, entryName)
-            withContext(Dispatchers.IO) {
-                cacheFile.writeText(text)
+        // 显示解析进度条
+        _parseProgressState.value = ParseProgressState(visible = true, title = "正在解析", message = entryName)
+        try {
+            val result = when {
+                entryName == "AndroidManifest.xml" -> ApkParserEngine.getManifest(apkFile)
+                entryName == "resources.arsc" -> ApkParserEngine.getResourcesArsc(apkFile)
+                else -> ApkParserEngine.getInternalFileContent(apkFile, entryPath)
             }
-            val item = FileItem(
-                name = entryName,
-                uri = android.net.Uri.fromFile(cacheFile),
-                isDirectory = false,
-                path = cacheFile.absolutePath
-            )
-            openFile(item)
-        }.onFailure { e ->
-            _toast.value = "解析失败：${e.message}"
+
+            result.onSuccess { text ->
+                val cacheFile = File(getApplication<Application>().cacheDir, entryName)
+                withContext(Dispatchers.IO) {
+                    cacheFile.writeText(text)
+                }
+                val item = FileItem(
+                    name = entryName,
+                    uri = android.net.Uri.fromFile(cacheFile),
+                    isDirectory = false,
+                    path = cacheFile.absolutePath
+                )
+                openFile(item)
+            }.onFailure { e ->
+                _toast.value = "解析失败：${e.message}"
+            }
+        } finally {
+            // 无论成功失败，关闭进度条
+            _parseProgressState.value = ParseProgressState()
         }
     }
 }
