@@ -10,5 +10,6 @@ fun AppDialogs(vm: MainViewModel) {
     DialogInputs(vm)
     DialogFileActions(vm)
     DialogApkParse(vm)
-    DialogParseProgress(vm) // 挂载解析进度弹窗
+    DialogParseProgress(vm)
+    DialogTransferProgress(vm) // 新增：传输进度
 }
