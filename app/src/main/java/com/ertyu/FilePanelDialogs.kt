@@ -15,8 +15,10 @@ import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Lock
@@ -52,6 +54,7 @@ fun FileActionDialog(
     item: FileItem,
     archiveFormat: ArchiveFormat?,
     isApk: Boolean,
+    isImage: Boolean,
     showCrossPanel: Boolean,
     onDismiss: () -> Unit,
     onRename: () -> Unit,
@@ -69,7 +72,9 @@ fun FileActionDialog(
     onChecksum: () -> Unit,
     onApkSign: () -> Unit,
     onApkClone: () -> Unit,
-    onCrypto: () -> Unit
+    onCrypto: () -> Unit,
+    onImageTools: () -> Unit,
+    onMd5Rename: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -83,6 +88,10 @@ fun FileActionDialog(
                     ActionRow("浏览内部", Icons.Default.FolderOpen, onBrowseApk)
                     ActionRow("APK 签名", Icons.Default.Edit, onApkSign)
                     ActionRow("共存/克隆", Icons.Default.ContentCopy, onApkClone)
+                }
+                if (isImage) {
+                    ActionRow("图片处理 (压缩)", Icons.Default.Image, onImageTools)
+                    ActionRow("以 MD5 重命名", Icons.Default.Fingerprint, onMd5Rename)
                 }
                 if (archiveFormat != null) {
                     ActionRow(
