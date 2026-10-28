@@ -1,9 +1,10 @@
 package com.ertyu
 
 import androidx.lifecycle.viewModelScope
+import com.ertyu.engine.DirectFileEngine
+import com.ertyu.engine.RootFileEngine
 import com.ertyu.engine.SettingsStore
 import com.ertyu.engine.ShizukuFileEngine
-import com.ertyu.engine.DirectFileEngine
 import com.ertyu.model.PanelMode
 import com.ertyu.model.SortMode
 import kotlinx.coroutines.flow.update
@@ -78,9 +79,18 @@ fun MainViewModel.removeCustomPath(path: String) {
     persistSettings()
 }
 
-fun MainViewModel.switchEngine(useShizuku: Boolean) {
-    engine = if (useShizuku) ShizukuFileEngine() else DirectFileEngine()
-    _toast.value = if (useShizuku) "已切换到 Shizuku 引擎" else "已切换到普通引擎"
+// 支持三种引擎切换：0 普通，1 Shizuku，2 Root
+fun MainViewModel.switchEngine(mode: Int) {
+    engine = when (mode) {
+        1 -> ShizukuFileEngine()
+        2 -> RootFileEngine()
+        else -> DirectFileEngine()
+    }
+    _toast.value = when (mode) {
+        1 -> "已切换到 Shizuku 引擎"
+        2 -> "已切换到 Root 引擎"
+        else -> "已切换到普通引擎"
+    }
     refresh(true)
     refresh(false)
 }
