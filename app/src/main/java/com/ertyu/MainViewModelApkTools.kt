@@ -162,32 +162,3 @@ fun MainViewModel.executeApkClone(keystoreFile: File, storePass: String, keyAlia
     }
 }
 
-// ==================== 打开 APK 内部文本/AXML/ARSC ====================
-
-fun MainViewModel.openApkInternalFile(apkPath: String, entryPath: String, entryName: String) {
-    val apkFile = File(apkPath)
-    viewModelScope.launch {
-        _toast.value = "正在解析：$entryName"
-        val result = when {
-            entryName == "AndroidManifest.xml" -> ApkParserEngine.getManifest(apkFile)
-            entryName == "resources.arsc" -> ApkParserEngine.getResourcesArsc(apkFile)
-            else -> ApkParserEngine.getInternalFileContent(apkFile, entryPath)
-        }
-
-        result.onSuccess { text ->
-            val cacheFile = File(getApplication<Application>().cacheDir, entryName)
-            withContext(Dispatchers.IO) {
-                cacheFile.writeText(text)
-            }
-            val item = FileItem(
-                name = entryName,
-                uri = android.net.Uri.fromFile(cacheFile),
-                isDirectory = false,
-                path = cacheFile.absolutePath
-            )
-            openFile(item)
-        }.onFailure { e ->
-            _toast.value = "解析失败：${e.message}"
-        }
-    }
-}
