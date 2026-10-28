@@ -2,10 +2,10 @@ package com.ertyu.engine
 
 import android.net.Uri
 import com.ertyu.model.FileItem
+import com.ertyu.model.TransferProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
-import rikka.shizuku.ShizukuRemoteProcess
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -17,24 +17,11 @@ class ShizukuFileEngine : FileEngine {
     private fun sh(cmd: String): String {
         if (!Shizuku.pingBinder()) return ""
         return try {
-            // 使用反射调用因为 13.x 版本将其标记为 private
-            val method = Shizuku::class.java.getDeclaredMethod(
-                "newProcess",
-                Array<String>::class.java,
-                Array<String>::class.java,
-                String::class.java
-            )
-            method.isAccessible = true
-            val process = method.invoke(null, arrayOf("sh", "-c", cmd), null, null) as? ShizukuRemoteProcess
-            if (process != null) {
-                val output = process.inputStream.bufferedReader().readText()
-                process.waitFor()
-                output
-            } else {
-                ""
-            }
+            val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
+            val output = process.inputStream.bufferedReader().readText()
+            process.waitFor()
+            output
         } catch (e: Exception) {
-            e.printStackTrace()
             ""
         }
     }
@@ -42,8 +29,6 @@ class ShizukuFileEngine : FileEngine {
     override suspend fun list(uri: Uri): List<FileItem> = withContext(Dispatchers.IO) {
         val path = uri.path ?: return@withContext emptyList()
         val raw = sh("ls -la '$path'")
-        if (raw.isEmpty()) return@withContext emptyList()
-        
         val lines = raw.split("\n")
         val result = ArrayList<FileItem>()
         
@@ -99,7 +84,8 @@ class ShizukuFileEngine : FileEngine {
         Uri.fromFile(File(newPath))
     }
 
-    override suspend fun copy(source: Uri, targetDir: Uri): Boolean = withContext(Dispatchers.IO) {
+    // 同步了带进度参数的签名，但因为 shell 权限拿不到底层流，所以只能传空回调
+    override suspend fun copy(source: Uri, targetDir: Uri, onProgress: (TransferProgress) -> Unit): Boolean = withContext(Dispatchers.IO) {
         val src = source.path ?: return@withContext false
         val dst = targetDir.path ?: return@withContext false
         val name = File(src).name
@@ -107,7 +93,7 @@ class ShizukuFileEngine : FileEngine {
         true
     }
 
-    override suspend fun move(source: Uri, targetDir: Uri): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun move(source: Uri, targetDir: Uri, onProgress: (TransferProgress) -> Unit): Boolean = withContext(Dispatchers.IO) {
         val src = source.path ?: return@withContext false
         val dst = targetDir.path ?: return@withContext false
         val name = File(src).name
