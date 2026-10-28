@@ -3,6 +3,9 @@ package com.ertyu
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.RecycleBinManager
 import com.ertyu.model.FileItem
+import com.ertyu.model.FileTransferState
+import com.ertyu.model.TransferProgress
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -33,20 +36,132 @@ fun MainViewModel.confirmDelete(useTrash: Boolean) {
     }
 }
 
+// ==================== 新增：带进度的复制与移动 ====================
+
+private fun formatSpeed(bytesPerSec: Long): String {
+    if (bytesPerSec < 1024) return "$bytesPerSec B/s"
+    val kb = bytesPerSec / 1024.0
+    if (kb < 1024) return String.format("%.1f KB/s", kb)
+    val mb = kb / 1024.0
+    return String.format("%.1f MB/s", mb)
+}
+
 fun MainViewModel.copyToOtherPanel(fromLeft: Boolean, item: FileItem) {
     val targetUri = flowOf(!fromLeft).value.currentUri ?: return
     viewModelScope.launch {
-        engine.copy(item.uri, targetUri)
-        openDirectory(!fromLeft, targetUri)
+        _fileTransferState.value = FileTransferState(
+            visible = true,
+            title = "正在复制",
+            currentFile = item.name
+        )
+        val ok = engine.copy(item.uri, targetUri) { p: TransferProgress ->
+            _fileTransferState.update {
+                it.copy(
+                    currentFile = p.currentFileName,
+                    copiedBytes = p.copied,
+                    totalBytes = p.total,
+                    speedText = formatSpeed(p.speed)
+                )
+            }
+        }
+        if (ok) {
+            _fileTransferState.update { it.copy(isDone = true) }
+            openDirectory(!fromLeft, targetUri)
+        } else {
+            _fileTransferState.update { it.copy(error = "复制失败") }
+        }
     }
 }
 
 fun MainViewModel.moveToOtherPanel(fromLeft: Boolean, item: FileItem) {
     val targetUri = flowOf(!fromLeft).value.currentUri ?: return
     viewModelScope.launch {
-        engine.move(item.uri, targetUri)
+        _fileTransferState.value = FileTransferState(
+            visible = true,
+            title = "正在移动",
+            currentFile = item.name
+        )
+        val ok = engine.move(item.uri, targetUri) { p: TransferProgress ->
+            _fileTransferState.update {
+                it.copy(
+                    currentFile = p.currentFileName,
+                    copiedBytes = p.copied,
+                    totalBytes = p.total,
+                    speedText = formatSpeed(p.speed)
+                )
+            }
+        }
+        if (ok) {
+            _fileTransferState.update { it.copy(isDone = true) }
+            refresh(fromLeft)
+            openDirectory(!fromLeft, targetUri)
+        } else {
+            _fileTransferState.update { it.copy(error = "移动失败") }
+        }
+    }
+}
+
+fun MainViewModel.dismissTransferDialog() {
+    _fileTransferState.value = FileTransferState()
+}
+
+// ==================== 批量操作 ====================
+
+fun MainViewModel.batchCopy(fromLeft: Boolean) {
+    val state = flowOf(fromLeft).value
+    val target = flowOf(!fromLeft).value.currentUri ?: return
+    val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+    if (targets.isEmpty()) return
+
+    viewModelScope.launch {
+        _fileTransferState.value = FileTransferState(visible = true, title = "批量复制中", totalBytes = targets.sumOf { it.size })
+        var totalCopied = 0L
+        val totalSize = targets.sumOf { it.size }
+        
+        for (item in targets) {
+            val ok = engine.copy(item.uri, target) { p: TransferProgress ->
+                _fileTransferState.update {
+                    it.copy(
+                        currentFile = p.currentFileName,
+                        copiedBytes = totalCopied + p.copied,
+                        speedText = formatSpeed(p.speed)
+                    )
+                }
+            }
+            if (ok) totalCopied += item.size
+        }
+        _fileTransferState.update { it.copy(isDone = true) }
+        clearSelection(fromLeft)
+        openDirectory(!fromLeft, target)
+    }
+}
+
+fun MainViewModel.batchMove(fromLeft: Boolean) {
+    val state = flowOf(fromLeft).value
+    val target = flowOf(!fromLeft).value.currentUri ?: return
+    val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+    if (targets.isEmpty()) return
+
+    viewModelScope.launch {
+        _fileTransferState.value = FileTransferState(visible = true, title = "批量移动中", totalBytes = targets.sumOf { it.size })
+        var totalCopied = 0L
+        
+        for (item in targets) {
+            val ok = engine.move(item.uri, target) { p: TransferProgress ->
+                _fileTransferState.update {
+                    it.copy(
+                        currentFile = p.currentFileName,
+                        copiedBytes = totalCopied + p.copied,
+                        speedText = formatSpeed(p.speed)
+                    )
+                }
+            }
+            if (ok) totalCopied += item.size
+        }
+        _fileTransferState.update { it.copy(isDone = true) }
+        clearSelection(fromLeft)
         refresh(fromLeft)
-        openDirectory(!fromLeft, targetUri)
+        openDirectory(!fromLeft, target)
     }
 }
 
@@ -83,7 +198,7 @@ fun MainViewModel.createFile(name: String) {
     }
 }
 
-// 弹窗控制方法
+// 弹窗控制
 fun MainViewModel.openNewFilePrompt(isLeft: Boolean) { _newFilePanelIsLeft.value = isLeft; _newFilePrompt.value = true }
 fun MainViewModel.dismissNewFilePrompt() { _newFilePrompt.value = false }
 fun MainViewModel.openNewFolderDialog(isLeft: Boolean) { _newFolderDialogIsLeft.value = isLeft; _newFolderDialogVisible.value = true }
