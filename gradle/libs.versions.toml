@@ -16,6 +16,7 @@ ftpserver = "1.2.0"
 shizuku = "13.1.5"
 zip4j = "2.11.5"
 apkparser = "2.6.10"
+smbj = "0.12.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -41,6 +42,7 @@ shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuk
 shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizuku" }
 zip4j = { group = "net.lingala.zip4j", name = "zip4j", version.ref = "zip4j" }
 apk-parser = { group = "net.dongliu", name = "apk-parser", version.ref = "apkparser" }
+smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
