@@ -1,6 +1,7 @@
 package com.ertyu.model
 
 data class FileTransferState(
+    val transferId: Long = 0L,
     val visible: Boolean = false,
     val title: String = "",
     val currentFile: String = "",
@@ -8,10 +9,12 @@ data class FileTransferState(
     val totalBytes: Long = 0L,
     val speedText: String = "",
     val isDone: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val warning: String? = null
 ) {
     val progress: Float
-        get() = if (totalBytes <= 0) 0f else (copiedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+        get() = if (totalBytes <= 0) 0f
+        else (copiedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
 }
 
 data class TransferProgress(
