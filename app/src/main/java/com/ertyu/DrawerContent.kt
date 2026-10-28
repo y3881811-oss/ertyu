@@ -1,7 +1,6 @@
 package com.ertyu
 
 import android.net.Uri
-import android.os.Environment
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
@@ -20,10 +19,12 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -130,6 +131,17 @@ fun DrawerContent(
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
+
+            // ============ 新增的工具入口 ============
+            DrawerItem("终端模拟器", Icons.Default.Terminal) {
+                onDismiss()
+                vm.openTerminal()
+            }
+            DrawerItem("进程管理器", Icons.Default.Memory) {
+                onDismiss()
+                vm.openProcessManager()
+            }
+            // ======================================
 
             DrawerItem("回收站", Icons.Default.DeleteForever) {
                 onDismiss()
