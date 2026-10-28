@@ -144,11 +144,21 @@ fun ApkBrowserScreen(vm: MainViewModel) {
                                         currentDir = entry.path
                                     } else {
                                         when {
-                                            entry.name.endsWith(".dex") -> vm.openDexViewerFromApk(state.apkPath, entry.path)
-                                            entry.name == "AndroidManifest.xml" -> vm.openApkInternalFile(state.apkPath, entry.path, entry.name)
-                                            entry.name == "resources.arsc" -> vm.openApkInternalFile(state.apkPath, entry.path, entry.name)
-                                            entry.name.endsWith(".xml") || entry.name.endsWith(".txt") || entry.name.endsWith(".json") -> vm.openApkInternalFile(state.apkPath, entry.path, entry.name)
-                                            else -> entryActionTarget = entry
+                                            entry.name.endsWith(".dex") -> {
+                                                vm.openDexViewerFromApk(state.apkPath, entry.path)
+                                            }
+                                            entry.name == "AndroidManifest.xml" -> {
+                                                vm.openApkInternalFile(state.apkPath, entry.path, entry.name)
+                                            }
+                                            entry.name == "resources.arsc" || entry.name.endsWith(".xml") -> {
+                                                vm.requestApkInternalParse(state.apkPath, entry.path, entry.name)
+                                            }
+                                            entry.name.endsWith(".txt") || entry.name.endsWith(".json") -> {
+                                                vm.openApkInternalFile(state.apkPath, entry.path, entry.name)
+                                            }
+                                            else -> {
+                                                entryActionTarget = entry
+                                            }
                                         }
                                     }
                                 }
