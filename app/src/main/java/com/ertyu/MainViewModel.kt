@@ -23,6 +23,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     internal var engine: FileEngine = DirectFileEngine()
 
+    // ==================== 面板 / 查看器 ====================
     internal val _leftPanel = MutableStateFlow(PanelState())
     val leftPanel: StateFlow<PanelState> = _leftPanel.asStateFlow()
     internal val _rightPanel = MutableStateFlow(PanelState())
@@ -35,6 +36,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _hexViewerState = MutableStateFlow(HexViewerState())
     val hexViewerState: StateFlow<HexViewerState> = _hexViewerState.asStateFlow()
 
+    // ==================== 压缩 ====================
     internal val _zipProgress = MutableStateFlow(ZipProgress())
     val zipProgress: StateFlow<ZipProgress> = _zipProgress.asStateFlow()
     internal val _zipPrompt = MutableStateFlow(ZipPrompt())
@@ -43,14 +45,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val compressPromptVisible: StateFlow<Boolean> = _compressPromptVisible.asStateFlow()
     internal val _compressPanelIsLeft = MutableStateFlow(true)
 
+    // ==================== 属性 ====================
     internal val _folderSizeState = MutableStateFlow(FolderSizeState())
     val folderSizeState: StateFlow<FolderSizeState> = _folderSizeState.asStateFlow()
 
+    // ==================== 搜索 / 书签 ====================
     internal val _searchState = MutableStateFlow(SearchState())
     val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
     internal val _bookmarkPanelState = MutableStateFlow(BookmarkPanelState())
     val bookmarkPanelState: StateFlow<BookmarkPanelState> = _bookmarkPanelState.asStateFlow()
 
+    // ==================== APK ====================
     internal val _apkInfoState = MutableStateFlow(ApkInfoState())
     val apkInfoState: StateFlow<ApkInfoState> = _apkInfoState.asStateFlow()
     internal val _apkBrowserState = MutableStateFlow(ApkBrowserState())
@@ -60,9 +65,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _installState = MutableStateFlow(InstallState())
     val installState: StateFlow<InstallState> = _installState.asStateFlow()
 
+    // ==================== 已安装应用 ====================
     internal val _installedAppsState = MutableStateFlow(InstalledAppsState())
     val installedAppsState: StateFlow<InstalledAppsState> = _installedAppsState.asStateFlow()
 
+    // ==================== 设置 ====================
     internal val _settingsState = MutableStateFlow(AppSettings())
     val settingsState: StateFlow<AppSettings> = _settingsState.asStateFlow()
     internal val _settingsVisible = MutableStateFlow(false)
@@ -70,9 +77,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _helpVisible = MutableStateFlow(false)
     val helpVisible: StateFlow<Boolean> = _helpVisible.asStateFlow()
 
+    // ==================== 提示 ====================
     internal val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
+    // ==================== FilePanel 弹窗状态 ====================
     internal val _newFilePrompt = MutableStateFlow(false)
     val newFilePrompt: StateFlow<Boolean> = _newFilePrompt.asStateFlow()
     internal val _newFilePanelIsLeft = MutableStateFlow(true)
@@ -110,6 +119,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val _deleteTargetIsLeft = MutableStateFlow(true)
     val deleteTargetIsLeft: StateFlow<Boolean> = _deleteTargetIsLeft.asStateFlow()
 
+    // 新增：待确认解析状态
+    internal val _pendingParseState = MutableStateFlow(PendingParseState())
+    val pendingParseState: StateFlow<PendingParseState> = _pendingParseState.asStateFlow()
+
+    // ==================== Jobs ====================
     internal var folderSizeJob: Job? = null
     internal var searchJob: Job? = null
     internal var installJob: Job? = null
@@ -118,6 +132,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     internal fun flowOf(isLeft: Boolean) = if (isLeft) _leftPanel else _rightPanel
 
+    // ==================== 初始化 ====================
     fun initDefaultDirs() {
         val root = Uri.fromFile(Environment.getExternalStorageDirectory())
         openDirectory(true, root)
@@ -127,11 +142,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ==================== 浏览 ====================
     fun openDirectory(isLeft: Boolean, uri: Uri) {
         val flow = flowOf(isLeft)
-        flow.update {
-            it.copy(isLoading = true, error = null, selectedUris = emptySet(), isSelectionMode = false, lastSelectedUri = null)
-        }
+        flow.update { it.copy(isLoading = true, error = null, selectedUris = emptySet(), isSelectionMode = false, lastSelectedUri = null) }
         viewModelScope.launch {
             try {
                 val all = engine.list(uri)
@@ -183,9 +197,4 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearToast() { _toast.value = null }
-}
-
-// 扩展私有方法
-private fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
-    this.value = function(this.value)
 }
