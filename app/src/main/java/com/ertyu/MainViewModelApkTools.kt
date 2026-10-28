@@ -3,13 +3,13 @@ package com.ertyu
 import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.ApkCloner
-import com.ertyu.engine.ApkParserEngine
 import com.ertyu.engine.ApkSignerEngine
 import com.ertyu.engine.DexDecompiler
 import com.ertyu.model.ApkCloneState
 import com.ertyu.model.ApkSignerState
 import com.ertyu.model.DexViewerState
 import com.ertyu.model.FileItem
+import com.ertyu.model.ParseProgressState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -65,30 +65,20 @@ fun MainViewModel.executeApkSign() {
 fun MainViewModel.openDexViewerFromApk(apkPath: String, dexPath: String) {
     val apkFile = File(apkPath)
     val dexName = dexPath.substringAfterLast('/')
-    ApkToolsState.dexViewerState.value = DexViewerState(
-        visible = true, apkPath = apkPath, apkName = apkFile.name, dexName = dexName, isLoading = true
-    )
+    
     viewModelScope.launch {
-        val result = DexDecompiler.listClasses(apkFile, dexName)
-        result.onSuccess { classes ->
-            ApkToolsState.dexViewerState.update { it.copy(isLoading = false, classes = classes) }
-        }.onFailure { e ->
-            ApkToolsState.dexViewerState.update { it.copy(isLoading = false, error = e.message ?: "读取失败") }
-        }
-    }
-}
-
-fun MainViewModel.openDexViewer(apkItem: FileItem, dexName: String) {
-    val path = apkItem.uri.path ?: return
-    ApkToolsState.dexViewerState.value = DexViewerState(
-        visible = true, apkPath = path, apkName = apkItem.name, dexName = dexName, isLoading = true
-    )
-    viewModelScope.launch {
-        val result = DexDecompiler.listClasses(File(path), dexName)
-        result.onSuccess { classes ->
-            ApkToolsState.dexViewerState.update { it.copy(isLoading = false, classes = classes) }
-        }.onFailure { e ->
-            ApkToolsState.dexViewerState.update { it.copy(isLoading = false, error = e.message ?: "读取失败") }
+        _parseProgressState.value = ParseProgressState(visible = true, title = "正在加载 DEX", message = dexName)
+        try {
+            val result = DexDecompiler.listClasses(apkFile, dexName)
+            result.onSuccess { classes ->
+                ApkToolsState.dexViewerState.value = DexViewerState(
+                    visible = true, apkPath = apkPath, apkName = apkFile.name, dexName = dexName, isLoading = false, classes = classes
+                )
+            }.onFailure { e ->
+                _toast.value = "读取失败：${e.message}"
+            }
+        } finally {
+            _parseProgressState.value = ParseProgressState()
         }
     }
 }
@@ -99,15 +89,21 @@ fun MainViewModel.updateDexFilter(q: String) { ApkToolsState.dexViewerState.upda
 fun MainViewModel.openSmaliClass(classType: String) {
     val state = ApkToolsState.dexViewerState.value
     ApkToolsState.dexViewerState.update { it.copy(selectedClass = classType, isLoadingSmali = true, smaliContent = "", error = null) }
+    
     viewModelScope.launch {
-        val app = getApplication<Application>()
-        val result = DexDecompiler.decompileClass(
-            apkFile = File(state.apkPath), dexName = state.dexName, classType = classType, cacheDir = app.cacheDir
-        )
-        result.onSuccess { content ->
-            ApkToolsState.dexViewerState.update { it.copy(isLoadingSmali = false, smaliContent = content) }
-        }.onFailure { e ->
-            ApkToolsState.dexViewerState.update { it.copy(isLoadingSmali = false, error = e.message ?: "反编译失败") }
+        _parseProgressState.value = ParseProgressState(visible = true, title = "正在反编译", message = classType.substringAfterLast('/'))
+        try {
+            val app = getApplication<Application>()
+            val result = DexDecompiler.decompileClass(
+                apkFile = File(state.apkPath), dexName = state.dexName, classType = classType, cacheDir = app.cacheDir
+            )
+            result.onSuccess { content ->
+                ApkToolsState.dexViewerState.update { it.copy(isLoadingSmali = false, smaliContent = content) }
+            }.onFailure { e ->
+                ApkToolsState.dexViewerState.update { it.copy(isLoadingSmali = false, error = e.message ?: "反编译失败") }
+            }
+        } finally {
+            _parseProgressState.value = ParseProgressState()
         }
     }
 }
@@ -161,4 +157,3 @@ fun MainViewModel.executeApkClone(keystoreFile: File, storePass: String, keyAlia
         }
     }
 }
-
