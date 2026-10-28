@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -132,7 +133,10 @@ fun DrawerContent(
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
 
-            // ============ 新增的工具入口 ============
+            DrawerItem("连接 SMB 共享", Icons.Default.Storage) {
+                onDismiss()
+                vm.openSmbDialog()
+            }
             DrawerItem("终端模拟器", Icons.Default.Terminal) {
                 onDismiss()
                 vm.openTerminal()
@@ -141,7 +145,6 @@ fun DrawerContent(
                 onDismiss()
                 vm.openProcessManager()
             }
-            // ======================================
 
             DrawerItem("回收站", Icons.Default.DeleteForever) {
                 onDismiss()
