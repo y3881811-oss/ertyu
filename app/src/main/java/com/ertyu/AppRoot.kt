@@ -32,6 +32,9 @@ fun AppRoot(vm: MainViewModel) {
     val logState by LogStateHolder.state.collectAsState()
     val recycleBinState by RecycleBinStateHolder.state.collectAsState()
 
+    val terminalState by TerminalStateHolder.state.collectAsState()
+    val processState by TerminalStateHolder.processState.collectAsState()
+
     AppDialogs(vm)
     CryptoDialog(vm)
 
@@ -123,6 +126,14 @@ fun AppRoot(vm: MainViewModel) {
         recycleBinState.visible -> {
             BackHandler { vm.closeRecycleBin() }
             RecycleBinScreen(vm)
+        }
+        terminalState.visible -> {
+            BackHandler { vm.closeTerminal() }
+            TerminalScreen(vm)
+        }
+        processState.visible -> {
+            BackHandler { vm.closeProcessManager() }
+            ProcessManagerScreen(vm)
         }
         settingsVisible -> {
             BackHandler { vm.closeSettings() }
