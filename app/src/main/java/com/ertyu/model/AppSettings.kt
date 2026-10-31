@@ -11,7 +11,8 @@ data class AppSettings(
     val showHiddenByDefault: Boolean = false,
     val sortModeDefault: SortMode = SortMode.NAME_ASC,
     val isGridMode: Boolean = false,
-    val useRecycleBin: Boolean = true, // 新增：默认开启回收站
+    val useRecycleBin: Boolean = true,
+    val engineType: Int = 0, // 0: 普通, 1: Shizuku, 2: Root
     val webDavSharePath: String = "",
     val webDavPort: Int = 7326,
     val webDavUsername: String = "mtfm",
