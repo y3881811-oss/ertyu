@@ -75,7 +75,16 @@ class MainActivity : ComponentActivity() {
         vm.loadSettings()
         requestStorageThenLoad()
     }
-
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+        != PackageManager.PERMISSION_GRANTED
+    ) {
+        requestPermissions(
+            arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+            1001
+        )
+    }
+}
     override fun onDestroy() {
         runCatching { unregisterReceiver(installReceiver) }
         PackageChangeMonitor.stop(this)
