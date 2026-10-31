@@ -1,75 +1,165 @@
-# ErtYu (MTFM)
 
-> 一款基于 Kotlin 与 Jetpack Compose 打造的现代化、高性能 Android 文件管理器。
+# ertyu
 
-ErtYu 致力于提供比较好的 的核心体验。不仅支持基础的文件管理，还内置了强大的压缩包处理、APK 逆向分析工具集、多媒体播放以及局域网互传功能。UI 采用 Material 3 设计，支持双面板自适应布局。
+一个开源、可扩展的 Android 文件管理器，提供双面板文件管理、多存储引擎切换、压缩包处理与 APK 工具链，代码按功能模块拆分，便于维护和二次开发。
 
-## ✨ 核心特性
-
-### 📂 极致的文件管理体验
-- **智能双面板**：横屏或平板自动切换双面板，竖屏自动切换单面板。
-- **多标签页**：单侧面板支持无限多标签，像浏览器一样管理不同目录。
-- **快捷侧边栏**：自动扫描本地存储（SD卡/U盘），内置标准公共目录（下载/文档等）及 Termux 专属路径，支持自定义快捷路径。
-- **高级批量操作**：支持正则表达式、数字编号的**批量重命名**；支持 MD5/SHA-1/SHA-256 的**文件校验**。
-- **文件对比**：内置基于 LCS 算法的文本 Diff 工具，高亮显示文件差异。
-
-### 🗜️ 强大的压缩与解压
-- **解压**：支持 ZIP, TAR, GZ, BZ2, XZ, ZST, 7Z, RAR 等 12 种格式。
-- **压缩**：支持打包为 ZIP, TAR, TAR.GZ。
-- **免解压浏览**：像浏览普通文件夹一样直接查看压缩包内部的目录结构和文件大小。
-
-### 🛠️ 进阶 APK 逆向与工具集
-- **APK 解析**：查看包名、版本、签名（MD5/SHA 指纹）、权限、组件信息。
-- **内部浏览**：直接解包查看 APK 内部的 DEX、SO、资源文件，并支持单独提取。
-- **DEX 反编译**：集成 smali/baksmali，支持在线将 DEX 转为 Smali 代码查看。
-- **签名与共存**：支持使用自定义 Keystore 进行重签名，以及通过修改包名实现 APK 共存（克隆）。
-- **应用管理**：一键列出已安装应用，支持快速提取 APK 或分享给他人。
-
-### 🌐 网络与互传
-- **WebDAV 服务器**：一键将手机变身 WebDAV 服务器。局域网内的电视、电脑、平板均可通过 WebDAV 协议直接上传/下载手机文件（默认端口 `7326`）。
-
-### 🎬 多媒体与预览
-- **文本编辑**：内置代码编辑器，支持查找替换、正则搜索、字号缩放、跳转行。
-- **HEX 查看器**：分块加载大文件，完美展示十六进制与 ASCII。
-- **多媒体播放**：基于 Media3 (ExoPlayer) 的流畅视频播放，以及专属的音乐播放器。
+> 当前处于积极开发阶段，功能和接口可能随版本调整。
 
 ---
 
-## 🛠️ 技术栈
+## 功能特性
 
-- **语言 & 架构**：100% Kotlin，MVVM 架构，使用 StateFlow 驱动 UI 状态。
-- **UI 框架**：Jetpack Compose + Material 3。
-- **媒体播放**：AndroidX Media3 (ExoPlayer)。
-- **压缩处理**：Apache Commons Compress, junrar, zstd-jni, xz。
-- **逆向工程**：apksig (签名), smali/baksmali (DEX 处理)。
-- **网络**：底层原生 Socket 手写轻量级 HTTP/WebDAV 服务端。
+### 文件管理
+- **双面板**：横屏/平板自动双面板，竖屏单面板，可手动切换
+- **多标签页**：左右面板各自维护独立标签
+- **视图切换**：列表视图 / 网格视图
+- **排序与过滤**：按名称、大小、时间排序，可显示隐藏文件
+- **路径记忆**：每个面板按目录记住滚动位置，返回时自动恢复
+
+### 存储引擎（可切换）
+- **普通文件引擎（推荐）**：基于 SAF，无额外权限，最稳定
+- **Shizuku 引擎**：免 Root 访问受限目录（Android 11+），需安装并启动 Shizuku
+- **Root 引擎**：完全控制文件系统
+
+### 文件操作
+- 复制、移动、重命名、删除、新建文件夹
+- 压缩、解压（支持常见压缩格式）
+- 批量操作：全选、反选、按类型选择
+- 文件对比（选中 2 项时启用）
+- **删除二次确认**：确认框内可勾选「移入回收站」
+- **回收站**：删除的文件可恢复，可在高级设置中关闭
+
+### 选择模式
+- 普通模式**长按**文件 → 进入选择模式并选中该项
+- 选择模式下**单击** → 切换选中
+- 选择模式下**长按已选中文件** → 弹出操作菜单
+- 选择模式下长按未选中文件 → 仅加选，不弹菜单
+- 操作菜单随选中数量变化：
+  - 选中 1 项：打开、重命名、属性、解压、压缩、分享、安装、签名
+  - 选中 N 项：批量重命名、压缩、复制、移动、删除、全选、反选
+
+### APK 工具
+- APK 安装、查看、签名、克隆
+- 分卷 APK（`.apks` / `.xapk` / `.apkm`）安装
+- APK 浏览与十六进制查看
+- 校验和计算
+
+### 媒体与预览
+- 视频播放、音频播放
+- 图片画廊
+- SQLite 数据库查看
+- 字体预览
+
+### 其他
+- WebDAV 共享
+- 高级设置：引擎切换、面板模式、默认排序、网格/列表、回收站开关、WebDAV 配置、自定义路径
 
 ---
 
-## 📲 下载与安装
+## 截图
 
-1. 前往本项目右侧的 **[Releases](../../releases)** 页面。
-2. 下载最新构建的 `.apk` 文件。
-3. 在 Android 设备上安装（由于涉及文件管理和 APK 安装，请授予相应的存储和安装未知应用权限）。
+> 截图占位，后续补充。
 
-> **注意**：项目最低支持 Android 8.0 (API 26)，目标版本为 Android 9 (API 28) 以获得最 unrestricted 的文件访问体验。
-
----
-
-## 🚀 自动化构建
-
-本项目采用 GitHub Actions 实现持续集成。
-- 每次推送代码，自动编译并发布 Release。
-- 使用长效缓存固定签名密钥（Keystore），确保每次升级均可覆盖安装。
+| 双面板 | 选择模式 | 高级设置 |
+|---|---|---|
+| _待补充_ | _待补充_ | _待补充_ |
 
 ---
 
-## 🤝 贡献与反馈
+## 构建
 
-由于本项目仍在快速迭代中，如果你发现任何 Bug 或有新的功能建议，欢迎提交 [Issue](../../issues) 或 Pull Request。
+### 环境要求
+- Android Studio Hedgehog 或更高版本
+- JDK 17
+- Android SDK 34
+- Gradle 8.x（使用项目自带 wrapper）
+
+### 命令行构建
+
+```bash
+# Debug
+./gradlew assembleDebug
+
+# Release（需配置签名）
+./gradlew assembleRelease
+```
+
+产物位于 app/build/outputs/apk/。
+
+签名配置
+
+Release 构建需要在 app/build.gradle.kts 或 local.properties 中配置签名信息，请勿将 keystore 提交到仓库。
 
 ---
 
-## 📄 开源协议
+项目结构
 
-本项目采用 [GPL-3.0](LICENSE) 协议开源。
+```
+app/src/main/java/com/ertyu/
+├── MainActivity.kt              # 入口
+├── MainScreen.kt                # 主界面布局
+├── MainViewModel*.kt            # ViewModel 按功能拆分（文件操作、选择、压缩、对比等）
+├── FilePanel.kt                 # 文件面板
+├── FilePanelRow.kt              # 列表项、网格项、选择工具栏
+├── FileToolbar.kt               # 顶部工具栏
+├── FileActionDock.kt            # 底部操作栏
+├── FileActionDialog.kt          # 单文件操作对话框
+├── SettingsAdvanced.kt          # 高级设置
+├── ui/
+│   └── SelectionActionSheet.kt  # 选择模式长按操作菜单
+├── engine/                      # 存储引擎（SAF / Shizuku / Root）、回收站
+├── model/                       # 数据模型（FileItem、PanelState、AppSettings 等）
+└── ...
+```
+
+---
+
+技术栈
+
+· 语言：Kotlin
+· UI：Jetpack Compose + Material 3
+· 架构：ViewModel + StateFlow，按功能拆分为多个扩展文件
+· 存储：SAF / Shizuku / Root 三级可切换
+· 压缩：Apache Commons Compress / zip4j
+· APK：smali/baksmali、apksig、REAndroid APKEditor
+· 异步：Kotlin Coroutines + Flow
+
+---
+
+路线图
+
+☑ Phase 1：双面板基础文件管理
+☑ Phase 2：选择模式、批量操作、回收站、压缩包
+☑ Phase 3：Shizuku 引擎接入
+☐ Phase 3：APK 工具链完善（签名、克隆、浏览）
+☐ Phase 4：WebDAV、插件机制、主题
+
+---
+
+贡献
+
+欢迎提交 Issue 和 Pull Request。
+
+1. Fork 本仓库
+2. 新建分支：git checkout -b feature/your-feature
+3. 提交改动：git commit -m "feat: add your feature"
+4. 推送分支：git push origin feature/your-feature
+5. 提交 Pull Request
+
+提交前请确保 ./gradlew assembleDebug 能通过。
+
+---
+
+许可证
+
+本项目采用 GPL-3.0 许可证，详见 LICENSE。
+
+GPL-3.0 具有传染性：基于本项目的衍生作品需以相同许可证开源。如需闭源或商业授权，请联系维护者。
+
+---
+
+联系
+
+· 仓库：https://github.com/y3881811-oss/ertyu
+· Issue：https://github.com/y3881811-oss/ertyu/issues
+
