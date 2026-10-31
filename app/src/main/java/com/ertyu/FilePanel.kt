@@ -194,12 +194,13 @@ fun FilePanel(
         SelectionActionSheet(
             visible = showSelectionSheet,
             selectedItems = selectedItems,
+            defaultUseTrash = settings.useRecycleBin,
             onDismiss = { showSelectionSheet = false },
             onSelectAll = { vm.selectAll(isLeft) },
             onInvertSelection = { vm.invertSelection(isLeft) },
             onCopy = { vm.batchCopy(isLeft) },
             onMove = { vm.batchMove(isLeft) },
-            onDelete = { vm.batchDelete(isLeft) },
+            onDelete = { useTrash -> vm.batchDelete(isLeft, useTrash) },
             onCompress = { vm.requestCompress(isLeft) },
             onBatchRename = { vm.openBatchRename(isLeft) }
         )
