@@ -74,17 +74,20 @@ class MainActivity : ComponentActivity() {
         }
         vm.loadSettings()
         requestStorageThenLoad()
+
+        // ===== 通知权限请求：移到 onCreate 内部 =====
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    1001
+                )
+            }
+        }
     }
-if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-    if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-        != PackageManager.PERMISSION_GRANTED
-    ) {
-        requestPermissions(
-            arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-            1001
-        )
-    }
-}
+
     override fun onDestroy() {
         runCatching { unregisterReceiver(installReceiver) }
         PackageChangeMonitor.stop(this)
