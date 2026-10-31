@@ -13,8 +13,33 @@ import kotlinx.coroutines.launch
 fun MainViewModel.loadSettings() {
     val s = SettingsStore.load(getApplication())
     _settingsState.value = s
+    
+    // 恢复上次使用的引擎
+    engine = when (s.engineType) {
+        1 -> ShizukuFileEngine()
+        2 -> RootFileEngine()
+        else -> DirectFileEngine()
+    }
+    
     _leftPanel.update { it.copy(sortMode = s.sortModeDefault) }
     _rightPanel.update { it.copy(sortMode = s.sortModeDefault) }
+}
+
+fun MainViewModel.switchEngine(mode: Int) {
+    _settingsState.update { it.copy(engineType = mode) }
+    engine = when (mode) {
+        1 -> ShizukuFileEngine()
+        2 -> RootFileEngine()
+        else -> DirectFileEngine()
+    }
+    _toast.value = when (mode) {
+        1 -> "已切换到 Shizuku 引擎"
+        2 -> "已切换到 Root 引擎"
+        else -> "已切换到普通引擎"
+    }
+    persistSettings()
+    refresh(true)
+    refresh(false)
 }
 
 fun MainViewModel.setPanelMode(mode: PanelMode) {
@@ -77,22 +102,6 @@ fun MainViewModel.removeCustomPath(path: String) {
     val current = _settingsState.value.customPaths
     _settingsState.update { it.copy(customPaths = current - path) }
     persistSettings()
-}
-
-// 支持三种引擎切换：0 普通，1 Shizuku，2 Root
-fun MainViewModel.switchEngine(mode: Int) {
-    engine = when (mode) {
-        1 -> ShizukuFileEngine()
-        2 -> RootFileEngine()
-        else -> DirectFileEngine()
-    }
-    _toast.value = when (mode) {
-        1 -> "已切换到 Shizuku 引擎"
-        2 -> "已切换到 Root 引擎"
-        else -> "已切换到普通引擎"
-    }
-    refresh(true)
-    refresh(false)
 }
 
 private fun MainViewModel.persistSettings() {
