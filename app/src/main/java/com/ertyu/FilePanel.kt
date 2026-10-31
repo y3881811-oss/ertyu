@@ -20,12 +20,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.ArchiveFormat
+import com.ertyu.ui.SelectionActionSheet
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -37,7 +41,7 @@ private val SPLIT_APK_EXTS = setOf("apks", "xapk", "apkm")
 @Composable
 fun FilePanel(
     isLeft: Boolean,
-    isCompact: Boolean = false, // 新增：是否紧凑模式
+    isCompact: Boolean = false,
     vm: MainViewModel,
     onSwitchPanel: (() -> Unit)? = null,
     onOpenDrawer: () -> Unit,
@@ -55,12 +59,14 @@ fun FilePanel(
     val currentUriStr = state.currentUri?.toString() ?: ""
     val savedUri = FilePanelScrollStore.savedUri(isLeft)
     val isSameDir = currentUriStr.isNotEmpty() && currentUriStr == savedUri
-
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = if (isSameDir) FilePanelScrollStore.savedIndex(isLeft) else 0,
         initialFirstVisibleItemScrollOffset = if (isSameDir) FilePanelScrollStore.savedOffset(isLeft) else 0
     )
     val coroutineScope = rememberCoroutineScope()
+
+    // ===== 新增：选择模式长按菜单的状态 =====
+    var showSelectionSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(listState, currentUriStr) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
@@ -70,17 +76,9 @@ fun FilePanel(
     }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        // 紧凑模式下隐藏 TabBar
         if (!isCompact) {
-            FileTabBar(
-                isLeft = isLeft,
-                tabs = tabs,
-                activeIndex = activeIndex,
-                currentState = state,
-                vm = vm
-            )
+            FileTabBar(isLeft = isLeft, tabs = tabs, activeIndex = activeIndex, currentState = state, vm = vm)
         }
-
         if (state.isSelectionMode) {
             SelectionToolbar(
                 count = state.selectedUris.size,
@@ -98,7 +96,7 @@ fun FilePanel(
         } else {
             FileToolbar(
                 isLeft = isLeft,
-                isCompact = isCompact, // 传给工具栏进行精简
+                isCompact = isCompact,
                 vm = vm,
                 isGridMode = settings.isGridMode,
                 onToggleGrid = { vm.toggleGridMode() },
@@ -135,7 +133,15 @@ fun FilePanel(
                                 isSelected = state.selectedUris.contains(item.uriString),
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
-                                    if (!state.isSelectionMode) vm.enterSelection(isLeft, item.uriString)
+                                    // 进入选择模式（如果尚未进入）
+                                    if (!state.isSelectionMode) {
+                                        vm.enterSelection(isLeft, item.uriString)
+                                    }
+                                    // 确保长按项被选中
+                                    if (item.uriString !in state.selectedUris) {
+                                        vm.toggleSelection(isLeft, item.uriString)
+                                    }
+                                    showSelectionSheet = true
                                 }
                             )
                         }
@@ -154,7 +160,15 @@ fun FilePanel(
                                 isSelectionMode = state.isSelectionMode,
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
-                                    if (!state.isSelectionMode) vm.enterSelection(isLeft, item.uriString)
+                                    // 进入选择模式（如果尚未进入）
+                                    if (!state.isSelectionMode) {
+                                        vm.enterSelection(isLeft, item.uriString)
+                                    }
+                                    // 确保长按项被选中
+                                    if (item.uriString !in state.selectedUris) {
+                                        vm.toggleSelection(isLeft, item.uriString)
+                                    }
+                                    showSelectionSheet = true
                                 },
                                 onMoreClick = { vm.openActionDialog(isLeft, item) }
                             )
@@ -163,7 +177,6 @@ fun FilePanel(
                 }
             }
 
-            // 紧凑模式下隐藏 Dock
             if (!isCompact && !state.isSelectionMode) {
                 FileActionDock(
                     isLeft = isLeft,
@@ -173,6 +186,21 @@ fun FilePanel(
                 )
             }
         }
+
+        // ===== 新增：选择模式长按弹出的操作菜单 =====
+        val selectedItems = state.items.filter { it.uriString in state.selectedUris }
+        SelectionActionSheet(
+            visible = showSelectionSheet,
+            selectedItems = selectedItems,
+            onDismiss = { showSelectionSheet = false },
+            onSelectAll = { vm.selectAll(isLeft) },
+            onInvertSelection = { vm.invertSelection(isLeft) },
+            onCopy = { vm.batchCopy(isLeft) },
+            onMove = { vm.batchMove(isLeft) },
+            onDelete = { vm.batchDelete(isLeft) },
+            onCompress = { vm.requestCompress(isLeft) },
+            onBatchRename = { vm.openBatchRename(isLeft) }
+        )
     }
 }
 
@@ -186,13 +214,11 @@ private fun handleItemClick(
         vm.handleSelectionClick(isLeft, item)
         return
     }
-
     if (item.isDirectory) {
         FilePanelScrollStore.save(isLeft, "", 0, 0)
         vm.openDirectory(isLeft, item.uri)
         return
     }
-
     val ext = item.name.substringAfterLast('.', "").lowercase()
     when {
         ext in SPLIT_APK_EXTS -> vm.installApk(item)
