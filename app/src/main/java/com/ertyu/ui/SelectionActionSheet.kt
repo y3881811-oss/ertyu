@@ -7,35 +7,48 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.FileItem
 
 /**
- * 选择模式下的批量/单项操作菜单。
- * - count == 1：显示单文件操作（重命名、信息、解压、压缩、分享、安装、签名）
- * - count >  1：只显示批量操作（批量重命名、压缩、删除等）
- * 通用项（全选、反选、复制、移动、删除）两者都显示。
+ * 选择模式长按已选文件弹出的操作菜单。
+ * - 选中 1 项：单文件操作 + 通用操作
+ * - 选中 N 项：批量操作 + 通用操作
+ * 删除操作会先弹二次确认，确认框内可勾选“移入回收站”。
+ *
+ * @param defaultUseTrash 删除确认框里“移入回收站”的初始勾选状态，
+ *                        建议传当前全局设置 settings.useRecycleBin。
+ * @param onDelete        参数为本次是否移入回收站。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SelectionActionSheet(
     visible: Boolean,
     selectedItems: List<FileItem>,
+    defaultUseTrash: Boolean,
     onDismiss: () -> Unit,
     onSelectAll: () -> Unit,
     onInvertSelection: () -> Unit,
     onCopy: () -> Unit,
     onMove: () -> Unit,
-    onDelete: () -> Unit,
+    onDelete: (Boolean) -> Unit,
     onCompress: () -> Unit,
     onBatchRename: () -> Unit,
-    // 单文件专属
     onOpenSingle: ((FileItem) -> Unit)? = null,
     onRenameSingle: ((FileItem) -> Unit)? = null,
     onPropertiesSingle: ((FileItem) -> Unit)? = null,
@@ -47,6 +60,8 @@ fun SelectionActionSheet(
 ) {
     if (!visible) return
 
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var useTrash by remember(defaultUseTrash) { mutableStateOf(defaultUseTrash) }
     val single = selectedItems.singleOrNull()
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -62,15 +77,19 @@ fun SelectionActionSheet(
             )
             Spacer(Modifier.height(8.dp))
 
-            // ===== 通用项 =====
+            // 通用项
             SheetItem("全选") { onSelectAll(); onDismiss() }
             SheetItem("反选") { onInvertSelection(); onDismiss() }
             SheetItem("复制") { onCopy(); onDismiss() }
             SheetItem("移动") { onMove(); onDismiss() }
-            SheetItem("删除", isDanger = true) { onDelete(); onDismiss() }
+            SheetItem("删除", isDanger = true) {
+                // 不直接删，先弹二次确认
+                useTrash = defaultUseTrash
+                showDeleteConfirm = true
+            }
 
-            // ===== 单个专属 =====
             if (single != null) {
+                // 单文件专属
                 onOpenSingle?.let { SheetItem("打开") { it(single); onDismiss() } }
                 onRenameSingle?.let { SheetItem("重命名") { it(single); onDismiss() } }
                 onPropertiesSingle?.let { SheetItem("属性") { it(single); onDismiss() } }
@@ -80,13 +99,67 @@ fun SelectionActionSheet(
                 onInstallSingle?.let { SheetItem("安装") { it(single); onDismiss() } }
                 onSignSingle?.let { SheetItem("签名") { it(single); onDismiss() } }
             } else {
-                // ===== 多个专属 =====
+                // 多选专属
                 SheetItem("批量重命名") { onBatchRename(); onDismiss() }
                 SheetItem("压缩") { onCompress(); onDismiss() }
             }
 
             Spacer(Modifier.height(16.dp))
         }
+    }
+
+    // 删除二次确认
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除文件") },
+            text = {
+                Column {
+                    Text(
+                        if (selectedItems.size == 1) {
+                            "确定删除「${selectedItems.firstOrNull()?.name ?: ""}」吗？此操作不可撤销。"
+                        } else {
+                            "确定删除选中的 ${selectedItems.size} 项吗？此操作不可撤销。"
+                        }
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { useTrash = !useTrash }
+                    ) {
+                        Checkbox(
+                            checked = useTrash,
+                            onCheckedChange = { useTrash = it }
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("移入回收站")
+                    }
+                    if (useTrash) {
+                        Text(
+                            "文件会先放入回收站，可后续恢复",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete(useTrash)
+                    onDismiss()
+                }) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 
