@@ -14,6 +14,7 @@ object SettingsStore {
     private const val KEY_SORT_MODE = "sort_mode"
     private const val KEY_IS_GRID_MODE = "is_grid_mode"
     private const val KEY_USE_RECYCLE_BIN = "use_recycle_bin"
+    private const val KEY_ENGINE_TYPE = "engine_type"
     private const val KEY_WEBDAV_PATH = "webdav_path"
     private const val KEY_WEBDAV_PORT = "webdav_port"
     private const val KEY_WEBDAV_USER = "webdav_user"
@@ -42,6 +43,7 @@ object SettingsStore {
             sortModeDefault = sort,
             isGridMode = sp.getBoolean(KEY_IS_GRID_MODE, false),
             useRecycleBin = sp.getBoolean(KEY_USE_RECYCLE_BIN, true),
+            engineType = sp.getInt(KEY_ENGINE_TYPE, 0),
             webDavSharePath = sp.getString(KEY_WEBDAV_PATH, "") ?: "",
             webDavPort = sp.getInt(KEY_WEBDAV_PORT, 7326),
             webDavUsername = sp.getString(KEY_WEBDAV_USER, "mtfm") ?: "mtfm",
@@ -61,6 +63,7 @@ object SettingsStore {
             .putString(KEY_SORT_MODE, s.sortModeDefault.name)
             .putBoolean(KEY_IS_GRID_MODE, s.isGridMode)
             .putBoolean(KEY_USE_RECYCLE_BIN, s.useRecycleBin)
+            .putInt(KEY_ENGINE_TYPE, s.engineType)
             .putString(KEY_WEBDAV_PATH, s.webDavSharePath)
             .putInt(KEY_WEBDAV_PORT, s.webDavPort)
             .putString(KEY_WEBDAV_USER, s.webDavUsername)
