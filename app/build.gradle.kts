@@ -113,7 +113,8 @@ dependencies {
     implementation(libs.ftpserver.core)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
-    implementation(libs.zip4j)
+    implementation(libs.zip4j)            implementation("androidx.media3:media3-exoplayer:1.8.0")
+implementation("androidx.media3:media3-session:1.8.0")
     implementation(libs.apk.parser)
     implementation(libs.smbj)
 }
