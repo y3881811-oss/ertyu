@@ -65,7 +65,7 @@ fun FilePanel(
     )
     val coroutineScope = rememberCoroutineScope()
 
-    // ===== 新增：选择模式长按菜单的状态 =====
+    // 选择模式下长按已选文件弹出的操作菜单
     var showSelectionSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(listState, currentUriStr) {
@@ -133,15 +133,16 @@ fun FilePanel(
                                 isSelected = state.selectedUris.contains(item.uriString),
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
-                                    // 进入选择模式（如果尚未进入）
                                     if (!state.isSelectionMode) {
+                                        // 普通模式长按：进入选择模式并选中该项，不弹菜单
                                         vm.enterSelection(isLeft, item.uriString)
-                                    }
-                                    // 确保长按项被选中
-                                    if (item.uriString !in state.selectedUris) {
+                                    } else if (item.uriString in state.selectedUris) {
+                                        // 选择模式长按已选中项：弹出操作菜单
+                                        showSelectionSheet = true
+                                    } else {
+                                        // 选择模式长按未选中项：只加选，不弹菜单
                                         vm.toggleSelection(isLeft, item.uriString)
                                     }
-                                    showSelectionSheet = true
                                 }
                             )
                         }
@@ -160,15 +161,16 @@ fun FilePanel(
                                 isSelectionMode = state.isSelectionMode,
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
-                                    // 进入选择模式（如果尚未进入）
                                     if (!state.isSelectionMode) {
+                                        // 普通模式长按：进入选择模式并选中该项，不弹菜单
                                         vm.enterSelection(isLeft, item.uriString)
-                                    }
-                                    // 确保长按项被选中
-                                    if (item.uriString !in state.selectedUris) {
+                                    } else if (item.uriString in state.selectedUris) {
+                                        // 选择模式长按已选中项：弹出操作菜单
+                                        showSelectionSheet = true
+                                    } else {
+                                        // 选择模式长按未选中项：只加选，不弹菜单
                                         vm.toggleSelection(isLeft, item.uriString)
                                     }
-                                    showSelectionSheet = true
                                 },
                                 onMoreClick = { vm.openActionDialog(isLeft, item) }
                             )
@@ -187,7 +189,7 @@ fun FilePanel(
             }
         }
 
-        // ===== 新增：选择模式长按弹出的操作菜单 =====
+        // 选择模式下长按已选文件弹出的操作菜单
         val selectedItems = state.items.filter { it.uriString in state.selectedUris }
         SelectionActionSheet(
             visible = showSelectionSheet,
