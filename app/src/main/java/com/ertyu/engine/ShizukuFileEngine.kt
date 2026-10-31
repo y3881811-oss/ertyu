@@ -4,7 +4,9 @@ import android.net.Uri
 import com.ertyu.model.FileItem
 import com.ertyu.model.TransferProgress
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import rikka.shizuku.Shizuku
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -13,18 +15,33 @@ import java.util.Locale
 class ShizukuFileEngine : FileEngine {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
-    // 临时用 Runtime.exec 代替，确保编译通过
-    // 注：如果要真正在 Android 11+ 访问受限目录，需要复杂的反射调用 Shizuku 的 IActivityManager
-    private fun sh(cmd: String): String {
-        return try {
-            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-            val output = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            output
-        } catch (e: Exception) {
-            ""
+    private fun sh(cmd: String): String = runBlocking {
+        withContext(Dispatchers.IO) {
+            try {
+                if (!Shizuku.pingBinder()) return@withContext "Shizuku 服务未运行"
+                
+                // 使用反射调用 Shizuku 的私有方法 newProcess 来执行高权限命令
+                val method = Shizuku::class.java.getDeclaredMethod(
+                    "newProcess",
+                    Array<String>::class.java,
+                    Array<String>::class.java,
+                    String::class.java
+                )
+                method.isAccessible = true
+                val process = method.invoke(null, arrayOf("sh", "-c", cmd), null, null) as Process
+                
+                val output = process.inputStream.bufferedReader().readText()
+                val error = process.errorStream.bufferedReader().readText()
+                process.waitFor()
+                
+                if (error.isNotBlank()) "Error: $error" else output
+            } catch (e: Exception) {
+                "执行异常: ${e.message}"
+            }
         }
     }
+
+    private fun Uri.toFileOrNull(): File? = path?.let(::File)
 
     override suspend fun list(uri: Uri): List<FileItem> = withContext(Dispatchers.IO) {
         val path = uri.path ?: return@withContext emptyList()
@@ -64,59 +81,59 @@ class ShizukuFileEngine : FileEngine {
     }
 
     override suspend fun delete(uri: Uri): Boolean = withContext(Dispatchers.IO) {
-        val path = uri.path ?: return@withContext false
-        sh("rm -rf '$path'")
+        val p = uri.path ?: return@withContext false
+        sh("rm -rf '$p'")
         true
     }
 
     override suspend fun createDirectory(parent: Uri, name: String): Uri? = withContext(Dispatchers.IO) {
-        val path = parent.path ?: return@withContext null
-        val newPath = "$path/$name"
+        val p = parent.path ?: return@withContext null
+        val newPath = "$p/$name"
         sh("mkdir -p '$newPath'")
         Uri.fromFile(File(newPath))
     }
 
     override suspend fun rename(uri: Uri, newName: String): Uri? = withContext(Dispatchers.IO) {
-        val path = uri.path ?: return@withContext null
-        val dir = File(path).parent ?: return@withContext null
-        val newPath = "$dir/$newName"
-        sh("mv '$path' '$newPath'")
+        val p = uri.path ?: return@withContext null
+        val d = File(p).parent ?: return@withContext null
+        val newPath = "$d/$newName"
+        sh("mv '$p' '$newPath'")
         Uri.fromFile(File(newPath))
     }
 
     override suspend fun copy(source: Uri, targetDir: Uri, onProgress: (TransferProgress) -> Unit): Boolean = withContext(Dispatchers.IO) {
-        val src = source.path ?: return@withContext false
-        val dst = targetDir.path ?: return@withContext false
-        val name = File(src).name
-        sh("cp -r '$src' '$dst/$name'")
+        val s = source.path ?: return@withContext false
+        val d = targetDir.path ?: return@withContext false
+        val name = File(s).name
+        sh("cp -r '$s' '$d/$name'")
         true
     }
 
     override suspend fun move(source: Uri, targetDir: Uri, onProgress: (TransferProgress) -> Unit): Boolean = withContext(Dispatchers.IO) {
-        val src = source.path ?: return@withContext false
-        val dst = targetDir.path ?: return@withContext false
-        val name = File(src).name
-        sh("mv '$src' '$dst/$name'")
+        val s = source.path ?: return@withContext false
+        val d = targetDir.path ?: return@withContext false
+        val name = File(s).name
+        sh("mv '$s' '$d/$name'")
         true
     }
 
     override fun getParent(uri: Uri): Uri? {
-        val path = uri.path ?: return null
-        val parent = File(path).parent ?: return null
+        val p = uri.path ?: return null
+        val parent = File(p).parent ?: return null
         return Uri.fromFile(File(parent))
     }
 
     override fun getDisplayName(uri: Uri): String = uri.path?.let { File(it).name } ?: ""
 
     override suspend fun readText(uri: Uri): String? = withContext(Dispatchers.IO) {
-        val path = uri.path ?: return@withContext null
-        sh("cat '$path'")
+        val p = uri.path ?: return@withContext null
+        sh("cat '$p'")
     }
 
     override suspend fun writeText(uri: Uri, content: String): Boolean = withContext(Dispatchers.IO) {
-        val path = uri.path ?: return@withContext false
+        val p = uri.path ?: return@withContext false
         val escaped = content.replace("'", "'\\''")
-        sh("echo '$escaped' > '$path'")
+        sh("echo '$escaped' > '$p'")
         true
     }
 
