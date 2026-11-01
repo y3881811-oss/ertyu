@@ -11,7 +11,7 @@ val keyPass: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
 
 android {
     namespace = "com.ertyu"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.ertyu"
