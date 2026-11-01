@@ -14,7 +14,6 @@ ftpserver = "1.2.1"
 shizuku = "13.1.5"
 zip4j = "2.11.6"
 smbj = "0.14.0"
-# 新增与替换的版本
 media3 = "1.11.1"
 smali = "3.0.10"
 apkeditor = "V1.4.9"
@@ -43,17 +42,12 @@ shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuk
 shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizuku" }
 zip4j = { group = "net.lingala.zip4j", name = "zip4j", version.ref = "zip4j" }
 smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
-
-# ===== 替换的依赖 =====
-# DEX 解析 (替代旧的 baksmali)
 smali = { group = "com.android.tools.smali", name = "smali", version.ref = "smali" }
 smali-baksmali = { group = "com.android.tools.smali", name = "smali-baksmali", version.ref = "smali" }
 smali-dexlib2 = { group = "com.android.tools.smali", name = "smali-dexlib2", version.ref = "smali" }
-
-# APK 资源与 Manifest 解析 (替代旧的 apk-parser)
 apkeditor = { group = "com.github.reandroid", name = "APKEditor", version.ref = "apkeditor" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+# 已删除 kotlin-android
