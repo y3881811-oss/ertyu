@@ -82,7 +82,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
+composeCompiler {
+    // 开启强跳过模式，加速重组判定
+    featureFlags.add(androidx.compose.compiler.plugins.kotlin.ComposeFeatureFlag.StrongSkipping)
+}
     // 已移除 kotlinOptions 块，迁移至下方的 kotlin { compilerOptions {} }
 }
 
