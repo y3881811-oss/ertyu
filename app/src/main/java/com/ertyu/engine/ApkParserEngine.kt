@@ -66,27 +66,38 @@ object ApkParserEngine {
 
     suspend fun getInternalFileContent(apkFile: File, entryPath: String): Result<String> =
         withContext(Dispatchers.IO) {
+            // 特殊处理 Manifest
+            if (entryPath == "AndroidManifest.xml") {
+                return@withContext getManifest(apkFile)
+            }
+            
             try {
-                if (entryPath == "AndroidManifest.xml") {
-                    return@withContext getManifest(apkFile)
-                }
-                // 如果是其他 xml，也尝试解析
-                ApkModule.loadApkFile(apkFile).use { apkModule ->
-                    val inputSource = apkModule.archive.getInputSource(entryPath)
+                val apkModule = ApkModule.loadApkFile(apkFile)
+                try {
+                    // 修复：直接使用 getInputSource(entryPath) 获取内部文件流
+                    val inputSource = apkModule.getInputSource(entryPath)
                         ?: throw IllegalStateException("找不到内部文件: $entryPath")
 
                     if (entryPath.endsWith(".xml", ignoreCase = true) || 
                         ResXmlDocument.isResXmlBlock(inputSource)) {
                         val xmlDoc = ResXmlDocument()
-                        inputSource.openStream().use { xmlDoc.readBytes(it) }
-                        return@withContext Result.success(xmlDoc.serializeToXml())
+                        inputSource.openStream().use { stream ->
+                            xmlDoc.readBytes(stream)
+                        }
+                        Result.success(xmlDoc.serializeToXml())
+                    } else {
+                        inputSource.openStream().use { stream ->
+                            val bytes = stream.readBytes()
+                            if (isText(bytes)) {
+                                Result.success(String(bytes, Charsets.UTF_8))
+                            } else {
+                                Result.success("该文件为二进制文件，无法直接预览。")
+                            }
+                        }
                     }
-
-                    inputSource.openStream().use { input ->
-                        val bytes = input.readBytes()
-                        if (isText(bytes)) Result.success(String(bytes, Charsets.UTF_8))
-                        else Result.success("该文件为二进制文件，无法直接预览。")
-                    }
+                } finally {
+                    // 修复：手动关闭 apkModule，避免 use 嵌套导致类型推断失败
+                    apkModule.close()
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "读取内部文件 $entryPath 失败", e)
