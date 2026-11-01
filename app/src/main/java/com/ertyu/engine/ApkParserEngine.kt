@@ -16,6 +16,17 @@ object ApkParserEngine {
             val xmlString = ApkModule.loadApkFile(apkFile).use { apkModule ->
                 val manifestBlock: AndroidManifestBlock = apkModule.androidManifest
                     ?: throw IllegalStateException("APK中不包含 AndroidManifest.xml")
+                
+                // 关键修复：强制加载 TableBlock，并关联 PackageBlock
+                val tableBlock = apkModule.tableBlock
+                if (tableBlock != null) {
+                    // pickOne() 是 ARSCLib 中获取第一个包的常用方法
+                    val pkg = tableBlock.pickOne() 
+                    if (pkg != null) {
+                        manifestBlock.setPackageBlock(pkg)
+                    }
+                }
+                
                 manifestBlock.serializeToXml()
             }
             if (xmlString.isNullOrBlank()) {
@@ -74,16 +85,26 @@ object ApkParserEngine {
             try {
                 val apkModule = ApkModule.loadApkFile(apkFile)
                 try {
-                    // 修复：直接使用 getInputSource(entryPath) 获取内部文件流
                     val inputSource = apkModule.getInputSource(entryPath)
                         ?: throw IllegalStateException("找不到内部文件: $entryPath")
 
                     if (entryPath.endsWith(".xml", ignoreCase = true) || 
                         ResXmlDocument.isResXmlBlock(inputSource)) {
+                        
                         val xmlDoc = ResXmlDocument()
                         inputSource.openStream().use { stream ->
                             xmlDoc.readBytes(stream)
                         }
+                        
+                        // 关键修复：对于其他 XML 文件，也必须关联 PackageBlock
+                        val tableBlock = apkModule.tableBlock
+                        if (tableBlock != null) {
+                            val pkg = tableBlock.pickOne()
+                            if (pkg != null) {
+                                xmlDoc.setPackageBlock(pkg)
+                            }
+                        }
+                        
                         Result.success(xmlDoc.serializeToXml())
                     } else {
                         inputSource.openStream().use { stream ->
@@ -96,7 +117,6 @@ object ApkParserEngine {
                         }
                     }
                 } finally {
-                    // 修复：手动关闭 apkModule，避免 use 嵌套导致类型推断失败
                     apkModule.close()
                 }
             } catch (e: Throwable) {
