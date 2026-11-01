@@ -113,7 +113,7 @@ dependencies {
     
     implementation(libs.smali.baksmali)
     implementation(libs.smali.dexlib2)
-    implementation(libs.apkeditor)
+    implementation(libs.arsc.lib)
     
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
