@@ -1,3 +1,5 @@
+# 禁止 R8 进行代码优化（大幅提速，但 APK 会稍微大一点点）
+-dontoptimize
 # ========== Compose ==========
 -dontwarn androidx.compose.**
 -keep class androidx.compose.runtime.** { *; }
@@ -81,3 +83,10 @@
 -dontwarn org.osgi.**
 -dontwarn aQute.**
 -dontwarn org.apache.harmony.**
+# 保留 ARSCLib 的全部代码（它是 APK 解析的核心）
+-keep class com.reandroid.** { *; }
+-dontwarn com.reandroid.**
+
+# 保留 Android XML 解析相关（ARSCLib 序列化依赖）
+-keep class org.xmlpull.v1.** { *; }
+-dontwarn org.xmlpull.v1.**

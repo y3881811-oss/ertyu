@@ -1,69 +1,136 @@
 package com.ertyu.engine
 
+import android.util.Log
+import com.reandroid.apk.ApkModule
+import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import net.dongliu.apk.parser.ApkFile
 import java.io.File
-import java.util.zip.ZipFile
 
 object ApkParserEngine {
+    private const val TAG = "ApkParserEngine"
 
     suspend fun getManifest(apkFile: File): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
-            ApkFile(apkFile).use { apk -> apk.manifestXml }
+        try {
+            val xmlString = ApkModule.loadApkFile(apkFile).use { apkModule ->
+                val manifestBlock: AndroidManifestBlock = apkModule.androidManifest
+                    ?: throw IllegalStateException("APK中不包含 AndroidManifest.xml")
+                
+                // 关键修复：强制加载 TableBlock，并关联 PackageBlock
+                val tableBlock = apkModule.tableBlock
+                if (tableBlock != null) {
+                    // pickOne() 是 ARSCLib 中获取第一个包的常用方法
+                    val pkg = tableBlock.pickOne() 
+                    if (pkg != null) {
+                        manifestBlock.setPackageBlock(pkg)
+                    }
+                }
+                
+                manifestBlock.serializeToXml()
+            }
+            if (xmlString.isNullOrBlank()) {
+                Result.failure(Exception("解析出的 Manifest 为空"))
+            } else {
+                Result.success(xmlString)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "解析 Manifest 失败", e)
+            Result.failure(Exception("解析异常: ${e.message}"))
         }
     }
 
     suspend fun getResourcesArsc(apkFile: File): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
-            ApkFile(apkFile).use { apk ->
+        try {
+            val html = ApkModule.loadApkFile(apkFile).use { apkModule ->
+                val manifestBlock: AndroidManifestBlock = apkModule.androidManifest
+                    ?: throw IllegalStateException("无法获取 AndroidManifestBlock")
+
+                val packageName = manifestBlock.packageName ?: "未知"
+                val versionName = manifestBlock.versionName ?: "未知"
+                val versionCode = manifestBlock.versionCode?.toString() ?: "0"
+                val minSdk = manifestBlock.minSdkVersion?.toString() ?: "0"
+                val targetSdk = manifestBlock.targetSdkVersion?.toString() ?: "0"
+                val permissions = manifestBlock.usesPermissions ?: emptyList()
+
                 val sb = StringBuilder()
-                sb.appendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
-                sb.appendLine("<!-- 资源表预览 (resources.arsc) 基础信息 -->")
-                sb.appendLine("<resources>")
-                val meta = apk.apkMeta
-                sb.appendLine("  <string name=\"package\">${meta.packageName}</string>")
-                sb.appendLine("  <string name=\"versionName\">${meta.versionName}</string>")
-                sb.appendLine("  <string name=\"versionCode\">${meta.versionCode}</string>")
-                sb.appendLine("  <string name=\"minSdkVersion\">${meta.minSdkVersion}</string>")
-                sb.appendLine("  <string name=\"targetSdkVersion\">${meta.targetSdkVersion}</string>")
-                
-                if (meta.usesPermissions.isNotEmpty()) {
-                    sb.appendLine("\n  <!-- 权限列表 -->")
-                    meta.usesPermissions.forEach { perm ->
-                        // 修复点：有些版本返回的是 List<String>，有些是对象
-                        sb.appendLine("  <uses-permission name=\"$perm\" />")
-                    }
+                sb.appendLine("<h1>APK 信息</h1>")
+                sb.appendLine("<h2>基本信息</h2>")
+                sb.appendLine("<p>包名: $packageName</p>")
+                sb.appendLine("<p>版本名: $versionName</p>")
+                sb.appendLine("<p>版本号: $versionCode</p>")
+                sb.appendLine("<p>最低 SDK: $minSdk</p>")
+                sb.appendLine("<p>目标 SDK: $targetSdk</p>")
+
+                if (permissions.isNotEmpty()) {
+                    sb.appendLine("\n<h2>权限列表</h2>")
+                    permissions.forEach { perm -> sb.appendLine("<p>$perm</p>") }
                 }
-                sb.appendLine("</resources>")
                 sb.toString()
             }
+            Result.success(html)
+        } catch (e: Throwable) {
+            Log.e(TAG, "解析 resources.arsc 失败", e)
+            Result.failure(Exception("解析异常: ${e.message}"))
         }
     }
 
-    suspend fun getInternalFileContent(apkFile: File, entryPath: String): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
-            ZipFile(apkFile).use { zip ->
-                val entry = zip.getEntry(entryPath) ?: throw IllegalStateException("找不到文件")
-                zip.getInputStream(entry).use { input ->
-                    val bytes = input.readBytes()
-                    if (isText(bytes)) {
-                        String(bytes, Charsets.UTF_8)
+    suspend fun getInternalFileContent(apkFile: File, entryPath: String): Result<String> =
+        withContext(Dispatchers.IO) {
+            // 特殊处理 Manifest
+            if (entryPath == "AndroidManifest.xml") {
+                return@withContext getManifest(apkFile)
+            }
+            
+            try {
+                val apkModule = ApkModule.loadApkFile(apkFile)
+                try {
+                    val inputSource = apkModule.getInputSource(entryPath)
+                        ?: throw IllegalStateException("找不到内部文件: $entryPath")
+
+                    if (entryPath.endsWith(".xml", ignoreCase = true) || 
+                        ResXmlDocument.isResXmlBlock(inputSource)) {
+                        
+                        val xmlDoc = ResXmlDocument()
+                        inputSource.openStream().use { stream ->
+                            xmlDoc.readBytes(stream)
+                        }
+                        
+                        // 关键修复：对于其他 XML 文件，也必须关联 PackageBlock
+                        val tableBlock = apkModule.tableBlock
+                        if (tableBlock != null) {
+                            val pkg = tableBlock.pickOne()
+                            if (pkg != null) {
+                                xmlDoc.setPackageBlock(pkg)
+                            }
+                        }
+                        
+                        Result.success(xmlDoc.serializeToXml())
                     } else {
-                        "<!-- 该文件是二进制格式（未解码的 XML 或其他资源），不支持直接文本预览。\n请使用右上角菜单将其提取到本地后，用 HEX 查看器打开。 -->"
+                        inputSource.openStream().use { stream ->
+                            val bytes = stream.readBytes()
+                            if (isText(bytes)) {
+                                Result.success(String(bytes, Charsets.UTF_8))
+                            } else {
+                                Result.success("该文件为二进制文件，无法直接预览。")
+                            }
+                        }
                     }
+                } finally {
+                    apkModule.close()
                 }
+            } catch (e: Throwable) {
+                Log.e(TAG, "读取内部文件 $entryPath 失败", e)
+                Result.failure(Exception("读取失败: ${e.message}"))
             }
         }
-    }
 
     private fun isText(bytes: ByteArray): Boolean {
         if (bytes.isEmpty()) return true
         var textCount = 0
         for (b in bytes) {
             val i = b.toInt() and 0xFF
-            if (i in 0x20..0x7E || i == 0x0A || i == 0x0D || i == 0x09) textCount++
-            else if (i > 0x7F) textCount++
+            if (i in 0x20..0x7E || i == 0x0A || i == 0x0D || i == 0x09 || i > 0x7F) textCount++
         }
         return textCount > bytes.size * 0.8
     }

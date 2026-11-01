@@ -113,11 +113,13 @@ fun LogViewerScreen(vm: MainViewModel) {
                 ) {
                     items(state.logFiles, key = { it.path }) { log ->
                         LogItemRow(log = log) {
-                            // 点击后直接用内置的文本编辑器打开
+                            // 👇 修复：加上 uriString 参数
+                            val fileUri = android.net.Uri.fromFile(File(log.path))
                             vm.openLogFile(
                                 com.ertyu.model.FileItem(
                                     name = log.name,
-                                    uri = android.net.Uri.fromFile(File(log.path)),
+                                    uriString = fileUri.toString(),
+                                    uri = fileUri,
                                     isDirectory = false,
                                     path = log.path
                                 )

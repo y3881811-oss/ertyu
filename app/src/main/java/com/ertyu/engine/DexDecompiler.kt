@@ -2,11 +2,12 @@ package com.ertyu.engine
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jf.baksmali.Baksmali
-import org.jf.baksmali.BaksmaliOptions
-import org.jf.dexlib2.DexFileFactory
-import org.jf.dexlib2.Opcodes
-import org.jf.dexlib2.iface.DexFile
+// 核心修改：将 org.jf 替换为 com.android.tools.smali
+import com.android.tools.smali.baksmali.Baksmali
+import com.android.tools.smali.baksmali.BaksmaliOptions
+import com.android.tools.smali.dexlib2.DexFileFactory
+import com.android.tools.smali.dexlib2.Opcodes
+import com.android.tools.smali.dexlib2.iface.DexFile
 import java.io.File
 
 object DexDecompiler {
@@ -43,6 +44,7 @@ object DexDecompiler {
             if (!smaliFile.exists()) {
                 val dex = loadDex(apkFile, dexName)
                 val options = BaksmaliOptions()
+                // API 完全兼容
                 Baksmali.disassembleDexFile(dex, outDir, 4, options)
             }
 

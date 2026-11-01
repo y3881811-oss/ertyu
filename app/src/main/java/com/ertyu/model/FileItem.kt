@@ -3,20 +3,19 @@ package com.ertyu.model
 import android.net.Uri
 import androidx.compose.runtime.Immutable
 
-@Immutable
+@Immutable // 👈 保留这个注解，告诉 Compose 它是不可变的，提升滑动性能
 data class FileItem(
     val name: String,
+    val uriString: String,
     val uri: Uri,
     val isDirectory: Boolean,
-    val size: Long = 0,
-    val lastModified: Long = 0,
+    val path: String,
+    val size: Long = 0L,
+    // 👇 以下字段必须加回来，否则底层引擎和属性弹窗会报错
+    val lastModified: Long = 0L,
     val mimeType: String? = null,
-    // 预计算字段
-    val uriString: String = uri.toString(),
-    val path: String = "",
     val sizeText: String = "",
-    val typeText: String = "",
     val lastModifiedText: String = "",
-    // 文件夹内条目数（仅目录有效，-1 表示未知）
-    val childCount: Int = -1
+    val childCount: Int = -1,
+    val typeText: String = ""
 )

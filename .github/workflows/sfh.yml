@@ -1,0 +1,139 @@
+name: Scheduled 
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+
+      - name: Restore keystore cache
+        id: keystore-cache
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: keystore/mtfm.jks
+          key: mtfm-keystore-v1
+
+      - name: Generate keystore (首次运行)
+        if: steps.keystore-cache.outputs.cache-hit != 'true'
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          mkdir -p keystore
+          keytool -genkeypair \
+            -keystore keystore/mtfm.jks \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -dname "CN=MTFM, OU=Dev, O=MTFM, L=City, S=State, C=CN"
+          echo "✅ 已生成新 keystore"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@8379f6a1328ee0e06e2bb424dadb7b159856a326
+
+      - name: Generate version
+        id: version
+        run: |
+          DATE=$(date -u +'%Y.%m.%d')
+          TIME=$(date -u +'%H%M')
+          TAG="v${DATE}-${TIME}"
+          V_NAME="${DATE}.${TIME}"
+          V_CODE=${{ github.run_number }}
+          
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "date=${DATE}" >> $GITHUB_OUTPUT
+          echo "v_name=${V_NAME}" >> $GITHUB_OUTPUT
+          echo "v_code=${V_CODE}" >> $GITHUB_OUTPUT
+
+      # ==========================================
+      # 插入的调试步骤：提取 ARSCLib 方法签名
+      # ==========================================
+      - name: Extract ARSCLib Methods
+        run: |
+          echo "解析依赖并下载 ARSCLib..."
+          gradle :app:dependencies --configuration releaseRuntimeClasspath --no-daemon > /dev/null 2>&1 || true
+          
+          JAR_PATH=$(find ~/.gradle/caches -name "ARSCLib*.jar" | head -n 1)
+          
+          if [ -n "$JAR_PATH" ]; then
+            echo "✅ 找到 ARSCLib jar: $JAR_PATH"
+            echo "================ AndroidManifestBlock Public Methods ================"
+            javap -classpath "$JAR_PATH" -public com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+            echo "================ ResXmlDocument Public Methods ================"
+            javap -classpath "$JAR_PATH" -public com.reandroid.arsc.chunk.xml.ResXmlDocument
+          else
+            echo "❌ 未找到 ARSCLib jar，请检查依赖是否配置正确。"
+          fi
+      # ==========================================
+
+      - name: Build Release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          gradle assembleRelease --no-daemon \
+            -PappVersionCode=${{ steps.version.outputs.v_code }} \
+            -PappVersionName="${{ steps.version.outputs.v_name }}"
+
+      - name: Rename APK
+        run: |
+          mkdir -p release
+          SRC=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          cp "$SRC" "release/MTFM-${{ steps.version.outputs.tag }}.apk"
+          ls -lh release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "MTFM ${{ steps.version.outputs.tag }}"
+          body: |
+            ## MTFM 自动构建版本
+
+            - **构建时间**：${{ steps.version.outputs.date }}
+            - **内部版本**：${{ steps.version.outputs.v_name }} (Code: ${{ steps.version.outputs.v_code }})
+            - **提交**：${{ github.sha }}
+            - **类型**：Release APK（R8 优化）
+
+            ### 安装说明
+            1. 下载下方 APK 文件
+            2. 在 Android 9 设备上允许「未知来源」安装
+            3. 可直接覆盖安装旧版本
+          files: release/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: MTFM-apk
+          path: release/*.apk

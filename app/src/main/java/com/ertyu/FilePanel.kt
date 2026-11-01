@@ -1,11 +1,6 @@
 package com.ertyu
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -14,16 +9,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.ui.SelectionActionSheet
 import kotlinx.coroutines.launch
-import java.io.File
 
 private val VIDEO_EXTS = setOf("mp4", "mkv", "avi", "mov", "webm", "flv", "3gp", "m4v", "ts")
 private val AUDIO_EXTS = setOf("mp3", "wav", "flac", "ogg", "m4a", "aac", "wma")
@@ -65,7 +51,6 @@ fun FilePanel(
     )
     val coroutineScope = rememberCoroutineScope()
 
-    // 选择模式下长按已选文件弹出的操作菜单
     var showSelectionSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(listState, currentUriStr) {
@@ -112,35 +97,26 @@ fun FilePanel(
 
         Box(modifier = Modifier.weight(1f)) {
             when {
-                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("错误: ${state.error}")
-                }
-                state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(if (state.showHidden) "空目录" else "空目录（可尝试显示隐藏文件）")
-                }
+                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("错误: ${state.error}") }
+                state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("空目录") }
                 settings.isGridMode -> {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 96.dp),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp, start = 4.dp, end = 4.dp)
                     ) {
-                        gridItems(items = state.items, key = { it.uriString }) { item ->
+                        gridItems(items = state.items, key = { it.uriString }, contentType = { "file_grid" }) { item ->
                             FileGridItem(
                                 item = item,
-                                isSelected = state.selectedUris.contains(item.uriString),
+                                isSelected = { state.selectedUris.contains(item.uriString) }, // 👈 Lambda
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
                                     if (!state.isSelectionMode) {
-                                        // 普通模式长按：进入选择模式并选中该项，不弹菜单
                                         vm.enterSelection(isLeft, item.uriString)
                                     } else if (item.uriString in state.selectedUris) {
-                                        // 选择模式长按已选中项：弹出操作菜单
                                         showSelectionSheet = true
                                     } else {
-                                        // 选择模式长按未选中项：只加选，不弹菜单
                                         vm.toggleSelection(isLeft, item.uriString)
                                     }
                                 }
@@ -154,21 +130,18 @@ fun FilePanel(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
                     ) {
-                        items(items = state.items, key = { it.uriString }) { item ->
+                        items(items = state.items, key = { it.uriString }, contentType = { "file_list" }) { item ->
                             FileRow(
                                 item = item,
-                                isSelected = state.selectedUris.contains(item.uriString),
+                                isSelected = { state.selectedUris.contains(item.uriString) }, // 👈 Lambda
                                 isSelectionMode = state.isSelectionMode,
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
                                     if (!state.isSelectionMode) {
-                                        // 普通模式长按：进入选择模式并选中该项，不弹菜单
                                         vm.enterSelection(isLeft, item.uriString)
                                     } else if (item.uriString in state.selectedUris) {
-                                        // 选择模式长按已选中项：弹出操作菜单
                                         showSelectionSheet = true
                                     } else {
-                                        // 选择模式长按未选中项：只加选，不弹菜单
                                         vm.toggleSelection(isLeft, item.uriString)
                                     }
                                 },
@@ -189,7 +162,6 @@ fun FilePanel(
             }
         }
 
-        // 选择模式下长按已选文件弹出的操作菜单
         val selectedItems = state.items.filter { it.uriString in state.selectedUris }
         SelectionActionSheet(
             visible = showSelectionSheet,

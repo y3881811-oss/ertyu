@@ -87,12 +87,17 @@ fun MainViewModel.extractArchiveEntry(entry: ArchiveEntry) {
 /** 从压缩包浏览界面一键全部解压 */
 fun MainViewModel.extractAllFromViewer() {
     val state = ArchiveViewerStateHolder.state.value
+    
+    // 👇 修复：加上 uriString 参数
+    val fileUri = android.net.Uri.fromFile(java.io.File(state.archivePath))
     val item = FileItem(
         name = state.archiveName,
-        uri = android.net.Uri.fromFile(java.io.File(state.archivePath)),
+        uriString = fileUri.toString(),
+        uri = fileUri,
         isDirectory = false,
         path = state.archivePath
     )
+    
     closeArchiveViewer()
     extractZipHere(state.sourceIsLeft, item)
 }
