@@ -1,24 +1,23 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+ 
     alias(libs.plugins.kotlin.compose)
 }
 
-// 签名参数保留
+// 签名参数
 val storePass: String = System.getenv("KEYSTORE_PASSWORD") ?: "mtfm123456"
 val aliasName: String = System.getenv("KEY_ALIAS") ?: "mtfm"
 val keyPass: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
 
 android {
     namespace = "com.ertyu"
-    compileSdk = 35
+    compileSdk = 37 // 升级至 37，以满足 Compose BOM 2026.08.00 的要求
 
     defaultConfig {
         applicationId = "com.ertyu"
         minSdk = 26
         targetSdk = 28
         
-        // 👇 动态读取 GitHub Actions 传入的版本号，如果没有传则使用默认值
         versionCode = (project.findProperty("appVersionCode") as String?)?.toInt() ?: 1
         versionName = (project.findProperty("appVersionName") as String?) ?: "0.1.0"
 
@@ -27,7 +26,6 @@ android {
         }
     }
 
-    // 签名配置完整保留
     signingConfigs {
         create("mtfm") {
             storeFile = rootProject.file("keystore/mtfm.jks")
@@ -57,7 +55,6 @@ android {
         abortOnError = false
     }
 
-    // 打包排除规则完整保留
     packaging {
         resources {
             excludes += setOf(
@@ -86,12 +83,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // 已移除 kotlinOptions 块，迁移至下方的 kotlin { compilerOptions {} }
+}
 
-    buildFeatures {
-        compose = true
+// AGP 9.0+ 内置 Kotlin 的标准写法，替代旧的 android.kotlinOptions
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -113,18 +111,14 @@ dependencies {
     implementation(libs.junrar)
     implementation(libs.apksig)
     
-    // ===== DEX & 资源解析依赖替换 =====
-    // 移除旧的 libs.baksmali 和 libs.apk.parser
-    implementation(libs.smali.baksmali)   // Google 维护的新版 baksmali
-    implementation(libs.smali.dexlib2)    // Google 维护的新版 dexlib2
-    implementation(libs.apkeditor)        // APKEditor 替代 apk-parser
+    implementation(libs.smali.baksmali)
+    implementation(libs.smali.dexlib2)
+    implementation(libs.apkeditor)
     
-    // ===== 媒体播放 =====
     implementation(libs.media3.exoplayer)
-    implementation(libs.media3.session)   // 新增：后台播放与通知栏控制必需
+    implementation(libs.media3.session)
     implementation(libs.media3.ui)
     
-    // ===== 网络与权限 =====
     implementation(libs.ftpserver.core)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
