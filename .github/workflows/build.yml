@@ -65,16 +65,28 @@ jobs:
           DATE=$(date -u +'%Y.%m.%d')
           TIME=$(date -u +'%H%M')
           TAG="v${DATE}-${TIME}"
+          
+          # 用于 APK 内部的 versionName 和 versionCode
+          V_NAME="${DATE}.${TIME}"
+          V_CODE=${{ github.run_number }}
+          
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "date=${DATE}" >> $GITHUB_OUTPUT
-          echo "版本号: ${TAG}"
+          echo "v_name=${V_NAME}" >> $GITHUB_OUTPUT
+          echo "v_code=${V_CODE}" >> $GITHUB_OUTPUT
+          
+          echo "Git Tag: ${TAG}"
+          echo "APK 内部版本: ${V_NAME} (Code: ${V_CODE})"
 
       - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle assembleRelease --no-daemon
+        run: |
+          gradle assembleRelease --no-daemon \
+            -PappVersionCode=${{ steps.version.outputs.v_code }} \
+            -PappVersionName="${{ steps.version.outputs.v_name }}"
 
       - name: Rename APK
         run: |
@@ -92,6 +104,7 @@ jobs:
             ## MTFM 自动构建版本
 
             - **构建时间**：${{ steps.version.outputs.date }}
+            - **内部版本**：${{ steps.version.outputs.v_name }} (Code: ${{ steps.version.outputs.v_code }})
             - **提交**：${{ github.sha }}
             - **类型**：Release APK（R8 优化）
 
