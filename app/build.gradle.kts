@@ -22,7 +22,7 @@ android {
         versionName = (project.findProperty("appVersionName") as String?) ?: "0.1.0"
 
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
