@@ -11,10 +11,10 @@ object ApkParserEngine {
 
     suspend fun getManifest(apkFile: File): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            // 使用 ApkModule 加载 APK，替代不存在的 ApkFile
             ApkModule.loadApkFile(apkFile).use { apkModule ->
                 val manifestBlock: AndroidManifestBlock = apkModule.androidManifest
-                manifestBlock.decodeXml().toString()
+                // 1. 使用 getXmlString() 来获取格式化的 XML 字符串
+                manifestBlock.getXmlString()
             }
         }
     }
@@ -24,18 +24,16 @@ object ApkParserEngine {
             ApkModule.loadApkFile(apkFile).use { apkModule ->
                 val manifestBlock: AndroidManifestBlock = apkModule.androidManifest
 
-                // 从 AndroidManifestBlock 中提取基础信息
                 val packageName = manifestBlock.packageName ?: ""
                 val versionName = manifestBlock.versionName ?: ""
                 val versionCode = manifestBlock.versionCode.toString()
                 val minSdk = manifestBlock.minSdkVersion.toString()
                 val targetSdk = manifestBlock.targetSdkVersion.toString()
 
-                // 获取权限列表
+                // 2. 获取权限列表的正确方式
+                // getUsesPermissions() 通常返回一个字符串列表，而非对象列表
                 val permissions = manifestBlock
-                    .getUsesPermissions()
-                    ?.mapNotNull { it.name }
-                    ?: emptyList()
+                    .getUsesPermissions() ?: emptyList()
 
                 val sb = StringBuilder()
                 sb.appendLine("<h1>APK 信息</h1>")
