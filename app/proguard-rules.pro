@@ -1,3 +1,5 @@
+# 禁止 R8 进行代码优化（大幅提速，但 APK 会稍微大一点点）
+-dontoptimize
 # ========== Compose ==========
 -dontwarn androidx.compose.**
 -keep class androidx.compose.runtime.** { *; }
