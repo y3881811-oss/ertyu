@@ -2,6 +2,7 @@ package com.ertyu.engine
 
 import com.reandroid.apk.ApkModule
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -13,8 +14,8 @@ object ApkParserEngine {
         runCatching {
             ApkModule.loadApkFile(apkFile).use { apkModule ->
                 val manifestBlock: AndroidManifestBlock = apkModule.androidManifest
-                // 1. 使用 getXmlString() 来获取格式化的 XML 字符串
-                manifestBlock.getXmlString()
+                // 将 AndroidManifestBlock 包装为 ResXmlDocument 以获取标准 XML 字符串
+                ResXmlDocument(manifestBlock).toXmlString()
             }
         }
     }
@@ -30,10 +31,8 @@ object ApkParserEngine {
                 val minSdk = manifestBlock.minSdkVersion.toString()
                 val targetSdk = manifestBlock.targetSdkVersion.toString()
 
-                // 2. 获取权限列表的正确方式
-                // getUsesPermissions() 通常返回一个字符串列表，而非对象列表
-                val permissions = manifestBlock
-                    .getUsesPermissions() ?: emptyList()
+                // getUsesPermissions() 直接返回 List<String>
+                val permissions = manifestBlock.getUsesPermissions() ?: emptyList()
 
                 val sb = StringBuilder()
                 sb.appendLine("<h1>APK 信息</h1>")
