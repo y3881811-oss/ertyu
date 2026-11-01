@@ -1,6 +1,6 @@
 package com.ertyu.engine
 
-import com.reandroid.apk.ApkFile
+import com.reandroid.apk.ApkModule
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -11,8 +11,9 @@ object ApkParserEngine {
 
     suspend fun getManifest(apkFile: File): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            ApkFile.load(apkFile).use { apk ->
-                val manifestBlock: AndroidManifestBlock = apk.androidManifest
+            // 使用 ApkModule 加载 APK，替代不存在的 ApkFile
+            ApkModule.loadApkFile(apkFile).use { apkModule ->
+                val manifestBlock: AndroidManifestBlock = apkModule.androidManifest
                 manifestBlock.decodeXml().toString()
             }
         }
@@ -20,14 +21,21 @@ object ApkParserEngine {
 
     suspend fun getResourcesArsc(apkFile: File): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            ApkFile.load(apkFile).use { apk ->
-                val manifestBlock: AndroidManifestBlock = apk.androidManifest
+            ApkModule.loadApkFile(apkFile).use { apkModule ->
+                val manifestBlock: AndroidManifestBlock = apkModule.androidManifest
+
+                // 从 AndroidManifestBlock 中提取基础信息
                 val packageName = manifestBlock.packageName ?: ""
                 val versionName = manifestBlock.versionName ?: ""
                 val versionCode = manifestBlock.versionCode.toString()
                 val minSdk = manifestBlock.minSdkVersion.toString()
                 val targetSdk = manifestBlock.targetSdkVersion.toString()
-                val permissions = manifestBlock.getUsesPermissions()?.mapNotNull { it.name } ?: emptyList()
+
+                // 获取权限列表
+                val permissions = manifestBlock
+                    .getUsesPermissions()
+                    ?.mapNotNull { it.name }
+                    ?: emptyList()
 
                 val sb = StringBuilder()
                 sb.appendLine("<h1>APK 信息</h1>")
@@ -40,7 +48,9 @@ object ApkParserEngine {
 
                 if (permissions.isNotEmpty()) {
                     sb.appendLine("\n<h2>权限列表</h2>")
-                    permissions.forEach { perm -> sb.appendLine("<p>$perm</p>") }
+                    permissions.forEach { perm ->
+                        sb.appendLine("<p>$perm</p>")
+                    }
                 }
                 sb.toString()
             }
@@ -51,7 +61,8 @@ object ApkParserEngine {
         withContext(Dispatchers.IO) {
             runCatching {
                 ZipFile(apkFile).use { zip ->
-                    val entry = zip.getEntry(entryPath) ?: throw IllegalStateException("找不到文件: $entryPath")
+                    val entry = zip.getEntry(entryPath)
+                        ?: throw IllegalStateException("找不到文件: $entryPath")
                     zip.getInputStream(entry).use { input ->
                         val bytes = input.readBytes()
                         if (isText(bytes)) String(bytes, Charsets.UTF_8) else ""
