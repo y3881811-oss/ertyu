@@ -9,9 +9,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -37,7 +37,6 @@ fun FilePanel(
     val state by panelFlow.collectAsState()
     val settings by vm.settingsState.collectAsState()
 
-    // ... 保留原来的 TabManager 和 ScrollStore 逻辑 ...
     val tabsFlow = if (isLeft) TabManager.leftTabList else TabManager.rightTabList
     val activeFlow = if (isLeft) TabManager.leftActiveIndex else TabManager.rightActiveIndex
     val tabs by tabsFlow.collectAsState()
@@ -98,27 +97,19 @@ fun FilePanel(
 
         Box(modifier = Modifier.weight(1f)) {
             when {
-                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("错误: ${state.error}")
-                }
-                state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(if (state.showHidden) "空目录" else "空目录（可尝试显示隐藏文件）")
-                }
+                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("错误: ${state.error}") }
+                state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("空目录") }
                 settings.isGridMode -> {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 96.dp),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp, start = 4.dp, end = 4.dp)
                     ) {
-                        // 👇 加上 contentType
                         gridItems(items = state.items, key = { it.uriString }, contentType = { "file_grid" }) { item ->
                             FileGridItem(
                                 item = item,
-                                // 👇 传入 Lambda
-                                isSelected = { state.selectedUris.contains(item.uriString) },
+                                isSelected = { state.selectedUris.contains(item.uriString) }, // 👈 Lambda
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
                                     if (!state.isSelectionMode) {
@@ -139,12 +130,10 @@ fun FilePanel(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
                     ) {
-                        // 👇 加上 contentType
                         items(items = state.items, key = { it.uriString }, contentType = { "file_list" }) { item ->
                             FileRow(
                                 item = item,
-                                // 👇 传入 Lambda
-                                isSelected = { state.selectedUris.contains(item.uriString) },
+                                isSelected = { state.selectedUris.contains(item.uriString) }, // 👈 Lambda
                                 isSelectionMode = state.isSelectionMode,
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
