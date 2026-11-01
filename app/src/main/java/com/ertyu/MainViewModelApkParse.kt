@@ -43,7 +43,6 @@ fun MainViewModel.openApkInternalFile(apkPath: String, entryPath: String, entryN
 private fun MainViewModel.doApkInternalParse(apkPath: String, entryPath: String, entryName: String) {
     val apkFile = File(apkPath)
     viewModelScope.launch {
-        // 显示解析进度条
         _parseProgressState.value = ParseProgressState(
             visible = true, 
             title = "正在解析", 
@@ -58,24 +57,23 @@ private fun MainViewModel.doApkInternalParse(apkPath: String, entryPath: String,
             }
 
             result.onSuccess { text ->
-                // 1. 处理缓存文件名：如果是 arsc，解析出来的是 HTML 文本，存为 .html 方便预览
                 val cacheFileName = if (entryName == "resources.arsc") "resources.html" else entryName
                 val cacheFile = File(getApplication<Application>().cacheDir, cacheFileName)
                 
-                // 2. 写入缓存文件
                 withContext(Dispatchers.IO) {
                     cacheFile.writeText(text)
                 }
                 
-                // 3. 构建 FileItem
+                // 👇 修复：加上 uriString
+                val fileUri = android.net.Uri.fromFile(cacheFile)
                 val item = FileItem(
                     name = cacheFileName,
-                    uri = android.net.Uri.fromFile(cacheFile),
+                    uriString = fileUri.toString(), // <--- 加在这里
+                    uri = fileUri,
                     isDirectory = false,
                     path = cacheFile.absolutePath
                 )
                 
-                // 4. 尝试打开，并捕获可能发生的异常
                 try {
                     openFile(item)
                 } catch (e: Exception) {
@@ -83,14 +81,11 @@ private fun MainViewModel.doApkInternalParse(apkPath: String, entryPath: String,
                 }
                 
             }.onFailure { e ->
-                // 如果解析失败，一定要提示出来，不能无声无息
                 _toast.value = "解析失败：${e.message ?: e.javaClass.simpleName}"
             }
         } catch (e: Exception) {
-            // 兜底捕获
             _toast.value = "发生未知异常：${e.message}"
         } finally {
-            // 无论成功失败，都要关闭进度条
             _parseProgressState.value = ParseProgressState()
         }
     }
