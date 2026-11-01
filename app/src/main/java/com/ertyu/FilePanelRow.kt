@@ -23,24 +23,22 @@ import com.ertyu.model.FileItem
 @Composable
 fun FileRow(
     item: FileItem,
-    isSelected: () -> Boolean, // 👈 改为 Lambda
+    isSelected: () -> Boolean, // 👈 改为 Lambda，精准控制重组
     isSelectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
-    // 在内部读取，只有这一行会重组
     val selected = isSelected()
     val bg = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
 
-    val subtitle = remember(item.uriString, item.sizeText, item.typeText, item.lastModifiedText) {
+    // 👇 移除了对 lastModifiedText 的引用，适配你的新 FileItem
+    val subtitle = remember(item.uriString, item.sizeText, item.typeText) {
         buildString {
             append(item.typeText)
             if (!item.isDirectory && item.sizeText.isNotEmpty()) {
-                append(" · "); append(item.sizeText)
-            }
-            if (item.lastModifiedText.isNotEmpty()) {
-                append(" · "); append(item.lastModifiedText)
+                if (isNotEmpty()) append(" · ")
+                append(item.sizeText)
             }
         }
     }
@@ -58,7 +56,6 @@ fun FileRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-            // 如果你这里的 FileThumbnail 是同步加载的，建议换成 Coil 异步加载
             FileThumbnail(item = item)
         }
         Spacer(Modifier.width(10.dp))
@@ -69,13 +66,15 @@ fun FileRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         if (!isSelectionMode) {
             IconButton(onClick = onMoreClick, modifier = Modifier.size(40.dp)) {
