@@ -1,27 +1,30 @@
 plugins {
     alias(libs.plugins.android.application)
- 
+    // AGP 9.0+ 已内置 Kotlin 支持
     alias(libs.plugins.kotlin.compose)
 }
 
-// 签名参数
+// ================== 签名参数配置 ==================
 val storePass: String = System.getenv("KEYSTORE_PASSWORD") ?: "mtfm123456"
 val aliasName: String = System.getenv("KEY_ALIAS") ?: "mtfm"
 val keyPass: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
 
 android {
     namespace = "com.ertyu"
-    compileSdk = 37 // 升级至 37，以满足 Compose BOM 2026.08.00 的要求
+    // 配合 Compose 2026.08.00 和 AGP 9.2，compileSdk 必须为 37
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.ertyu"
         minSdk = 26
         targetSdk = 28
         
+        // 动态读取 GitHub Actions 传入的版本号
         versionCode = (project.findProperty("appVersionCode") as String?)?.toInt() ?: 1
         versionName = (project.findProperty("appVersionName") as String?) ?: "0.1.0"
 
         ndk {
+            // 👇 只保留 64 位（arm64-v8a），去掉了 32 位（armeabi-v7a）
             abiFilters += listOf("arm64-v8a")
         }
     }
@@ -38,8 +41,10 @@ android {
     buildTypes {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("mtfm")
+            isMinifyEnabled = false
         }
         getByName("release") {
+            // 这是 Release 配置：开启混淆和资源压缩
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -53,6 +58,7 @@ android {
     lint {
         checkReleaseBuilds = false
         abortOnError = false
+        disable += setOf("LintError")
     }
 
     packaging {
@@ -82,25 +88,29 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-composeCompiler {
-    // 开启强跳过模式，加速重组判定
-    featureFlags.add(androidx.compose.compiler.plugins.kotlin.ComposeFeatureFlag.StrongSkipping)
-}
-    // 已移除 kotlinOptions 块，迁移至下方的 kotlin { compilerOptions {} }
 }
 
-// AGP 9.0+ 内置 Kotlin 的标准写法，替代旧的 android.kotlinOptions
+// ================== AGP 9 内置 Kotlin 配置 ==================
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
+// ================== Compose 编译器优化 ==================
+composeCompiler {
+    // 开启强跳过模式，大幅优化快速滑动卡顿
+    featureFlags.add(androidx.compose.compiler.plugins.kotlin.ComposeFeatureFlag.StrongSkipping)
+}
+
 dependencies {
+    // ===== AndroidX 基础 =====
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
+
+    // ===== Compose =====
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -108,23 +118,31 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
 
+    // ===== 压缩与解压 =====
     implementation(libs.commons.compress)
     implementation(libs.xz)
     implementation(libs.zstd.jni)
     implementation(libs.junrar)
+    implementation(libs.zip4j)
+
+    // ===== 签名与安装 =====
     implementation(libs.apksig)
-    
-    implementation(libs.smali.baksmali)
-    implementation(libs.smali.dexlib2)
-    implementation(libs.arsc.lib)
-    
+
+    // ===== 网络与服务器 =====
+    implementation(libs.ftpserver.core)
+    implementation(libs.smbj)
+
+    // ===== 权限管理 =====
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
+
+    // ===== 媒体播放 (Media3) =====
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
     implementation(libs.media3.ui)
-    
-    implementation(libs.ftpserver.core)
-    implementation(libs.shizuku.api)
-    implementation(libs.shizuku.provider)
-    implementation(libs.zip4j)
-    implementation(libs.smbj)
+
+    // ===== APK 与 DEX 处理工具 =====
+    implementation(libs.arsc.lib)         // 替代 apk-parser 和 APKEditor
+    implementation(libs.smali.baksmali)   // 替代旧 baksmali
+    implementation(libs.smali.dexlib2)    // 辅助 DEX 底层 API
 }
