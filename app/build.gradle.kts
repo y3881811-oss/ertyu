@@ -4,97 +4,59 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val storePass: String = System.getenv("KEYSTORE_PASSWORD") ?: "mtfm123456"
-val aliasName: String = System.getenv("KEY_ALIAS") ?: "mtfm"
-val keyPass: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
-
 android {
     namespace = "com.ertyu"
     compileSdk = 34
 
     defaultConfig {
         applicationId = "com.ertyu"
-        minSdk = 26
-        targetSdk = 28
+        minSdk = 26 // 因为 zip4j 和 commons-compress 的要求
+        targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0"
 
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
-        }
-    }
-
-    signingConfigs {
-        create("mtfm") {
-            storeFile = rootProject.file("keystore/mtfm.jks")
-            storePassword = storePass
-            keyAlias = aliasName
-            keyPassword = keyPass
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables {
+            useSupportLibrary = true
         }
     }
 
     buildTypes {
-        getByName("debug") {
-            signingConfig = signingConfigs.getByName("mtfm")
-        }
-        getByName("release") {
-            isMinifyEnabled = true
-            isShrinkResources = true
+        release {
+            isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("mtfm")
         }
     }
-
-    lint {
-        checkReleaseBuilds = false
-        abortOnError = false
-    }
-
-    packaging {
-        resources {
-            excludes += setOf(
-                "META-INF/DEPENDENCIES",
-                "META-INF/LICENSE",
-                "META-INF/LICENSE.txt",
-                "META-INF/LICENSE.md",
-                "META-INF/NOTICE",
-                "META-INF/NOTICE.txt",
-                "META-INF/NOTICE.md",
-                "META-INF/INDEX.LIST",
-                "META-INF/*.kotlin_module",
-                "META-INF/versions/**",
-                "kotlin/**",
-                "DebugProbesKt.bin",
-                "kotlin-tooling-metadata.json"
-            )
-        }
-        jniLibs {
-            useLegacyPackaging = false
-        }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
     kotlinOptions {
         jvmTarget = "17"
     }
-
     buildFeatures {
         compose = true
+    }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // 防止 smbj 等库的冲突
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
     }
 }
 
 dependencies {
+    // ===== AndroidX 基础 =====
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
+
+    // ===== Compose =====
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -102,20 +64,31 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
 
+    // ===== 压缩与解压 =====
     implementation(libs.commons.compress)
     implementation(libs.xz)
     implementation(libs.zstd.jni)
     implementation(libs.junrar)
+    implementation(libs.zip4j)
+
+    // ===== 签名与安装 =====
     implementation(libs.apksig)
-    implementation(libs.baksmali)
+
+    // ===== 媒体播放 (Media3) =====
     implementation(libs.media3.exoplayer)
+    implementation(libs.media3.session)
     implementation(libs.media3.ui)
+
+    // ===== 网络与服务器 =====
     implementation(libs.ftpserver.core)
+    implementation(libs.smbj)
+
+    // ===== 权限管理 =====
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
-    implementation(libs.zip4j)
-implementation(libs.media3.exoplayer)
-implementation(libs.media3.session)
-    implementation(libs.apk.parser)
-    implementation(libs.smbj)
+
+    // ===== APK 与 DEX 处理工具 (已替换废弃库) =====
+    implementation(libs.apkeditor)        // 替代 apk-parser
+    implementation(libs.smali.baksmali)   // 替代旧 baksmali
+    implementation(libs.smali.dexlib2)    // 辅助 DEX 底层 API
 }
