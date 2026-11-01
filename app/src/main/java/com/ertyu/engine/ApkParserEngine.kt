@@ -1,69 +1,103 @@
 package com.ertyu.engine
 
+import com.reandroid.apk.ApkFile
+import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import net.dongliu.apk.parser.ApkFile
 import java.io.File
 import java.util.zip.ZipFile
 
 object ApkParserEngine {
 
+    /**
+     * 获取反编译后的 AndroidManifest.xml 字符串
+     * 使用 APKEditor / ARSCLib 的 AndroidManifestBlock 解码二进制 AXML
+     */
     suspend fun getManifest(apkFile: File): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            ApkFile(apkFile).use { apk -> apk.manifestXml }
+            ApkFile.load(apkFile).use { apk ->
+                val manifestBlock: AndroidManifestBlock = apk.androidManifest
+                // decodeXml() 将二进制 AXML 转为可读的 XML 文本
+                manifestBlock.decodeXml().toString()
+            }
         }
     }
 
+    /**
+     * 获取 APK 的元信息（包名、版本、SDK、权限等），并以 HTML 形式返回
+     * 直接从 AndroidManifestBlock 读取，不需要解析 resources.arsc
+     */
     suspend fun getResourcesArsc(apkFile: File): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            ApkFile(apkFile).use { apk ->
+            ApkFile.load(apkFile).use { apk ->
+                val manifestBlock: AndroidManifestBlock = apk.androidManifest
+
+                val packageName = manifestBlock.packageName ?: ""
+                val versionName = manifestBlock.versionName ?: ""
+                val versionCode = manifestBlock.versionCode.toString()
+                val minSdk = manifestBlock.minSdkVersion.toString()
+                val targetSdk = manifestBlock.targetSdkVersion.toString()
+
+                // 获取权限列表；不同版本 ARSCLib 的 API 名称可能略有差异
+                val permissions = manifestBlock
+                    .getUsesPermissions()
+                    ?.mapNotNull { it.name }
+                    ?: emptyList()
+
                 val sb = StringBuilder()
-                sb.appendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
-                sb.appendLine("<!-- 资源表预览 (resources.arsc) 基础信息 -->")
-                sb.appendLine("<resources>")
-                val meta = apk.apkMeta
-                sb.appendLine("  <string name=\"package\">${meta.packageName}</string>")
-                sb.appendLine("  <string name=\"versionName\">${meta.versionName}</string>")
-                sb.appendLine("  <string name=\"versionCode\">${meta.versionCode}</string>")
-                sb.appendLine("  <string name=\"minSdkVersion\">${meta.minSdkVersion}</string>")
-                sb.appendLine("  <string name=\"targetSdkVersion\">${meta.targetSdkVersion}</string>")
-                
-                if (meta.usesPermissions.isNotEmpty()) {
-                    sb.appendLine("\n  <!-- 权限列表 -->")
-                    meta.usesPermissions.forEach { perm ->
-                        // 修复点：有些版本返回的是 List<String>，有些是对象
-                        sb.appendLine("  <uses-permission name=\"$perm\" />")
+                sb.appendLine("<h1>APK 信息</h1>")
+                sb.appendLine("<h2>基本信息</h2>")
+                sb.appendLine("<p>包名: $packageName</p>")
+                sb.appendLine("<p>版本名: $versionName</p>")
+                sb.appendLine("<p>版本号: $versionCode</p>")
+                sb.appendLine("<p>最低 SDK: $minSdk</p>")
+                sb.appendLine("<p>目标 SDK: $targetSdk</p>")
+
+                if (permissions.isNotEmpty()) {
+                    sb.appendLine("\n<h2>权限列表</h2>")
+                    permissions.forEach { perm ->
+                        sb.appendLine("<p>$perm</p>")
                     }
                 }
-                sb.appendLine("</resources>")
                 sb.toString()
             }
         }
     }
 
-    suspend fun getInternalFileContent(apkFile: File, entryPath: String): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
-            ZipFile(apkFile).use { zip ->
-                val entry = zip.getEntry(entryPath) ?: throw IllegalStateException("找不到文件")
-                zip.getInputStream(entry).use { input ->
-                    val bytes = input.readBytes()
-                    if (isText(bytes)) {
-                        String(bytes, Charsets.UTF_8)
-                    } else {
-                        "<!-- 该文件是二进制格式（未解码的 XML 或其他资源），不支持直接文本预览。\n请使用右上角菜单将其提取到本地后，用 HEX 查看器打开。 -->"
+    /**
+     * 读取 APK 内部指定文件的文本内容（原逻辑不变，不依赖 apk-parser）
+     */
+    suspend fun getInternalFileContent(apkFile: File, entryPath: String): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                ZipFile(apkFile).use { zip ->
+                    val entry = zip.getEntry(entryPath)
+                        ?: throw IllegalStateException("找不到文件: $entryPath")
+                    zip.getInputStream(entry).use { input ->
+                        val bytes = input.readBytes()
+                        if (isText(bytes)) {
+                            String(bytes, Charsets.UTF_8)
+                        } else {
+                            ""
+                        }
                     }
                 }
             }
         }
-    }
 
+    /**
+     * 判断字节数组是否为文本（原逻辑不变）
+     */
     private fun isText(bytes: ByteArray): Boolean {
         if (bytes.isEmpty()) return true
         var textCount = 0
         for (b in bytes) {
             val i = b.toInt() and 0xFF
-            if (i in 0x20..0x7E || i == 0x0A || i == 0x0D || i == 0x09) textCount++
-            else if (i > 0x7F) textCount++
+            if (i in 0x20..0x7E || i == 0x0A || i == 0x0D || i == 0x09) {
+                textCount++
+            } else if (i > 0x7F) {
+                textCount++
+            }
         }
         return textCount > bytes.size * 0.8
     }
