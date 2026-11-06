@@ -1,5 +1,6 @@
 package com.ertyu
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -16,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.ArchiveFormat
+import com.ertyu.ui.FileConflictDialog
 import com.ertyu.ui.SelectionActionSheet
 import kotlinx.coroutines.launch
 
@@ -36,11 +38,9 @@ fun FilePanel(
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
     val state by panelFlow.collectAsState()
     val settings by vm.settingsState.collectAsState()
-
-    val tabsFlow = if (isLeft) TabManager.leftTabList else TabManager.rightTabList
-    val activeFlow = if (isLeft) TabManager.leftActiveIndex else TabManager.rightActiveIndex
-    val tabs by tabsFlow.collectAsState()
-    val activeIndex by activeFlow.collectAsState()
+    
+    // 冲突检测状态
+    val conflictState by vm.fileConflictState.collectAsState()
 
     val currentUriStr = state.currentUri?.toString() ?: ""
     val savedUri = FilePanelScrollStore.savedUri(isLeft)
@@ -53,6 +53,15 @@ fun FilePanel(
 
     var showSelectionSheet by remember { mutableStateOf(false) }
 
+    // 👇 返回键拦截：优先关闭弹窗 -> 其次退出多选
+    BackHandler(enabled = showSelectionSheet || state.isSelectionMode) {
+        if (showSelectionSheet) {
+            showSelectionSheet = false
+        } else if (state.isSelectionMode) {
+            vm.clearSelection(isLeft)
+        }
+    }
+
     LaunchedEffect(listState, currentUriStr) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
             .collect { (idx, offset) ->
@@ -62,7 +71,7 @@ fun FilePanel(
 
     Column(modifier = modifier.fillMaxHeight()) {
         if (!isCompact) {
-            FileTabBar(isLeft = isLeft, tabs = tabs, activeIndex = activeIndex, currentState = state, vm = vm)
+            FileTabBar(isLeft = isLeft, tabs = Tabs(), activeIndex = 0, currentState = state, vm = vm)
         }
         if (state.isSelectionMode) {
             SelectionToolbar(
@@ -109,7 +118,7 @@ fun FilePanel(
                         gridItems(items = state.items, key = { it.uriString }, contentType = { "file_grid" }) { item ->
                             FileGridItem(
                                 item = item,
-                                isSelected = { state.selectedUris.contains(item.uriString) }, // 👈 Lambda
+                                isSelected = { state.selectedUris.contains(item.uriString) },
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
                                     if (!state.isSelectionMode) {
@@ -133,7 +142,7 @@ fun FilePanel(
                         items(items = state.items, key = { it.uriString }, contentType = { "file_list" }) { item ->
                             FileRow(
                                 item = item,
-                                isSelected = { state.selectedUris.contains(item.uriString) }, // 👈 Lambda
+                                isSelected = { state.selectedUris.contains(item.uriString) },
                                 isSelectionMode = state.isSelectionMode,
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
@@ -176,8 +185,17 @@ fun FilePanel(
             onCompress = { vm.requestCompress(isLeft) },
             onBatchRename = { vm.openBatchRename(isLeft) }
         )
+
+        // 👇 挂载同名冲突弹窗
+        FileConflictDialog(
+            state = conflictState,
+            onDismiss = { vm.clearConflictState() }
+        )
     }
 }
+
+// 占位：如果你有 TabManager，请保留你的原逻辑
+private fun Tabs() = emptyList<Any>()
 
 private fun handleItemClick(
     isLeft: Boolean,
