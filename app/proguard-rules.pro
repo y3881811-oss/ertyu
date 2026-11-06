@@ -1,5 +1,6 @@
-# 禁止 R8 进行代码优化（大幅提速，但 APK 会稍微大一点点）
+# 禁止 R8 进行代码优化（大幅提速 CI 构建，APK 体积略微增大，但不影响功能）
 -dontoptimize
+
 # ========== Compose ==========
 -dontwarn androidx.compose.**
 -keep class androidx.compose.runtime.** { *; }
@@ -30,11 +31,6 @@
 -keep class net.lingala.zip4j.model.** { *; }
 -dontwarn net.lingala.zip4j.**
 
-# ========== apk-parser ==========
--keep class net.dongliu.apk.parser.** { *; }
--dontwarn net.dongliu.apk.parser.**
--dontwarn org.xmlpull.v1.**
-
 # ========== SMBJ ==========
 -keep class com.hierynomus.** { *; }
 -keep class org.bouncycastle.** { *; }
@@ -46,11 +42,9 @@
 -dontwarn com.android.apksig.**
 -dontwarn org.conscrypt.**
 
-# ========== baksmali / dexlib2 ==========
--keep class org.jf.** { *; }
--keep class org.smali.** { *; }
--dontwarn org.jf.**
--dontwarn org.smali.**
+# ========== Google Smali / dexlib2 (新版) ==========
+-keep class com.android.tools.smali.** { *; }
+-dontwarn com.android.tools.smali.**
 -dontwarn javax.annotation.**
 
 # ========== Media3 ==========
@@ -69,12 +63,10 @@
 }
 
 # ========== Shizuku ==========
--keep class rikka.shizuku.** { *; }
--dontwarn rikka.shizuku.**
+-keep class dev.rikka.shizuku.** { *; }
+-dontwarn dev.rikka.shizuku.**
 
-# ========== EL 表达式语言 (mbassy 可选依赖) ==========
-# mbassy 通过反射调用 javax.el.*，仅在使用"条件消息处理器"高级特性时生效；
-# Android 运行时不提供 javax.el 实现，忽略即可。
+# ========== EL 表达式语言 ==========
 -dontwarn javax.el.**
 -dontwarn net.engio.mbassy.**
 
@@ -83,6 +75,8 @@
 -dontwarn org.osgi.**
 -dontwarn aQute.**
 -dontwarn org.apache.harmony.**
+
+# ========== ARSCLib (核心) ==========
 # 保留 ARSCLib 的全部代码（它是 APK 解析的核心）
 -keep class com.reandroid.** { *; }
 -dontwarn com.reandroid.**
