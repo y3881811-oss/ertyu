@@ -32,7 +32,39 @@ jobs:
             -Pandroidx.compose.compiler.generateMetrics=true \
             -Pandroidx.compose.compiler.generateFunctionMetrics=true
 
+      # 👇 直接打印报告内容到日志
+      - name: Print Compose Compiler Reports
+        if: always()
+        run: |
+          echo "=================== Compose Compiler Reports ==================="
+          
+          echo "🔍 正在查找 composables 和 classes 报告..."
+          REPORT_DIR=""
+          # 兼容不同版本的输出路径
+          if [ -d "app/build/compose_reports" ]; then
+            REPORT_DIR="app/build/compose_reports"
+          elif [ -d "app/build/reports/compose" ]; then
+            REPORT_DIR="app/build/reports/compose"
+          fi
+
+          if [ -n "$REPORT_DIR" ]; then
+            find "$REPORT_DIR" -type f -name "*.txt" | while read file; do
+              echo "--------------------------------------------------------"
+              echo "📄 文件: $file"
+              echo "--------------------------------------------------------"
+              cat "$file"
+              echo -e "\n"
+            done
+          else
+            echo "⚠️ 未找到 app/build/compose_reports 目录，请检查编译是否成功或路径是否有变。"
+            # 打印 app/build 目录结构辅助排查
+            find app/build -name "*.txt" -path "*compose*" 2>/dev/null || true
+          fi
+          echo "================================================================"
+
+      # 依然保留上传，作为备用
       - name: Upload Compose Compiler Reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: compose-compiler-reports
