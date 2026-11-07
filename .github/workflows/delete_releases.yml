@@ -1,0 +1,52 @@
+name: Delete ALL Releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '⚠️ 警告：此操作会删除所有 Release 和 Git Tag！确认请输入 YES'
+        required: true
+        default: 'NO'
+
+permissions:
+  contents: write
+
+jobs:
+  delete-all:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'YES'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Delete All Releases and Tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 正在获取所有 Release..."
+          
+          # 获取所有的 tag 列表（因为可能有些 tag 没有关联 Release，所以直接获取 tag 最稳妥）
+          TAGS=$(gh release list --limit 1000 --json tagName --jq '.[].tagName')
+          
+          if [ -z "$TAGS" ]; then
+            echo "✅ 仓库里没有任何 Release。"
+            exit 0
+          fi
+
+          echo "🔥 发现 Release，准备开始核平清空..."
+          
+          for tag in $TAGS; do
+            echo "正在删除 Release 和 Tag: $tag"
+            # --cleanup-tag 会连带把 Git Tag 也删掉
+            gh release delete "$tag" --yes --cleanup-tag || echo "删除 $tag 失败，可能已被删除"
+          done
+          
+          # 兜底：清理残留的 Git Tag（有些 Tag 可能没绑定 Release，但你想全清）
+          echo "🧹 正在清理残留的远程 Git Tags..."
+          git fetch --tags
+          for tag in $(git tag); do
+            echo "清理 Tag: $tag"
+            git push origin --delete "$tag" || true
+          done
+          
+          echo "🎉 所有 Release 和 Tag 已彻底清空！"
