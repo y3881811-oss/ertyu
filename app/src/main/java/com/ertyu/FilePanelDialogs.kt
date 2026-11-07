@@ -276,10 +276,17 @@ fun CompressFormatDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择压缩格式") },
         text = {
-            Column {
+            // 👇 加上滚动，防止小屏溢出
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 FormatRow("ZIP", ".zip（兼容性最好）", ArchiveFormat.ZIP, onSelect)
                 FormatRow("TAR", ".tar（不压缩）", ArchiveFormat.TAR, onSelect)
                 FormatRow("TAR.GZ", ".tar.gz（Linux 常见）", ArchiveFormat.TAR_GZ, onSelect)
+                
+                // 👇 新增的三种格式
+                FormatRow("TAR.BZ2", ".tar.bz2（较高压缩）", ArchiveFormat.TAR_BZ2, onSelect)
+                FormatRow("TAR.XZ", ".tar.xz（高压缩比）", ArchiveFormat.TAR_XZ, onSelect)
+                FormatRow("TAR.ZST", ".tar.zst（极速高压缩）", ArchiveFormat.TAR_ZST, onSelect)
+                
                 FormatRow("7Z", ".7z（高压缩比，不支持加密）", ArchiveFormat.SEVEN_Z, onSelect)
             }
         },
