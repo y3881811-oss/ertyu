@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.SdCard
@@ -140,6 +141,11 @@ fun DrawerContent(
             DrawerItem("终端模拟器", Icons.Default.Terminal) {
                 onDismiss()
                 vm.openTerminal()
+            }
+            // 👇 新增：Termux Home 入口
+            DrawerItem("Termux Home", Icons.Default.FolderSpecial) {
+                onDismiss()
+                vm.openTermuxHome(isLeft = true) // 默认在左侧打开
             }
             DrawerItem("进程管理器", Icons.Default.Memory) {
                 onDismiss()
