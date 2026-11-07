@@ -8,7 +8,6 @@ fun AppDialogs(vm: MainViewModel) {
     DialogZip(vm)
     DialogInstall(vm)
     DialogInputs(vm)
-    DialogFileActions(vm)
     DialogApkParse(vm)
     DialogParseProgress(vm)
     DialogTransferProgress(vm)

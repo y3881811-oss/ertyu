@@ -41,6 +41,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,7 +58,8 @@ fun DrawerContent(
     vm: MainViewModel,
     onDismiss: () -> Unit
 ) {
-    val settings = vm.settingsState.value
+    // 👇 修复：使用 collectAsState 而不是直接读取 .value
+    val settings by vm.settingsState.collectAsState()
     val volumes = remember { StorageScanner.scanAll() }
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -172,7 +174,6 @@ fun DrawerContent(
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
 
-            // 👇 新增：关于软件入口
             DrawerItem("关于软件", Icons.Default.Info) {
                 onDismiss()
                 vm.openAbout()

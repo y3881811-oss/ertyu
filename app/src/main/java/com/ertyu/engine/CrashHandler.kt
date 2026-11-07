@@ -12,60 +12,51 @@ import java.util.Locale
 
 object CrashHandler {
 
-    private var context: Context? = null
-    private var defaultHandler: Thread.UncaughtExceptionHandler? = null
-
-    fun init(ctx: Context) {
-        context = ctx.applicationContext
-        defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+    fun init(context: Context) {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                saveCrashLog(thread, throwable)
+                handleCrash(context, throwable)
             } catch (e: Exception) {
-                // 防止保存日志时再次发生异常
+                // 忽略保存日志时的二次崩溃
             } finally {
-                // 交还给系统默认处理（弹出系统崩溃提示）
                 defaultHandler?.uncaughtException(thread, throwable)
             }
         }
     }
 
-    private fun saveCrashLog(thread: Thread, throwable: Throwable) {
-        val ctx = context ?: return
-        val timeStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val fileName = "crash_$timeStr.txt"
+    private fun handleCrash(context: Context, throwable: Throwable) {
+        val time = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ROOT).format(Date())
+        val fileName = "crash_$time.txt"
 
-        val logDir = File(Environment.getExternalStorageDirectory(), "Download/MTFM_Logs")
-        if (!logDir.exists()) logDir.mkdirs()
+        val dir = File(Environment.getExternalStorageDirectory(), "MTFM/logs")
+        if (!dir.exists()) dir.mkdirs()
+        val file = File(dir, fileName)
 
-        val crashFile = File(logDir, fileName)
-        
-        val stringWriter = StringWriter()
-        val printWriter = PrintWriter(stringWriter)
-        throwable.printStackTrace(printWriter)
-        
-        val crashInfo = buildString {
-            appendLine("========== MTFM 崩溃日志 ==========")
-            appendLine("时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
-            appendLine("线程: ${thread.name}")
-            appendLine("设备: ${Build.MANUFACTURER} ${Build.MODEL}")
-            appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+        file.printWriter().use { writer ->
+            writer.println("=== 崩溃日志 ===")
+            writer.println("时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(Date())}")
+            writer.println("设备: ${Build.MANUFACTURER} ${Build.MODEL}")
+            writer.println("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
             
-            // 尝试获取 App 版本
+            // 👇 修复：兼容 API 26~27，避免在 Android 8 上崩溃
             try {
-                val pInfo = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
-                appendLine("版本: ${pInfo.versionName} (${pInfo.longVersionCode})")
+                val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    pInfo.longVersionCode.toString()
+                } else {
+                    @Suppress("DEPRECATION")
+                    pInfo.versionCode.toString()
+                }
+                writer.println("版本: ${pInfo.versionName} ($versionCode)")
             } catch (e: Exception) {
-                // ignore
+                writer.println("版本: 未知")
             }
-            
-            appendLine("==================================")
-            appendLine()
-            append(stringWriter.toString())
-        }
+            writer.println()
 
-        crashFile.writeText(crashInfo)
-        printWriter.close()
-        stringWriter.close()
+            val sw = StringWriter()
+            throwable.printStackTrace(PrintWriter(sw))
+            writer.println(sw.toString())
+        }
     }
 }
