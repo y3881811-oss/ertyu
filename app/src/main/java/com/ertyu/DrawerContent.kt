@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderSpecial
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.SdCard
@@ -130,10 +131,8 @@ fun DrawerContent(
                 vm.openProcessManager()
             }
 
-            // 👇 新增的两个高级功能入口
             DrawerItem("全局内容搜索", Icons.Default.Search) {
                 onDismiss()
-                // 这里给个空格作为起始关键字，触发展示界面
                 vm.startContentSearch(File("/storage/emulated/0"), " ") 
             }
             DrawerItem("重复文件清理", Icons.Default.DeleteSweep) {
@@ -172,6 +171,12 @@ fun DrawerContent(
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
+
+            // 👇 新增：关于软件入口
+            DrawerItem("关于软件", Icons.Default.Info) {
+                onDismiss()
+                vm.openAbout()
+            }
 
             DrawerItem("设置", Icons.Default.Settings) {
                 onDismiss()
