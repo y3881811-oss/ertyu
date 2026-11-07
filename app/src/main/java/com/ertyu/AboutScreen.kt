@@ -11,12 +11,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +31,23 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun AboutScreen(vm: MainViewModel) {
     val context = LocalContext.current
+    
+    // 👇 核心修复：不再使用 BuildConfig，直接通过系统 API 动态获取版本号
+    val versionText = remember {
+        try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            val vName = pInfo.versionName ?: "未知"
+            val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                pInfo.longVersionCode.toString()
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo.versionCode.toString()
+            }
+            "$vName ($vCode)"
+        } catch (e: Exception) {
+            "1.0.0 (1)"
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -86,18 +105,16 @@ fun AboutScreen(vm: MainViewModel) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
                 Column {
-                    // 版本信息
                     AboutRow(
                         icon = Icons.Default.Info,
                         title = "版本",
-                        subtitle = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                        onClick = null // 不可点击
+                        subtitle = versionText,
+                        onClick = null
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
                     
-                    // GitHub
                     AboutRow(
-                        icon = Icons.Default.Android, // 如果有 Github 图标可以换成自定义的
+                        icon = Icons.Default.Code,
                         title = "在 GitHub 上查看",
                         subtitle = "y3881811-oss/ertyu",
                         onClick = {
@@ -107,7 +124,6 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
-                    // 许可证
                     AboutRow(
                         icon = Icons.Default.Description,
                         title = "开源许可证",
@@ -119,13 +135,11 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
-                    // 隐私政策
                     AboutRow(
                         icon = Icons.Default.Security,
                         title = "隐私政策",
                         subtitle = "本应用不收集任何个人数据",
                         onClick = {
-                            // 如果你有网页链接可以在这里跳转，如果没有可以暂时提示
                             vm.showToast("本应用完全离线运行，不收集任何数据")
                         }
                     )
@@ -155,7 +169,7 @@ fun AboutScreen(vm: MainViewModel) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
                     
                     AboutRow(
-                        icon = Icons.Default.Android,
+                        icon = Icons.Default.Code,
                         title = "在 GitHub 上关注",
                         subtitle = "查看主页",
                         onClick = {
