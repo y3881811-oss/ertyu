@@ -17,7 +17,7 @@ android {
         applicationId = "com.ertyu"
         minSdk = 26
         targetSdk = 28
-        
+
         versionCode = (project.findProperty("appVersionCode") as String?)?.toInt() ?: 1
         versionName = (project.findProperty("appVersionName") as String?) ?: "0.1.0"
 
@@ -37,7 +37,8 @@ android {
 
     buildTypes {
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("mtfm")
+            // 👇 改为使用 Android 默认的 Debug 签名
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
         getByName("release") {
@@ -47,6 +48,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Release 包依然使用你专属的 mtfm 签名
             signingConfig = signingConfigs.getByName("mtfm")
         }
     }
