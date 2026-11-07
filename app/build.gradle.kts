@@ -138,3 +138,4 @@ dependencies {
     implementation(libs.smali.baksmali)
     implementation(libs.smali.dexlib2)
 }
+ implementation(libs.androidx.exifinterface)
