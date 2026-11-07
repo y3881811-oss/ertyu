@@ -68,7 +68,7 @@ fun DrawerContent(
             Column(modifier = Modifier.padding(20.dp)) {
                 Icon(Icons.Default.Android, contentDescription = null, modifier = Modifier.height(48.dp))
                 Spacer(Modifier.height(12.dp))
-                Text("MTFM", style = MaterialTheme.typography.titleLarge)
+                Text("EYU文件管理器", style = MaterialTheme.typography.titleLarge)
                 Text("本地文件管理器", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             HorizontalDivider()

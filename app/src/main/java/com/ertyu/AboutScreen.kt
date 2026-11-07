@@ -87,7 +87,7 @@ fun AboutScreen(vm: MainViewModel) {
             }
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "MTFM",
+                text = "EYU文件管理器",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )

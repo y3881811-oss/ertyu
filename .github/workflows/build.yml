@@ -1,43 +1,45 @@
-name: Release Build
+name: Scheduled Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# 👇 你只需要修改这里的名字，下面全部会自动生效！
+env:
+  APP_NAME: "EYU文件管理器" 
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android SDK licenses
         run: |
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
 
-      # ================== 签名配置缓存 ==================
-      - name: Restore Keystore Cache
+      - name: Restore keystore cache
         id: keystore-cache
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
         with:
           path: keystore/mtfm.jks
           key: mtfm-keystore-v1
 
-      - name: Generate Keystore (首次运行)
+      - name: Generate keystore (首次运行)
         if: steps.keystore-cache.outputs.cache-hit != 'true'
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -56,30 +58,12 @@ jobs:
             -dname "CN=MTFM, OU=Dev, O=MTFM, L=City, S=State, C=CN"
           echo "✅ 已生成新 keystore"
 
-      # ================== 核心缓存：Android 构建 & Gradle ==================
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@8379f6a1328ee0e06e2bb424dadb7b159856a326
         with:
           gradle-version: '9.4.1'
 
-      - name: Cache Android Build Cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/build-cache
-          key: ${{ runner.os }}-android-build-cache-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-android-build-cache-
-
-      - name: Cache Gradle Build Cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches/build-cache-1
-          key: ${{ runner.os }}-gradle-build-cache-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-build-cache-
-
-      # ================== 版本号生成 ==================
-      - name: Generate Version
+      - name: Generate version
         id: version
         run: |
           DATE=$(date -u +'%Y.%m.%d')
@@ -92,8 +76,10 @@ jobs:
           echo "date=${DATE}" >> $GITHUB_OUTPUT
           echo "v_name=${V_NAME}" >> $GITHUB_OUTPUT
           echo "v_code=${V_CODE}" >> $GITHUB_OUTPUT
+          
+          echo "Git Tag: ${TAG}"
+          echo "APK 内部版本: ${V_NAME} (Code: ${V_CODE})"
 
-      # ================== 开始构建 ==================
       - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -108,21 +94,28 @@ jobs:
         run: |
           mkdir -p release
           SRC=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          cp "$SRC" "release/MTFM-${{ steps.version.outputs.tag }}.apk"
+          # 👇 这里决定了下载下来的文件名，现在会变成：极客文件-v2026.11.07-1234.apk
+          cp "$SRC" "release/${{ env.APP_NAME }}-${{ steps.version.outputs.tag }}.apk"
           ls -lh release/
 
-      # ================== 发布与上传 ==================
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Create Release
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "MTFM ${{ steps.version.outputs.tag }}"
+          # 👇 这里决定了 GitHub Release 页面的标题
+          name: "${{ env.APP_NAME }} ${{ steps.version.outputs.tag }}"
           body: |
-            ## MTFM 自动构建版本
+            ## ${{ env.APP_NAME }} 自动构建版本
+
             - **构建时间**：${{ steps.version.outputs.date }}
             - **内部版本**：${{ steps.version.outputs.v_name }} (Code: ${{ steps.version.outputs.v_code }})
             - **提交**：${{ github.sha }}
-            - **类型**：Release APK (Signed, R8 Optimized)
+            - **类型**：Release APK（R8 优化）
+
+            ### 安装说明
+            1. 下载下方 APK 文件
+            2. 允许「未知来源」安装
+            3. 可直接覆盖安装旧版本
           files: release/*.apk
           draft: false
           prerelease: false
@@ -130,27 +123,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: MTFM-apk
+          # 👇 这里决定了在 Actions 页面下载的 zip 压缩包的名字
+          name: ${{ env.APP_NAME }}-apk
           path: release/*.apk
-
-      # ================== 缓存保活机制 ==================
-      # 使用 restore 动作并在匹配时更新访问时间，if: always() 确保即使构建失败也会刷新
-      - name: Keep Cache Alive (Android)
-        if: always()
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/.android/build-cache
-          key: ${{ runner.os }}-android-build-cache-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-android-build-cache-
-
-      - name: Keep Cache Alive (Gradle)
-        if: always()
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/.gradle/caches/build-cache-1
-          key: ${{ runner.os }}-gradle-build-cache-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-build-cache-
