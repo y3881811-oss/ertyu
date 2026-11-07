@@ -12,10 +12,13 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
 import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorOutputStream
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream
+import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStream
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
@@ -71,11 +74,17 @@ object ArchiveEngine {
             val entries = mutableListOf<Pair<File, String>>()
             sources.forEach { src -> collect(src, src.name, entries) }
             if (entries.isEmpty()) throw IllegalArgumentException("没有可压缩的内容")
-            
+
             when (format) {
                 ArchiveFormat.ZIP -> return@withContext ZipEngine.compress(sources, targetFile, onProgress)
                 ArchiveFormat.TAR -> compressTar(entries, targetFile, null, onProgress)
                 ArchiveFormat.TAR_GZ -> compressTar(entries, targetFile, "gz", onProgress)
+                
+                // 👇 新增对 bz2, xz, zst 的压缩支持
+                ArchiveFormat.TAR_BZ2 -> compressTar(entries, targetFile, "bz2", onProgress)
+                ArchiveFormat.TAR_XZ -> compressTar(entries, targetFile, "xz", onProgress)
+                ArchiveFormat.TAR_ZST -> compressTar(entries, targetFile, "zst", onProgress)
+                
                 ArchiveFormat.SEVEN_Z -> compress7z(entries, targetFile, onProgress)
                 else -> throw IllegalArgumentException("不支持压缩为 ${format.label}")
             }
@@ -106,9 +115,20 @@ object ArchiveEngine {
 
     private fun compressTar(entries: List<Pair<File, String>>, target: File, compressor: String?, onProgress: (Int, Int) -> Unit) {
         val base: OutputStream = BufferedOutputStream(target.outputStream())
-        val out: OutputStream = when (compressor) { null -> base; "gz" -> GzipCompressorOutputStream(base); else -> throw IllegalArgumentException("未知压缩器") }
+        
+        // 👇 补充各类压缩器的 OutputStream 包装
+        val out: OutputStream = when (compressor) { 
+            null -> base
+            "gz" -> GzipCompressorOutputStream(base)
+            "bz2" -> BZip2CompressorOutputStream(base)
+            "xz" -> XZCompressorOutputStream(base)
+            "zst" -> ZstdCompressorOutputStream(base)
+            else -> throw IllegalArgumentException("未知压缩器") 
+        }
+        
         TarArchiveOutputStream(out).use { tar ->
-            tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX); tar.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX)
+            tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
+            tar.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX)
             var current = 0
             for ((file, name) in entries) {
                 val entryName = if (file.isDirectory) "$name/" else name
