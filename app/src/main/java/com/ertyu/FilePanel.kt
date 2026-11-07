@@ -38,9 +38,12 @@ fun FilePanel(
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
     val state by panelFlow.collectAsState()
     val settings by vm.settingsState.collectAsState()
+    
+    // 👇 获取冲突弹窗状态
     val conflictState by vm.fileConflictState.collectAsState()
+    // 👇 获取剪贴板状态
+    val clipboard by vm.fileClipboardState.collectAsState()
 
-    // 恢复 TabManager 逻辑
     val tabsFlow = if (isLeft) TabManager.leftTabList else TabManager.rightTabList
     val activeFlow = if (isLeft) TabManager.leftActiveIndex else TabManager.rightActiveIndex
     val tabs by tabsFlow.collectAsState()
@@ -57,7 +60,7 @@ fun FilePanel(
 
     var showSelectionSheet by remember { mutableStateOf(false) }
 
-    // 返回键拦截
+    // 👇 返回键拦截
     BackHandler(enabled = showSelectionSheet || state.isSelectionMode) {
         if (showSelectionSheet) {
             showSelectionSheet = false
@@ -75,7 +78,6 @@ fun FilePanel(
 
     Column(modifier = modifier.fillMaxHeight()) {
         if (!isCompact) {
-            // 恢复正确的 TabBar
             FileTabBar(isLeft = isLeft, tabs = tabs, activeIndex = activeIndex, currentState = state, vm = vm)
         }
         if (state.isSelectionMode) {
@@ -177,21 +179,33 @@ fun FilePanel(
         }
 
         val selectedItems = state.items.filter { it.uriString in state.selectedUris }
+        
+        // 👇 更新参数名，适配剪贴板功能
         SelectionActionSheet(
             visible = showSelectionSheet,
             selectedItems = selectedItems,
             defaultUseTrash = settings.useRecycleBin,
+            hasClipboardItems = !clipboard.isEmpty,
             onDismiss = { showSelectionSheet = false },
             onSelectAll = { vm.selectAll(isLeft) },
             onInvertSelection = { vm.invertSelection(isLeft) },
-            onCopy = { vm.batchCopy(isLeft) },
-            onMove = { vm.batchMove(isLeft) },
+            
+            // 新增剪贴板相关
+            onCopyToClipboard = { vm.copyToClipboard(isLeft) },
+            onCutToClipboard = { vm.cutToClipboard(isLeft) },
+            onPaste = { vm.pasteFromClipboard(isLeft) },
+            
+            // 保留的直接操作
+            onCopyToOther = { vm.batchCopy(isLeft) },
+            onMoveToOther = { vm.batchMove(isLeft) },
+            
+            // 删除等操作
             onDelete = { useTrash -> vm.batchDelete(isLeft, useTrash) },
             onCompress = { vm.requestCompress(isLeft) },
             onBatchRename = { vm.openBatchRename(isLeft) }
         )
 
-        // 挂载冲突弹窗
+        // 👇 挂载冲突弹窗
         FileConflictDialog(
             state = conflictState,
             onDismiss = { vm.clearConflictState() }
