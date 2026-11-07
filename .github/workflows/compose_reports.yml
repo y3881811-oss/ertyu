@@ -1,0 +1,43 @@
+name: Compose Compiler Reports
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动点击运行
+
+permissions:
+  contents: read
+
+jobs:
+  generate-reports:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '9.4.1'
+
+      # 执行编译，并强制开启 Compose 编译器报告生成
+      - name: Compile Release and Collect Compose Compiler Data
+        run: |
+          gradle :app:compileReleaseKotlin --no-daemon --build-cache \
+            -Pandroidx.compose.compiler.generateMetrics=true \
+            -Pandroidx.compose.compiler.generateFunctionMetrics=true
+
+      - name: Upload Compose Compiler Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-compiler-reports
+          path: |
+            app/build/compose_metrics
+            app/build/compose_reports
+          retention-days: 14
+          if-no-files-found: warn
