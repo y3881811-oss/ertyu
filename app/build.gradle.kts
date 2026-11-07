@@ -1,10 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
-    // AGP 9.0+ 已内置 Kotlin 支持
     alias(libs.plugins.kotlin.compose)
 }
 
-// ================== 签名参数配置 ==================
 val storePass: String = System.getenv("KEYSTORE_PASSWORD") ?: "mtfm123456"
 val aliasName: String = System.getenv("KEY_ALIAS") ?: "mtfm"
 val keyPass: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
@@ -37,7 +35,6 @@ android {
 
     buildTypes {
         getByName("debug") {
-            // 👇 改为使用 Android 默认的 Debug 签名
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
@@ -48,7 +45,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Release 包依然使用你专属的 mtfm 签名
             signingConfig = signingConfigs.getByName("mtfm")
         }
     }
@@ -62,24 +58,14 @@ android {
     packaging {
         resources {
             excludes += setOf(
-                "META-INF/DEPENDENCIES",
-                "META-INF/LICENSE",
-                "META-INF/LICENSE.txt",
-                "META-INF/LICENSE.md",
-                "META-INF/NOTICE",
-                "META-INF/NOTICE.txt",
-                "META-INF/NOTICE.md",
-                "META-INF/INDEX.LIST",
-                "META-INF/*.kotlin_module",
-                "META-INF/versions/**",
-                "kotlin/**",
-                "DebugProbesKt.bin",
+                "META-INF/DEPENDENCIES", "META-INF/LICENSE", "META-INF/LICENSE.txt",
+                "META-INF/LICENSE.md", "META-INF/NOTICE", "META-INF/NOTICE.txt",
+                "META-INF/NOTICE.md", "META-INF/INDEX.LIST", "META-INF/*.kotlin_module",
+                "META-INF/versions/**", "kotlin/**", "DebugProbesKt.bin",
                 "kotlin-tooling-metadata.json"
             )
         }
-        jniLibs {
-            useLegacyPackaging = false
-        }
+        jniLibs { useLegacyPackaging = false }
     }
 
     compileOptions {
@@ -88,7 +74,6 @@ android {
     }
 }
 
-// ================== AGP 9 内置 Kotlin 配置 ==================
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -96,13 +81,13 @@ kotlin {
 }
 
 dependencies {
-    // ===== AndroidX 基础 =====
+    // AndroidX 基础
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
 
-    // ===== Compose =====
+    // Compose
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -110,31 +95,34 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
 
-    // ===== 压缩与解压 =====
+    // 压缩与解压
     implementation(libs.commons.compress)
     implementation(libs.xz)
     implementation(libs.zstd.jni)
     implementation(libs.junrar)
     implementation(libs.zip4j)
 
-    // ===== 签名与安装 =====
+    // 签名与安装
     implementation(libs.apksig)
 
-    // ===== 网络与服务器 =====
+    // 网络与服务器
     implementation(libs.ftpserver.core)
     implementation(libs.smbj)
 
-    // ===== 权限管理 =====
+    // 权限管理
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
 
-    // ===== 媒体播放 (Media3) =====
+    // 媒体播放 (Media3)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
     implementation(libs.media3.ui)
 
-    // ===== APK 与 DEX 处理工具 =====
+    // APK 与 DEX 处理工具
     implementation(libs.arsc.lib)
     implementation(libs.smali.baksmali)
     implementation(libs.smali.dexlib2)
+
+    // EXIF 图片信息提取
+    implementation(libs.androidx.exifinterface)
 }

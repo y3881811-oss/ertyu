@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.FileItem
 import com.ertyu.model.SortMode
+import java.io.File
 
 @Composable
 fun FileActionDialog(
@@ -120,16 +121,8 @@ fun FileActionDialog(
                 ActionRow("属性", Icons.Default.Info, onInfo)
                 ActionRow("重命名", Icons.Default.Edit, onRename)
                 if (showCrossPanel) {
-                    ActionRow(
-                        "复制到另一侧",
-                        Icons.Default.ContentCopy,
-                        onCopy
-                    )
-                    ActionRow(
-                        "移动到另一侧",
-                        Icons.AutoMirrored.Filled.DriveFileMove,
-                        onMove
-                    )
+                    ActionRow("复制到另一侧", Icons.Default.ContentCopy, onCopy)
+                    ActionRow("移动到另一侧", Icons.AutoMirrored.Filled.DriveFileMove, onMove)
                 }
                 ActionRow("删除", Icons.Default.Delete, onDelete)
                 ActionRow("多选", Icons.Default.SelectAll, onSelect)
@@ -142,11 +135,7 @@ fun FileActionDialog(
 }
 
 @Composable
-private fun ActionRow(
-    label: String,
-    icon: ImageVector,
-    onClick: () -> Unit
-) {
+private fun ActionRow(label: String, icon: ImageVector, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -177,46 +166,22 @@ fun FileInfoDialog(
                 InfoBlock("类型", item.typeText)
 
                 if (item.isDirectory) {
-                    val countText = if (item.childCount >= 0)
-                        "目录（包含 ${item.childCount} 项）" else "目录"
+                    val countText = if (item.childCount >= 0) "目录（包含 ${item.childCount} 项）" else "目录"
                     InfoBlock("内容", countText)
 
                     when {
-                        sizeState.error != null -> {
-                            InfoBlock("总大小", "计算失败：${sizeState.error}")
-                        }
-                        sizeState.done -> {
-                            InfoBlock(
-                                "总大小",
-                                "${formatBytes(sizeState.totalBytes)}" +
-                                        "（${sizeState.scanned} 个文件）"
-                            )
-                        }
+                        sizeState.error != null -> InfoBlock("总大小", "计算失败：${sizeState.error}")
+                        sizeState.done -> InfoBlock("总大小", "${formatBytes(sizeState.totalBytes)}（${sizeState.scanned} 个文件）")
                         sizeState.isCalculating -> {
                             Spacer(Modifier.height(4.dp))
-                            Text(
-                                "正在计算…",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Text("正在计算…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.height(4.dp))
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                             Spacer(Modifier.height(4.dp))
-                            Text(
-                                "已扫描 ${sizeState.scanned} 个文件 · " +
-                                        formatBytes(sizeState.totalBytes),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text("已扫描 ${sizeState.scanned} 个文件 · ${formatBytes(sizeState.totalBytes)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         else -> {
-                            TextButton(
-                                onClick = { vm.calculateFolderSize(item) }
-                            ) {
-                                Text("计算总大小")
-                            }
+                            TextButton(onClick = { vm.calculateFolderSize(item) }) { Text("计算总大小") }
                         }
                     }
                 } else {
@@ -226,11 +191,27 @@ fun FileInfoDialog(
                 InfoBlock("修改时间", item.lastModifiedText)
                 InfoBlock("路径", item.path)
 
+                // 👇 新增：EXIF 信息展示与一键重命名
+                if (!item.isDirectory && (item.name.endsWith(".jpg", true) || item.name.endsWith(".jpeg", true))) {
+                    val exif = com.ertyu.engine.FeatureEngines.getExif(File(item.path))
+                    if (exif != null) {
+                        InfoBlock("拍摄设备", "${exif.make ?: "未知"} ${exif.model ?: ""}".trim())
+                        InfoBlock("拍摄时间", exif.dateTime ?: "未知")
+                        if (exif.gps != null) {
+                            InfoBlock("GPS 坐标", exif.gps)
+                        }
+                        TextButton(onClick = {
+                            vm.renameByExif(true, item) // 默认传 true (左侧)，如果有具体上下文可以调整
+                            onDismiss()
+                        }) {
+                            Text("按拍摄时间重命名")
+                        }
+                    }
+                }
+
                 if (sizeState.isCalculating) {
                     Spacer(Modifier.height(4.dp))
-                    TextButton(onClick = { vm.cancelFolderSize() }) {
-                        Text("取消计算")
-                    }
+                    TextButton(onClick = { vm.cancelFolderSize() }) { Text("取消计算") }
                 }
             }
         },
@@ -243,17 +224,9 @@ fun FileInfoDialog(
 @Composable
 private fun InfoBlock(label: String, value: String) {
     Column(modifier = Modifier.padding(vertical = 6.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
+        Text(text = label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(2.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace
-        )
+        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -268,67 +241,42 @@ private fun formatBytes(bytes: Long): String {
 }
 
 @Composable
-fun CompressFormatDialog(
-    onSelect: (ArchiveFormat) -> Unit,
-    onDismiss: () -> Unit
-) {
+fun CompressFormatDialog(onSelect: (ArchiveFormat) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择压缩格式") },
         text = {
-            // 👇 加上滚动，防止小屏溢出
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 FormatRow("ZIP", ".zip（兼容性最好）", ArchiveFormat.ZIP, onSelect)
                 FormatRow("TAR", ".tar（不压缩）", ArchiveFormat.TAR, onSelect)
                 FormatRow("TAR.GZ", ".tar.gz（Linux 常见）", ArchiveFormat.TAR_GZ, onSelect)
-                
-                // 👇 新增的三种格式
                 FormatRow("TAR.BZ2", ".tar.bz2（较高压缩）", ArchiveFormat.TAR_BZ2, onSelect)
                 FormatRow("TAR.XZ", ".tar.xz（高压缩比）", ArchiveFormat.TAR_XZ, onSelect)
                 FormatRow("TAR.ZST", ".tar.zst（极速高压缩）", ArchiveFormat.TAR_ZST, onSelect)
-                
                 FormatRow("7Z", ".7z（高压缩比，不支持加密）", ArchiveFormat.SEVEN_Z, onSelect)
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }
 
 @Composable
-private fun FormatRow(
-    label: String,
-    desc: String,
-    format: ArchiveFormat,
-    onSelect: (ArchiveFormat) -> Unit
-) {
+private fun FormatRow(label: String, desc: String, format: ArchiveFormat, onSelect: (ArchiveFormat) -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onSelect(format) }
-            .padding(vertical = 12.dp, horizontal = 4.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onSelect(format) }.padding(vertical = 12.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(Icons.Default.FolderZip, contentDescription = null)
         Spacer(Modifier.width(16.dp))
         Column {
             Text(label, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                desc,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 @Composable
-fun SortDialog(
-    current: SortMode,
-    onSelect: (SortMode) -> Unit,
-    onDismiss: () -> Unit
-) {
+fun SortDialog(current: SortMode, onSelect: (SortMode) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("排序方式") },
@@ -336,38 +284,23 @@ fun SortDialog(
             Column {
                 SortMode.entries.forEach { mode ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(mode) }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { onSelect(mode) }.padding(vertical = 8.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(
-                            selected = mode == current,
-                            onClick = { onSelect(mode) }
-                        )
+                        RadioButton(selected = mode == current, onClick = { onSelect(mode) })
                         Spacer(Modifier.width(8.dp))
                         Text(mode.label)
                     }
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
     )
 }
 
 @Composable
-fun TextInputDialog(
-    title: String,
-    placeholder: String,
-    initial: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
+fun TextInputDialog(title: String, placeholder: String, initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initial) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -380,11 +313,7 @@ fun TextInputDialog(
                 modifier = Modifier.fillMaxWidth()
             )
         },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(text) }) { Text("确定") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
+        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("确定") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }

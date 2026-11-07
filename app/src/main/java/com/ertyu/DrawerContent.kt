@@ -18,10 +18,13 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.SdCard
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
@@ -57,27 +60,13 @@ fun DrawerContent(
     val volumes = remember { StorageScanner.scanAll() }
     var showAddDialog by remember { mutableStateOf(false) }
 
-    ModalDrawerSheet(
-        modifier = Modifier.fillMaxHeight()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-        ) {
+    ModalDrawerSheet(modifier = Modifier.fillMaxHeight()) {
+        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Icon(
-                    Icons.Default.Android,
-                    contentDescription = null,
-                    modifier = Modifier.height(48.dp)
-                )
+                Icon(Icons.Default.Android, contentDescription = null, modifier = Modifier.height(48.dp))
                 Spacer(Modifier.height(12.dp))
                 Text("MTFM", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    "本地文件管理器",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text("本地文件管理器", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             HorizontalDivider()
 
@@ -92,27 +81,20 @@ fun DrawerContent(
                 Spacer(Modifier.height(8.dp))
                 HorizontalDivider()
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "自定义路径",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)
-                )
+                Text("自定义路径", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp))
                 settings.customPaths.forEach { path ->
                     val name = File(path).name.ifBlank { path }
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = {
-                                    onDismiss()
-                                    vm.openDirectory(true, Uri.fromFile(File(path)))
-                                },
-                                onLongClick = {
-                                    vm.removeCustomPath(path)
-                                    vm.showToast("已删除快捷路径")
-                                }
-                            )
+                        modifier = Modifier.fillMaxWidth().combinedClickable(
+                            onClick = {
+                                onDismiss()
+                                vm.openDirectory(true, Uri.fromFile(File(path)))
+                            },
+                            onLongClick = {
+                                vm.removeCustomPath(path)
+                                vm.showToast("已删除快捷路径")
+                            }
+                        )
                     ) {
                         NavigationDrawerItem(
                             label = { Text(name) },
@@ -125,9 +107,7 @@ fun DrawerContent(
                 }
             }
 
-            DrawerItem("添加本地路径", Icons.Default.Add) {
-                showAddDialog = true
-            }
+            DrawerItem("添加本地路径", Icons.Default.Add) { showAddDialog = true }
 
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
@@ -141,9 +121,25 @@ fun DrawerContent(
                 onDismiss()
                 vm.openTerminal()
             }
+            DrawerItem("Termux Home", Icons.Default.FolderSpecial) {
+                onDismiss()
+                vm.openTermuxHome(isLeft = true)
+            }
             DrawerItem("进程管理器", Icons.Default.Memory) {
                 onDismiss()
                 vm.openProcessManager()
+            }
+
+            // 👇 新增的两个高级功能入口
+            DrawerItem("全局内容搜索", Icons.Default.Search) {
+                onDismiss()
+                // 这里给个空格作为起始关键字，触发展示界面
+                vm.startContentSearch(File("/storage/emulated/0"), " ") 
+            }
+            DrawerItem("重复文件清理", Icons.Default.DeleteSweep) {
+                onDismiss()
+                vm.closeDuplicateScan()
+                vm.startDuplicateScan(File("/storage/emulated/0"))
             }
 
             DrawerItem("回收站", Icons.Default.DeleteForever) {
@@ -213,19 +209,13 @@ fun DrawerContent(
                     }
                 }) { Text("添加") }
             },
-            dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) { Text("取消") }
-            }
+            dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("取消") } }
         )
     }
 }
 
 @Composable
-private fun DrawerItem(
-    label: String,
-    icon: ImageVector,
-    onClick: () -> Unit
-) {
+private fun DrawerItem(label: String, icon: ImageVector, onClick: () -> Unit) {
     NavigationDrawerItem(
         label = { Text(label) },
         icon = { Icon(icon, contentDescription = null) },

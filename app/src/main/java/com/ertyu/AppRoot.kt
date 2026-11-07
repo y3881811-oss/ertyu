@@ -1,12 +1,21 @@
 package com.ertyu
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import java.io.File
 
 @Composable
 fun AppRoot(vm: MainViewModel) {
+    val context = LocalContext.current
+
     val editor by vm.editor.collectAsState()
     val imageViewer by vm.imageViewer.collectAsState()
     val hexViewerState by vm.hexViewerState.collectAsState()
@@ -35,6 +44,37 @@ fun AppRoot(vm: MainViewModel) {
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
 
+    // 新增功能的状态
+    val contentSearchState by vm.contentSearchState.collectAsState()
+    val duplicateScanState by vm.duplicateScanState.collectAsState()
+
+    // ================== SAF 文件夹授权逻辑 ==================
+    val safLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+                vm.openDirectory(true, uri)
+                vm.showToast("授权成功")
+            } catch (e: Exception) {
+                vm.showToast("获取权限失败: ${e.message}")
+            }
+        } else {
+            vm.showToast("已取消授权")
+        }
+    }
+
+    val needSafAuth by _termuxSafRequestState.collectAsState()
+    LaunchedEffect(needSafAuth) {
+        if (needSafAuth) {
+            vm.dismissTermuxSafRequest()
+            safLauncher.launch(null)
+        }
+    }
+    // ==========================================================
+
     AppDialogs(vm)
     CryptoDialog(vm)
 
@@ -46,6 +86,16 @@ fun AppRoot(vm: MainViewModel) {
         imageViewer.isOpen -> {
             BackHandler { vm.closeImageViewer() }
             ImageViewerScreen(vm)
+        }
+        // 👇 挂载全局内容搜索界面
+        contentSearchState.isSearching || contentSearchState.results.isNotEmpty() -> {
+            BackHandler { vm.closeContentSearch() }
+            ContentSearchScreen(vm, File("/storage/emulated/0"))
+        }
+        // 👇 挂载重复文件扫描界面
+        duplicateScanState.isScanning || duplicateScanState.groups.isNotEmpty() -> {
+            BackHandler { vm.closeDuplicateScan() }
+            DuplicateScanScreen(vm, File("/storage/emulated/0"))
         }
         galleryState.visible -> {
             GalleryScreen(vm)
