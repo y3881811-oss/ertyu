@@ -26,6 +26,9 @@ fun AppRoot(vm: MainViewModel) {
     val installedAppsState by vm.installedAppsState.collectAsState()
     val settingsVisible by vm.settingsVisible.collectAsState()
     val helpVisible by vm.helpVisible.collectAsState()
+    
+    // 👇 新增的关于界面状态
+    val aboutVisible by _aboutVisible.collectAsState()
 
     val signerState by ApkToolsState.signerState.collectAsState()
     val dexViewerState by ApkToolsState.dexViewerState.collectAsState()
@@ -87,12 +90,10 @@ fun AppRoot(vm: MainViewModel) {
             BackHandler { vm.closeImageViewer() }
             ImageViewerScreen(vm)
         }
-        // 👇 挂载全局内容搜索界面
         contentSearchState.isSearching || contentSearchState.results.isNotEmpty() -> {
             BackHandler { vm.closeContentSearch() }
             ContentSearchScreen(vm, File("/storage/emulated/0"))
         }
-        // 👇 挂载重复文件扫描界面
         duplicateScanState.isScanning || duplicateScanState.groups.isNotEmpty() -> {
             BackHandler { vm.closeDuplicateScan() }
             DuplicateScanScreen(vm, File("/storage/emulated/0"))
@@ -192,6 +193,11 @@ fun AppRoot(vm: MainViewModel) {
         helpVisible -> {
             BackHandler { vm.closeHelp() }
             HelpScreen(vm)
+        }
+        // 👇 挂载关于界面
+        aboutVisible -> {
+            BackHandler { vm.closeAbout() }
+            AboutScreen(vm)
         }
         else -> {
             MainScreen(vm)
