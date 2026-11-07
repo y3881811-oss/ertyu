@@ -47,17 +47,29 @@ fun ContentSearchScreen(vm: MainViewModel, rootDir: java.io.File) {
         }
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (state.isSearching) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (state.isSearching) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
             LazyColumn {
                 items(state.results) { res ->
-                    // 👇 改用 Row + Column 手写列表项，兼容性无敌
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                // TODO: 如果你需要打开编辑器，请在这里改成你 ViewModel 里实际的方法名
-                                // vm.openEditor(res.file.absolutePath)
-                                vm.showToast("点击了: ${res.file.name}")
+                                // 1. 将 File 包装成 FileItem
+                                val fileUri = android.net.Uri.fromFile(res.file)
+                                val item = com.ertyu.model.FileItem(
+                                    name = res.file.name,
+                                    uriString = fileUri.toString(),
+                                    uri = fileUri,
+                                    isDirectory = false,
+                                    path = res.file.absolutePath
+                                )
+                                
+                                // 2. 调用你项目里现成的 openFile 方法
+                                vm.openFile(item)
+                                
+                                // 3. 关闭搜索界面
                                 vm.closeContentSearch()
                             }
                             .padding(16.dp)
@@ -129,7 +141,6 @@ fun DuplicateScanScreen(vm: MainViewModel, rootDir: java.io.File) {
                         items(group.files) { file ->
                             val isSelected = state.selectedFiles.contains(file.absolutePath)
                             
-                            // 👇 同样手写 Row，彻底摆脱 ListItem 依赖
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
