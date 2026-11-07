@@ -2,17 +2,16 @@ package com.ertyu
 
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.RecycleBinManager
-import com.ertyu.model.ConflictAction
 import com.ertyu.model.FileConflictState
 import com.ertyu.model.FileItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
-// 移除了 private，供 FileOps 访问
+// ===== 冲突状态管理 =====
+val _fileConflictState = MutableStateFlow(FileConflictState())
 val MainViewModel.fileConflictState: StateFlow<FileConflictState> get() = _fileConflictState
 
 fun MainViewModel.clearConflictState() {
