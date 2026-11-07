@@ -38,9 +38,13 @@ fun FilePanel(
     val panelFlow = if (isLeft) vm.leftPanel else vm.rightPanel
     val state by panelFlow.collectAsState()
     val settings by vm.settingsState.collectAsState()
-    
-    // 冲突检测状态
     val conflictState by vm.fileConflictState.collectAsState()
+
+    // 恢复 TabManager 逻辑
+    val tabsFlow = if (isLeft) TabManager.leftTabList else TabManager.rightTabList
+    val activeFlow = if (isLeft) TabManager.leftActiveIndex else TabManager.rightActiveIndex
+    val tabs by tabsFlow.collectAsState()
+    val activeIndex by activeFlow.collectAsState()
 
     val currentUriStr = state.currentUri?.toString() ?: ""
     val savedUri = FilePanelScrollStore.savedUri(isLeft)
@@ -53,7 +57,7 @@ fun FilePanel(
 
     var showSelectionSheet by remember { mutableStateOf(false) }
 
-    // 👇 返回键拦截：优先关闭弹窗 -> 其次退出多选
+    // 返回键拦截
     BackHandler(enabled = showSelectionSheet || state.isSelectionMode) {
         if (showSelectionSheet) {
             showSelectionSheet = false
@@ -71,7 +75,8 @@ fun FilePanel(
 
     Column(modifier = modifier.fillMaxHeight()) {
         if (!isCompact) {
-            FileTabBar(isLeft = isLeft, tabs = Tabs(), activeIndex = 0, currentState = state, vm = vm)
+            // 恢复正确的 TabBar
+            FileTabBar(isLeft = isLeft, tabs = tabs, activeIndex = activeIndex, currentState = state, vm = vm)
         }
         if (state.isSelectionMode) {
             SelectionToolbar(
@@ -186,16 +191,13 @@ fun FilePanel(
             onBatchRename = { vm.openBatchRename(isLeft) }
         )
 
-        // 👇 挂载同名冲突弹窗
+        // 挂载冲突弹窗
         FileConflictDialog(
             state = conflictState,
             onDismiss = { vm.clearConflictState() }
         )
     }
 }
-
-// 占位：如果你有 TabManager，请保留你的原逻辑
-private fun Tabs() = emptyList<Any>()
 
 private fun handleItemClick(
     isLeft: Boolean,
