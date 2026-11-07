@@ -8,6 +8,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -58,7 +59,9 @@ object FeatureEngines {
         val ignoreExts = listOf("apk", "zip", "jpg", "png", "mp4", "mp3", "so", "dex", "jar", "ttf", "db")
 
         rootDir.walkTopDown().forEach { file ->
-            ensureActive()
+            // 👇 修复：在 flow 中正确使用 ensureActive
+            currentCoroutineContext().ensureActive()
+            
             if (file.isFile && file.length() < 5 * 1024 * 1024 && file.extension.lowercase() !in ignoreExts) {
                 try {
                     file.useLines { lines ->
@@ -104,7 +107,9 @@ object FeatureEngines {
     fun scanDuplicates(rootDir: File): Flow<Pair<String, List<File>>> = flow {
         val fileSizeMap = mutableMapOf<Long, MutableList<File>>()
         rootDir.walkTopDown().forEach { file ->
-            ensureActive()
+            // 👇 修复：在 flow 中正确使用 ensureActive
+            currentCoroutineContext().ensureActive()
+            
             if (file.isFile && file.length() > 0) {
                 fileSizeMap.getOrPut(file.length()) { mutableListOf() }.add(file)
             }
@@ -114,7 +119,9 @@ object FeatureEngines {
             if (files.size > 1) {
                 val hashMap = mutableMapOf<String, MutableList<File>>()
                 for (file in files) {
-                    ensureActive()
+                    // 👇 修复：在 flow 中正确使用 ensureActive
+                    currentCoroutineContext().ensureActive()
+                    
                     val md5 = getMD5(file)
                     if (md5 != null) hashMap.getOrPut(md5) { mutableListOf() }.add(file)
                 }
