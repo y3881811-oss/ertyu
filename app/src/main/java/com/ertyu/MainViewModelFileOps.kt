@@ -11,7 +11,119 @@ import com.ertyu.model.TransferProgress
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+// 追加到 MainViewModelFileOps.kt 顶部导入区
+import com.ertyu.model.FileClipboardState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
+// ==================== 剪贴板状态 ====================
+val _fileClipboardState = MutableStateFlow(FileClipboardState())
+val MainViewModel.fileClipboardState: StateFlow<FileClipboardState> get() = _fileClipboardState
+
+fun MainViewModel.copyToClipboard(isLeft: Boolean) {
+    val state = flowOf(isLeft).value
+    val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+    if (targets.isEmpty()) return
+    
+    _fileClipboardState.value = FileClipboardState(targets, isCut = false, sourceIsLeft = isLeft)
+    _toast.value = "已复制 ${targets.size} 项到剪贴板"
+    clearSelection(isLeft)
+}
+
+fun MainViewModel.cutToClipboard(isLeft: Boolean) {
+    val state = flowOf(isLeft).value
+    val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
+    if (targets.isEmpty()) return
+    
+    _fileClipboardState.value = FileClipboardState(targets, isCut = true, sourceIsLeft = isLeft)
+    _toast.value = "已剪切 ${targets.size} 项到剪贴板"
+    clearSelection(isLeft)
+}
+
+fun MainViewModel.pasteFromClipboard(targetIsLeft: Boolean) {
+    val clip = _fileClipboardState.value
+    if (clip.isEmpty) return
+    
+    val targetUri = flowOf(targetIsLeft).value.currentUri ?: return
+    val targets = clip.items
+    val isMove = clip.isCut
+    
+    val targetNames = flowOf(targetIsLeft).value.items.map { it.name }.toMutableSet()
+    val conflicts = targets.filter { targetNames.contains(it.name) }
+    
+    if (conflicts.isNotEmpty()) {
+        _fileConflictState.value = FileConflictState(
+            visible = true,
+            conflictingNames = conflicts.map { it.name },
+            onResolve = { action ->
+                if (action != ConflictAction.CANCEL) {
+                    executePaste(targets, targetUri, targetIsLeft, targetNames, action, isMove)
+                    _fileClipboardState.value = FileClipboardState() // 粘贴后清空剪贴板
+                }
+            }
+        )
+    } else {
+        executePaste(targets, targetUri, targetIsLeft, targetNames, ConflictAction.OVERWRITE, isMove)
+        _fileClipboardState.value = FileClipboardState()
+    }
+}
+
+private fun MainViewModel.executePaste(
+    targets: List<FileItem>,
+    targetUri: Uri,
+    targetIsLeft: Boolean,
+    targetNames: MutableSet<String>,
+    action: ConflictAction,
+    isMove: Boolean
+) {
+    viewModelScope.launch {
+        _fileTransferState.value = FileTransferState(visible = true, title = if(isMove) "批量移动中" else "批量复制中", totalBytes = targets.sumOf { it.size })
+        var totalCopied = 0L
+        var skipCount = 0
+
+        for (item in targets) {
+            val conflictItem = flowOf(targetIsLeft).value.items.find { it.name == item.name }
+
+            if (conflictItem != null) {
+                when (action) {
+                    ConflictAction.SKIP -> { skipCount++; continue }
+                    ConflictAction.OVERWRITE -> {
+                        engine.delete(conflictItem.uri)
+                        targetNames.remove(conflictItem.name)
+                    }
+                    ConflictAction.KEEP_BOTH -> {
+                        val newName = generateUniqueFileName(conflictItem.name, targetNames)
+                        engine.rename(conflictItem.uri, newName)
+                        targetNames.remove(conflictItem.name)
+                        targetNames.add(newName)
+                    }
+                    else -> {}
+                }
+            }
+
+            val ok = if (isMove) {
+                engine.move(item.uri, targetUri) { p: TransferProgress ->
+                    _fileTransferState.update { it.copy(currentFile = p.currentFileName, copiedBytes = totalCopied + p.copied, speedText = formatSpeed(p.speed)) }
+                }
+            } else {
+                engine.copy(item.uri, targetUri) { p: TransferProgress ->
+                    _fileTransferState.update { it.copy(currentFile = p.currentFileName, copiedBytes = totalCopied + p.copied, speedText = formatSpeed(p.speed)) }
+                }
+            }
+            
+            if (ok) {
+                totalCopied += item.size
+                targetNames.add(item.name)
+            }
+        }
+        _fileTransferState.update { it.copy(isDone = true) }
+        refresh(targetIsLeft)
+        if (isMove) refresh(!targetIsLeft) // 如果是剪切，源面板也要刷新
+        if (skipCount > 0) _toast.value = "已跳过 $skipCount 项同名文件"
+        clearConflictState()
+    }
+}
 fun MainViewModel.requestDelete(isLeft: Boolean, item: FileItem) {
     _deleteTargetIsLeft.value = isLeft
     _deleteTarget.value = item
