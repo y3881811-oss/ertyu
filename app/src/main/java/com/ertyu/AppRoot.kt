@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import java.io.File
 
 @Composable
 fun AppRoot(vm: MainViewModel) {
@@ -43,18 +44,18 @@ fun AppRoot(vm: MainViewModel) {
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
 
-    // ================== 新增：SAF 文件夹授权逻辑 ==================
-    // 1. 注册 SAF 文件夹选择器
+    // 新增功能的状态
+    val contentSearchState by vm.contentSearchState.collectAsState()
+    val duplicateScanState by vm.duplicateScanState.collectAsState()
+
+    // ================== SAF 文件夹授权逻辑 ==================
     val safLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
             try {
-                // 持久化读写权限，否则重启应用后权限会丢失
                 val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 context.contentResolver.takePersistableUriPermission(uri, takeFlags)
-                
-                // 默认在左侧面板打开拿到的 SAF 目录
                 vm.openDirectory(true, uri)
                 vm.showToast("授权成功")
             } catch (e: Exception) {
@@ -65,12 +66,11 @@ fun AppRoot(vm: MainViewModel) {
         }
     }
 
-    // 2. 监听 VM 的请求状态，如果用户点击了 Termux 按钮则弹出选择器
     val needSafAuth by _termuxSafRequestState.collectAsState()
     LaunchedEffect(needSafAuth) {
         if (needSafAuth) {
             vm.dismissTermuxSafRequest()
-            safLauncher.launch(null) // 拉起系统 SAF 选择器
+            safLauncher.launch(null)
         }
     }
     // ==========================================================
@@ -86,6 +86,16 @@ fun AppRoot(vm: MainViewModel) {
         imageViewer.isOpen -> {
             BackHandler { vm.closeImageViewer() }
             ImageViewerScreen(vm)
+        }
+        // 👇 挂载全局内容搜索界面
+        contentSearchState.isSearching || contentSearchState.results.isNotEmpty() -> {
+            BackHandler { vm.closeContentSearch() }
+            ContentSearchScreen(vm, File("/storage/emulated/0"))
+        }
+        // 👇 挂载重复文件扫描界面
+        duplicateScanState.isScanning || duplicateScanState.groups.isNotEmpty() -> {
+            BackHandler { vm.closeDuplicateScan() }
+            DuplicateScanScreen(vm, File("/storage/emulated/0"))
         }
         galleryState.visible -> {
             GalleryScreen(vm)
