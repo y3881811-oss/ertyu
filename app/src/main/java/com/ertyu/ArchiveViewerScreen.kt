@@ -4,16 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -23,24 +14,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,6 +29,9 @@ import com.ertyu.model.ArchiveEntry
 fun ArchiveViewerScreen(vm: MainViewModel) {
     val state by ArchiveViewerStateHolder.state.collectAsState()
     var actionTarget by remember { mutableStateOf<ArchiveEntry?>(null) }
+    
+    // 👇 新增：控制“全部解压”弹窗的状态
+    var showExtractDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -79,8 +57,8 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { vm.extractAllFromViewer() }) {
-                        Icon(Icons.Default.FolderOpen, contentDescription = "全部解压到当前目录")
+                    IconButton(onClick = { showExtractDialog = true }) { // 👈 点击弹出解压选项
+                        Icon(Icons.Default.FolderOpen, contentDescription = "全部解压")
                     }
                 }
             )
@@ -120,7 +98,6 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
-                    // 如果有过滤词，不显示返回上级；如果没有过滤词且不在根目录，显示返回上级
                     if (state.filter.isEmpty() && state.currentDir.isNotEmpty()) {
                         item {
                             Row(
@@ -133,7 +110,7 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
                             }
                         }
                     }
-                    
+
                     items(state.displayEntries, key = { it.path }) { entry ->
                         ArchiveEntryRow(
                             entry = entry,
@@ -151,6 +128,7 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
         }
     }
 
+    // 提取单个文件的弹窗
     actionTarget?.let { entry ->
         AlertDialog(
             onDismissRequest = { actionTarget = null },
@@ -171,6 +149,68 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { actionTarget = null }) { Text("取消") }
+            }
+        )
+    }
+
+    // 👇 新增：全部解压的选项弹窗
+    if (showExtractDialog) {
+        var targetDirName by remember { mutableStateOf(state.archiveName.substringBeforeLast(".")) }
+        var toOtherPanel by remember { mutableStateOf(false) }
+        var deleteSource by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showExtractDialog = false },
+            title = { Text("解压") },
+            text = {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = !toOtherPanel, onClick = { toOtherPanel = false })
+                        Text("解压到当前目录")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = toOtherPanel, onClick = { toOtherPanel = true })
+                        Text("解压到另一标签页")
+                    }
+                    
+                    Spacer(Modifier.height(8.dp))
+                    
+                    OutlinedTextField(
+                        value = targetDirName,
+                        onValueChange = { targetDirName = it },
+                        label = { Text("目标文件夹名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { deleteSource = !deleteSource }
+                    ) {
+                        Checkbox(checked = deleteSource, onCheckedChange = { deleteSource = it })
+                        Spacer(Modifier.width(4.dp))
+                        Text("解压后删除源文件")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.extractAllFromViewer(
+                        targetDirName = targetDirName,
+                        toOtherPanel = toOtherPanel,
+                        deleteSource = deleteSource
+                    )
+                    showExtractDialog = false
+                }) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExtractDialog = false }) {
+                    Text("关闭")
+                }
             }
         )
     }

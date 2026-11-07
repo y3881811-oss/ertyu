@@ -2,19 +2,32 @@ package com.ertyu
 
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.RecycleBinManager
+import com.ertyu.model.FileConflictState
 import com.ertyu.model.FileItem
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
+val _fileConflictState = MutableStateFlow(FileConflictState())
+val MainViewModel.fileConflictState: StateFlow<FileConflictState> get() = _fileConflictState
+
+fun MainViewModel.clearConflictState() { _fileConflictState.value = FileConflictState() }
+
+fun generateUniqueFileName(name: String, existingNames: Set<String>): String {
+    if (!existingNames.contains(name)) return name
+    val isDirectory = !name.contains(".")
+    val baseName = if (isDirectory) name else name.substringBeforeLast(".")
+    val extension = if (isDirectory) "" else ".${name.substringAfterLast(".")}"
+    var counter = 1
+    var newName = "$baseName ($counter)$extension"
+    while (existingNames.contains(newName)) { counter++; newName = "$baseName ($counter)$extension" }
+    return newName
+}
+
 fun MainViewModel.enterSelection(isLeft: Boolean, uriString: String) {
-    flowOf(isLeft).update {
-        it.copy(
-            selectedUris = setOf(uriString),
-            isSelectionMode = true,
-            lastSelectedUri = uriString
-        )
-    }
+    flowOf(isLeft).update { it.copy(selectedUris = setOf(uriString), isSelectionMode = true, lastSelectedUri = uriString) }
 }
 
 fun MainViewModel.handleSelectionClick(isLeft: Boolean, item: FileItem) {
@@ -24,11 +37,7 @@ fun MainViewModel.handleSelectionClick(isLeft: Boolean, item: FileItem) {
         if (currentSelected.contains(uriString)) {
             currentSelected.remove(uriString)
             val newMode = currentSelected.isNotEmpty()
-            state.copy(
-                selectedUris = currentSelected,
-                isSelectionMode = newMode,
-                lastSelectedUri = if (newMode) uriString else null
-            )
+            state.copy(selectedUris = currentSelected, isSelectionMode = newMode, lastSelectedUri = if (newMode) uriString else null)
         } else {
             val lastUri = state.lastSelectedUri
             val lastIndex = state.items.indexOfFirst { it.uriString == lastUri }
@@ -37,14 +46,8 @@ fun MainViewModel.handleSelectionClick(isLeft: Boolean, item: FileItem) {
                 val start = minOf(lastIndex, currentIndex)
                 val end = maxOf(lastIndex, currentIndex)
                 for (i in start..end) currentSelected.add(state.items[i].uriString)
-            } else {
-                currentSelected.add(uriString)
-            }
-            state.copy(
-                selectedUris = currentSelected,
-                isSelectionMode = true,
-                lastSelectedUri = uriString
-            )
+            } else { currentSelected.add(uriString) }
+            state.copy(selectedUris = currentSelected, isSelectionMode = true, lastSelectedUri = uriString)
         }
     }
 }
@@ -53,59 +56,35 @@ fun MainViewModel.toggleSelection(isLeft: Boolean, uriString: String) {
     flowOf(isLeft).update { state ->
         val set = state.selectedUris.toMutableSet()
         if (!set.add(uriString)) set.remove(uriString)
-        state.copy(
-            selectedUris = set,
-            isSelectionMode = set.isNotEmpty(),
-            lastSelectedUri = if (set.isNotEmpty()) uriString else null
-        )
+        state.copy(selectedUris = set, isSelectionMode = set.isNotEmpty(), lastSelectedUri = if (set.isNotEmpty()) uriString else null)
     }
 }
 
 fun MainViewModel.selectAll(isLeft: Boolean) {
-    flowOf(isLeft).update { state ->
-        state.copy(
-            selectedUris = state.items.map { it.uriString }.toSet(),
-            isSelectionMode = true,
-            lastSelectedUri = null
-        )
-    }
+    flowOf(isLeft).update { state -> state.copy(selectedUris = state.items.map { it.uriString }.toSet(), isSelectionMode = true, lastSelectedUri = null) }
 }
 
 fun MainViewModel.invertSelection(isLeft: Boolean) {
     flowOf(isLeft).update { state ->
         val newSelected = state.items.map { it.uriString }.toSet() - state.selectedUris
-        state.copy(
-            selectedUris = newSelected,
-            isSelectionMode = newSelected.isNotEmpty(),
-            lastSelectedUri = null
-        )
+        state.copy(selectedUris = newSelected, isSelectionMode = newSelected.isNotEmpty(), lastSelectedUri = null)
     }
 }
 
 fun MainViewModel.selectByType(isLeft: Boolean, type: String) {
     flowOf(isLeft).update { state ->
-        val newSelected = state.items
-            .filter { !it.isDirectory && it.name.substringAfterLast('.', "").lowercase() == type }
-            .map { it.uriString }
-            .toSet()
-        state.copy(
-            selectedUris = state.selectedUris + newSelected,
-            isSelectionMode = true,
-            lastSelectedUri = null
-        )
+        val newSelected = state.items.filter { !it.isDirectory && it.name.substringAfterLast('.', "").lowercase() == type }.map { it.uriString }.toSet()
+        state.copy(selectedUris = state.selectedUris + newSelected, isSelectionMode = true, lastSelectedUri = null)
     }
 }
 
 fun MainViewModel.clearSelection(isLeft: Boolean) {
-    flowOf(isLeft).update {
-        it.copy(selectedUris = emptySet(), isSelectionMode = false, lastSelectedUri = null)
-    }
+    flowOf(isLeft).update { it.copy(selectedUris = emptySet(), isSelectionMode = false, lastSelectedUri = null) }
 }
 
 fun MainViewModel.batchDelete(isLeft: Boolean, useTrash: Boolean? = null) {
     val state = flowOf(isLeft).value
     val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
-    // 本次是否走回收站：优先用调用方传入的值，否则回退到全局设置
     val trashEnabled = useTrash ?: _settingsState.value.useRecycleBin
 
     viewModelScope.launch {
@@ -113,18 +92,10 @@ fun MainViewModel.batchDelete(isLeft: Boolean, useTrash: Boolean? = null) {
         targets.forEach { item ->
             val path = item.uri.path
             if (trashEnabled && path != null) {
-                val file = File(path)
-                if (RecycleBinManager.moveToTrash(getApplication(), file, item.isDirectory, item.size)) {
-                    toTrashCount++
-                } else {
-                    engine.delete(item.uri)
-                }
-            } else {
-                engine.delete(item.uri)
-            }
+                if (RecycleBinManager.moveToTrash(getApplication(), File(path), item.isDirectory, item.size)) toTrashCount++ else engine.delete(item.uri)
+            } else { engine.delete(item.uri) }
         }
-        clearSelection(isLeft)
-        refresh(isLeft)
+        clearSelection(isLeft); refresh(isLeft)
         if (toTrashCount > 0) _toast.value = "已处理 $toTrashCount 项到回收站"
     }
 }
