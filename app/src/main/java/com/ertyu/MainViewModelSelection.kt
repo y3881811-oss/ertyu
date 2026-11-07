@@ -2,6 +2,7 @@ package com.ertyu
 
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.RecycleBinManager
+import com.ertyu.model.ConflictAction
 import com.ertyu.model.FileConflictState
 import com.ertyu.model.FileItem
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,15 +12,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
-// ===== 冲突状态管理 =====
-private val _fileConflictState = MutableStateFlow(FileConflictState())
+// 移除了 private，供 FileOps 访问
 val MainViewModel.fileConflictState: StateFlow<FileConflictState> get() = _fileConflictState
 
 fun MainViewModel.clearConflictState() {
     _fileConflictState.value = FileConflictState()
 }
 
-// ===== 核心多选逻辑（恢复你原有的方法） =====
+// ===== 核心多选逻辑 =====
 fun MainViewModel.enterSelection(isLeft: Boolean, uriString: String) {
     flowOf(isLeft).update {
         it.copy(
