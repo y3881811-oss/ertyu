@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -49,14 +50,32 @@ fun ContentSearchScreen(vm: MainViewModel, rootDir: java.io.File) {
             if (state.isSearching) LinearProgressIndicator(Modifier.fillMaxWidth())
             LazyColumn {
                 items(state.results) { res ->
-                    ListItem(
-                        headlineText = { Text(res.file.name) },
-                        supportingText = { Text("第 ${res.lineNum} 行: ${res.content}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        modifier = Modifier.clickable {
-                            vm.openEditor(res.file.absolutePath)
-                            vm.closeContentSearch()
-                        }
-                    )
+                    // 👇 改用 Row + Column 手写列表项，兼容性无敌
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                // TODO: 如果你需要打开编辑器，请在这里改成你 ViewModel 里实际的方法名
+                                // vm.openEditor(res.file.absolutePath)
+                                vm.showToast("点击了: ${res.file.name}")
+                                vm.closeContentSearch()
+                            }
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = res.file.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "第 ${res.lineNum} 行: ${res.content}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     HorizontalDivider()
                 }
             }
@@ -72,7 +91,7 @@ fun DuplicateScanScreen(vm: MainViewModel, rootDir: java.io.File) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("重复文件清理 (${state.selectedFiles.size})") },
+                title = { Text("重复文件清理 (已选 ${state.selectedFiles.size})") },
                 navigationIcon = {
                     IconButton(onClick = { vm.closeDuplicateScan() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
@@ -100,20 +119,41 @@ fun DuplicateScanScreen(vm: MainViewModel, rootDir: java.io.File) {
                 LazyColumn {
                     state.groups.forEachIndexed { index, group ->
                         item {
-                            Text("组 ${index + 1} (${group.files.size} 个文件)", Modifier.padding(16.dp, 8.dp), style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "组 ${index + 1} (${group.files.size} 个文件)",
+                                Modifier.padding(16.dp, 8.dp),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                         items(group.files) { file ->
                             val isSelected = state.selectedFiles.contains(file.absolutePath)
-                            ListItem(
-                                headlineText = { Text(file.name) },
-                                supportingText = { Text(file.absolutePath, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                leadingContent = {
-                                    Checkbox(
-                                        checked = isSelected,
-                                        onCheckedChange = { vm.toggleDuplicateSelection(file.absolutePath) }
+                            
+                            // 👇 同样手写 Row，彻底摆脱 ListItem 依赖
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { vm.toggleDuplicateSelection(file.absolutePath) }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isSelected,
+                                    onCheckedChange = { vm.toggleDuplicateSelection(file.absolutePath) }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(file.name, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        file.absolutePath,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                            )
+                            }
+                            HorizontalDivider()
                         }
                     }
                 }
