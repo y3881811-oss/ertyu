@@ -84,11 +84,17 @@ fun MainViewModel.extractArchiveEntry(entry: ArchiveEntry) {
     }
 }
 
-/** 从压缩包浏览界面一键全部解压 */
-fun MainViewModel.extractAllFromViewer() {
+/**
+ * 从压缩包浏览界面一键全部解压 (带高级参数)
+ */
+fun MainViewModel.extractAllFromViewer(
+    targetDirName: String,
+    toOtherPanel: Boolean,
+    deleteSource: Boolean
+) {
     val state = ArchiveViewerStateHolder.state.value
+    if (state.archivePath.isEmpty()) return
     
-    // 👇 修复：加上 uriString 参数
     val fileUri = android.net.Uri.fromFile(java.io.File(state.archivePath))
     val item = FileItem(
         name = state.archiveName,
@@ -97,7 +103,15 @@ fun MainViewModel.extractAllFromViewer() {
         isDirectory = false,
         path = state.archivePath
     )
-    
+
     closeArchiveViewer()
-    extractZipHere(state.sourceIsLeft, item)
+    
+    // 👇 调用统一的解压逻辑
+    extractArchive(
+        isLeft = state.sourceIsLeft,
+        item = item,
+        targetDirName = targetDirName,
+        toOtherPanel = toOtherPanel,
+        deleteSource = deleteSource
+    )
 }
