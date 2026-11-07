@@ -1,12 +1,20 @@
 package com.ertyu
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun AppRoot(vm: MainViewModel) {
+    val context = LocalContext.current
+
     val editor by vm.editor.collectAsState()
     val imageViewer by vm.imageViewer.collectAsState()
     val hexViewerState by vm.hexViewerState.collectAsState()
@@ -34,6 +42,38 @@ fun AppRoot(vm: MainViewModel) {
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
+
+    // ================== 新增：SAF 文件夹授权逻辑 ==================
+    // 1. 注册 SAF 文件夹选择器
+    val safLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                // 持久化读写权限，否则重启应用后权限会丢失
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+                
+                // 默认在左侧面板打开拿到的 SAF 目录
+                vm.openDirectory(true, uri)
+                vm.showToast("授权成功")
+            } catch (e: Exception) {
+                vm.showToast("获取权限失败: ${e.message}")
+            }
+        } else {
+            vm.showToast("已取消授权")
+        }
+    }
+
+    // 2. 监听 VM 的请求状态，如果用户点击了 Termux 按钮则弹出选择器
+    val needSafAuth by _termuxSafRequestState.collectAsState()
+    LaunchedEffect(needSafAuth) {
+        if (needSafAuth) {
+            vm.dismissTermuxSafRequest()
+            safLauncher.launch(null) // 拉起系统 SAF 选择器
+        }
+    }
+    // ==========================================================
 
     AppDialogs(vm)
     CryptoDialog(vm)
