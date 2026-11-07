@@ -1,0 +1,70 @@
+name: Memory Test
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动点击触发
+  push:
+    branches: [ "main" ] # 也可以推送到 main 时自动触发
+
+jobs:
+  memory-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '9.4.1'
+
+      # 1. 编译 Debug 包 (内存测试用 Debug 包更贴近实际开发状态)
+      - name: Build Debug APK
+        run: gradle assembleDebug --no-daemon --build-cache
+
+      # 2. 启动模拟器并执行测试脚本
+      - name: Run Memory Test on Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30 # 推荐使用 API 30 或以上，运行更快
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          script: |
+            # 等待模拟器完全启动
+            adb wait-for-device
+            
+            # 安装编译好的 APK
+            echo "Installing APK..."
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            
+            # 启动 App (确保包名 com.ertyu 和启动页 MainActivity 正确)
+            echo "Launching App..."
+            adb shell am start -W -n com.ertyu/.MainActivity
+            
+            # 等待 15 秒让 App 完全加载初始界面
+            echo "Waiting for App to settle..."
+            sleep 15
+            
+            # 抓取内存信息
+            echo "Dumping memory info..."
+            adb shell dumpsys meminfo com.ertyu > meminfo_full.txt
+            
+            # 提取并打印关键内存指标
+            echo "================ Memory Summary ================"
+            grep -E "TOTAL PSS|TOTAL RSS|Java Heap|Native Heap" meminfo_full.txt || cat meminfo_full.txt
+            echo "================================================"
+
+      # 3. 将完整的内存报告保存下来，供你下载查看
+      - name: Upload Memory Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-report
+          path: meminfo_full.txt
