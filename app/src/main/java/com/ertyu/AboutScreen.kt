@@ -16,8 +16,11 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +35,7 @@ import androidx.compose.ui.unit.dp
 fun AboutScreen(vm: MainViewModel) {
     val context = LocalContext.current
     
-    // 👇 核心修复：不再使用 BuildConfig，直接通过系统 API 动态获取版本号
+    // 动态获取当前版本号
     val versionText = remember {
         try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -47,6 +50,38 @@ fun AboutScreen(vm: MainViewModel) {
         } catch (e: Exception) {
             "1.0.0 (1)"
         }
+    }
+
+    val updateState by _updateState.collectAsState()
+
+    // 👇 检查更新的弹窗
+    if (updateState.hasUpdate) {
+        AlertDialog(
+            onDismissRequest = { vm.dismissUpdateDialog() },
+            title = { Text("发现新版本") },
+            text = {
+                Column {
+                    Text("最新版本：${updateState.latestVersion}")
+                    Spacer(Modifier.height(8.dp))
+                    Text("当前版本：${versionText.substringBefore(" ")}")
+                    Spacer(Modifier.height(16.dp))
+                    Text("是否前往 GitHub 下载最新版？", style = MaterialTheme.typography.bodyMedium)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.downloadUpdate(updateState.downloadUrl)
+                    vm.dismissUpdateDialog()
+                }) {
+                    Text("去下载")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissUpdateDialog() }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -105,6 +140,7 @@ fun AboutScreen(vm: MainViewModel) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
                 Column {
+                    // 版本信息
                     AboutRow(
                         icon = Icons.Default.Info,
                         title = "版本",
@@ -112,7 +148,21 @@ fun AboutScreen(vm: MainViewModel) {
                         onClick = null
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-                    
+
+                    // 👇 检查更新入口
+                    AboutRow(
+                        icon = Icons.Default.SystemUpdate,
+                        title = "检查更新",
+                        subtitle = if (updateState.isChecking) "正在检查..." else "检查是否有最新版本",
+                        onClick = {
+                            if (!updateState.isChecking) {
+                                vm.checkForUpdates(versionText.substringBefore(" "))
+                            }
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+
+                    // GitHub 仓库
                     AboutRow(
                         icon = Icons.Default.Code,
                         title = "在 GitHub 上查看",
@@ -124,6 +174,7 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
+                    // 许可证
                     AboutRow(
                         icon = Icons.Default.Description,
                         title = "开源许可证",
@@ -135,6 +186,7 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
+                    // 隐私政策
                     AboutRow(
                         icon = Icons.Default.Security,
                         title = "隐私政策",
@@ -207,8 +259,8 @@ private fun AboutRow(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            contentDescription = null
         )
         Spacer(Modifier.width(16.dp))
         Column {
