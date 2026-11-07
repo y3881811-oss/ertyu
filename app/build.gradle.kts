@@ -137,5 +137,6 @@ dependencies {
     implementation(libs.arsc.lib)
     implementation(libs.smali.baksmali)
     implementation(libs.smali.dexlib2)
+implementation(libs.androidx.exifinterface)
 }
- implementation(libs.androidx.exifinterface)
+ 
