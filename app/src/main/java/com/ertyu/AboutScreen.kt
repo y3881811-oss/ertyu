@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 fun AboutScreen(vm: MainViewModel) {
     val context = LocalContext.current
     
-    // 动态获取当前版本号
     val versionText = remember {
         try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -54,7 +53,6 @@ fun AboutScreen(vm: MainViewModel) {
 
     val updateState by _updateState.collectAsState()
 
-    // 👇 检查更新的弹窗
     if (updateState.hasUpdate) {
         AlertDialog(
             onDismissRequest = { vm.dismissUpdateDialog() },
@@ -104,7 +102,6 @@ fun AboutScreen(vm: MainViewModel) {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ================== App 头部信息 ==================
             Spacer(Modifier.height(24.dp))
             Box(
                 modifier = Modifier
@@ -127,20 +124,18 @@ fun AboutScreen(vm: MainViewModel) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "本地文件管理器",
+                text = "高效、安全、开源的文件管理",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
             Spacer(Modifier.height(32.dp))
 
-            // ================== 应用信息列表 ==================
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
                 Column {
-                    // 版本信息
                     AboutRow(
                         icon = Icons.Default.Info,
                         title = "版本",
@@ -149,7 +144,6 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
-                    // 👇 检查更新入口
                     AboutRow(
                         icon = Icons.Default.SystemUpdate,
                         title = "检查更新",
@@ -162,7 +156,6 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
-                    // GitHub 仓库
                     AboutRow(
                         icon = Icons.Default.Code,
                         title = "在 GitHub 上查看",
@@ -174,7 +167,6 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
-                    // 许可证
                     AboutRow(
                         icon = Icons.Default.Description,
                         title = "开源许可证",
@@ -186,7 +178,6 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
-                    // 隐私政策
                     AboutRow(
                         icon = Icons.Default.Security,
                         title = "隐私政策",
@@ -200,7 +191,6 @@ fun AboutScreen(vm: MainViewModel) {
 
             Spacer(Modifier.height(24.dp))
 
-            // ================== 作者信息列表 ==================
             Text(
                 text = "作者",
                 style = MaterialTheme.typography.labelMedium,
@@ -259,7 +249,8 @@ private fun AboutRow(
     ) {
         Icon(
             imageVector = icon,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // 👇 修复：把 color 改为 tint
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             contentDescription = null
         )
         Spacer(Modifier.width(16.dp))
