@@ -18,10 +18,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,7 +49,11 @@ fun AboutScreen(vm: MainViewModel) {
     }
 
     val updateState by _updateState.collectAsState()
+    
+    // 控制下载节点选择弹窗
+    var showDownloadOptions by remember { mutableStateOf(false) }
 
+    // ================== 发现新版本弹窗 ==================
     if (updateState.hasUpdate) {
         AlertDialog(
             onDismissRequest = { vm.dismissUpdateDialog() },
@@ -63,13 +64,20 @@ fun AboutScreen(vm: MainViewModel) {
                     Spacer(Modifier.height(8.dp))
                     Text("当前版本：${versionText.substringBefore(" ")}")
                     Spacer(Modifier.height(16.dp))
-                    Text("是否前往 GitHub 下载最新版？", style = MaterialTheme.typography.bodyMedium)
+                    Text("是否前往下载最新版？", style = MaterialTheme.typography.bodyMedium)
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    vm.downloadUpdate(updateState.downloadUrl)
-                    vm.dismissUpdateDialog()
+                    if (updateState.downloadUrl.isNotBlank()) {
+                        // 如果拿到了 APK 直链，弹出节点选择
+                        showDownloadOptions = true
+                        vm.dismissUpdateDialog()
+                    } else {
+                        // 如果没拿到直链，直接打开网页
+                        vm.startDownload(updateState.htmlUrl)
+                        vm.dismissUpdateDialog()
+                    }
                 }) {
                     Text("去下载")
                 }
@@ -82,6 +90,38 @@ fun AboutScreen(vm: MainViewModel) {
         )
     }
 
+    // ================== 下载节点选择弹窗 ==================
+    if (showDownloadOptions) {
+        AlertDialog(
+            onDismissRequest = { showDownloadOptions = false },
+            title = { Text("选择下载节点") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text("GitHub 在国内访问较慢，建议选择以下加速节点：", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    
+                    downloadProxies.forEach { (proxy, name) ->
+                        val finalUrl = if (proxy.isEmpty()) updateState.downloadUrl else "$proxy${updateState.downloadUrl}"
+                        ListItem(
+                            headlineContent = { Text(name) },
+                            modifier = Modifier.clickable {
+                                vm.startDownload(finalUrl)
+                                showDownloadOptions = false
+                            }
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDownloadOptions = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // ================== 主界面 ==================
     Scaffold(
         topBar = {
             TopAppBar(
@@ -249,7 +289,6 @@ private fun AboutRow(
     ) {
         Icon(
             imageVector = icon,
-            // 👇 修复：把 color 改为 tint
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             contentDescription = null
         )
