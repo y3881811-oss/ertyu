@@ -16,9 +16,9 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 fun AboutScreen(vm: MainViewModel) {
     val context = LocalContext.current
     
-    // 👇 核心修复：不再使用 BuildConfig，直接通过系统 API 动态获取版本号
     val versionText = remember {
         try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -49,6 +48,77 @@ fun AboutScreen(vm: MainViewModel) {
         }
     }
 
+    val updateState by _updateState.collectAsState()
+    
+    var showDownloadOptions by remember { mutableStateOf(false) }
+
+    // ================== 发现新版本弹窗 ==================
+    if (updateState.hasUpdate) {
+        AlertDialog(
+            onDismissRequest = { vm.dismissUpdateDialog() },
+            title = { Text("发现新版本") },
+            text = {
+                Column {
+                    Text("最新版本：${updateState.latestVersion}")
+                    Spacer(Modifier.height(8.dp))
+                    Text("当前版本：${versionText.substringBefore(" ")}")
+                    Spacer(Modifier.height(16.dp))
+                    Text("是否前往下载最新版？", style = MaterialTheme.typography.bodyMedium)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (updateState.downloadUrl.isNotBlank()) {
+                        showDownloadOptions = true
+                        vm.dismissUpdateDialog()
+                    } else {
+                        vm.startDownload(updateState.htmlUrl)
+                        vm.dismissUpdateDialog()
+                    }
+                }) {
+                    Text("去下载")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissUpdateDialog() }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // ================== 下载节点选择弹窗 ==================
+    if (showDownloadOptions) {
+        AlertDialog(
+            onDismissRequest = { showDownloadOptions = false },
+            title = { Text("选择下载节点") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text("GitHub 在国内访问较慢，建议选择以下加速节点：", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    
+                    downloadProxies.forEach { (proxy, name) ->
+                        val finalUrl = if (proxy.isEmpty()) updateState.downloadUrl else "$proxy${updateState.downloadUrl}"
+                        ListItem(
+                            headlineContent = { Text(name) },
+                            modifier = Modifier.clickable {
+                                vm.startDownload(finalUrl)
+                                showDownloadOptions = false
+                            }
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDownloadOptions = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // ================== 主界面 ==================
     Scaffold(
         topBar = {
             TopAppBar(
@@ -69,7 +139,6 @@ fun AboutScreen(vm: MainViewModel) {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ================== App 头部信息 ==================
             Spacer(Modifier.height(24.dp))
             Box(
                 modifier = Modifier
@@ -92,14 +161,13 @@ fun AboutScreen(vm: MainViewModel) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "本地文件管理器",
+                text = "高效、安全、开源的文件管理",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
             Spacer(Modifier.height(32.dp))
 
-            // ================== 应用信息列表 ==================
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -112,7 +180,19 @@ fun AboutScreen(vm: MainViewModel) {
                         onClick = null
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-                    
+
+                    AboutRow(
+                        icon = Icons.Default.SystemUpdate,
+                        title = "检查更新",
+                        subtitle = if (updateState.isChecking) "正在检查..." else "检查是否有最新版本",
+                        onClick = {
+                            if (!updateState.isChecking) {
+                                vm.checkForUpdates(versionText.substringBefore(" "))
+                            }
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+
                     AboutRow(
                         icon = Icons.Default.Code,
                         title = "在 GitHub 上查看",
@@ -148,7 +228,6 @@ fun AboutScreen(vm: MainViewModel) {
 
             Spacer(Modifier.height(24.dp))
 
-            // ================== 作者信息列表 ==================
             Text(
                 text = "作者",
                 style = MaterialTheme.typography.labelMedium,
@@ -207,8 +286,8 @@ private fun AboutRow(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            contentDescription = null
         )
         Spacer(Modifier.width(16.dp))
         Column {
