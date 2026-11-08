@@ -16,8 +16,18 @@ data class UpdateState(
     val isChecking: Boolean = false,
     val hasUpdate: Boolean = false,
     val latestVersion: String = "",
-    val downloadUrl: String = "",
+    val htmlUrl: String = "",        // GitHub Release 页面
+    val downloadUrl: String = "",    // 真实的 APK 下载直链
     val errorMsg: String? = null
+)
+
+// 定义加速节点列表（前缀 + 名称）
+val downloadProxies = listOf(
+    "" to "直连 GitHub (需科学上网或网络较好)",
+    "https://ghfast.top/" to "高速节点 1 (韩国/日本等 CDN)",
+    "https://gh-proxy.org/" to "高速节点 2 (美国/香港 CDN)",
+    "https://ghproxy.net/" to "高速节点 3 (法国 CDN)",
+    "https://wget.la/" to "高速节点 4 (多地区 CDN)"
 )
 
 val _aboutVisible = MutableStateFlow(false)
@@ -29,7 +39,7 @@ fun MainViewModel.openAbout() {
 
 fun MainViewModel.closeAbout() {
     _aboutVisible.value = false
-    _updateState.value = UpdateState() // 退出时重置状态
+    _updateState.value = UpdateState()
 }
 
 fun MainViewModel.checkForUpdates(currentVersionName: String) {
@@ -43,34 +53,46 @@ fun MainViewModel.checkForUpdates(currentVersionName: String) {
                 val conn = apiUrl.openConnection() as HttpURLConnection
                 conn.requestMethod = "GET"
                 conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                conn.setRequestProperty("User-Agent", "MTFM-App")
+                conn.setRequestProperty("User-Agent", "EYU-FileManager")
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
 
                 if (conn.responseCode == 200) {
                     val response = conn.inputStream.bufferedReader().use { it.readText() }
                     val json = JSONObject(response)
-                    val latestTag = json.getString("tag_name") // 例如 "v2026.11.07-1234"
-                    val htmlUrl = json.getString("html_url")   // Release 页面链接
-                    Pair(latestTag, htmlUrl)
+                    val latestTag = json.getString("tag_name")
+                    val htmlUrl = json.getString("html_url")
+                    
+                    // 尝试解析 assets 里的第一个 APK 直链
+                    var apkDownloadUrl = ""
+                    val assets = json.optJSONArray("assets")
+                    if (assets != null && assets.length() > 0) {
+                        for (i in 0 until assets.length()) {
+                            val asset = assets.getJSONObject(i)
+                            val name = asset.optString("name")
+                            if (name.endsWith(".apk")) {
+                                apkDownloadUrl = asset.optString("browser_download_url")
+                                break
+                            }
+                        }
+                    }
+                    
+                    Triple(latestTag, htmlUrl, apkDownloadUrl)
                 } else {
                     throw Exception("HTTP ${conn.responseCode}")
                 }
             }
 
-            val (latestTag, htmlUrl) = result
-            
-            // 清理版本号进行比对 (比如去掉前缀 v 和 date 里的 - 等)
+            val (latestTag, htmlUrl, apkDownloadUrl) = result
             val cleanLatest = latestTag.replace("v", "").replace("-", ".")
             
-            // 如果 Github 上的最新 Tag 和当前 App 的 versionName 不一致，则提示更新
-            // (注意：此处用简单字符串对比，如果 CI 生成版本号变了，建议改成拆分数字对比)
             if (cleanLatest != currentVersionName) {
                 _updateState.value = UpdateState(
                     isChecking = false,
                     hasUpdate = true,
                     latestVersion = latestTag,
-                    downloadUrl = htmlUrl
+                    htmlUrl = htmlUrl,
+                    downloadUrl = apkDownloadUrl
                 )
             } else {
                 _updateState.value = UpdateState(isChecking = false, hasUpdate = false)
@@ -89,7 +111,8 @@ fun MainViewModel.dismissUpdateDialog() {
     _updateState.value = _updateState.value.copy(hasUpdate = false)
 }
 
-fun MainViewModel.downloadUpdate(url: String) {
+// 调起浏览器下载
+fun MainViewModel.startDownload(url: String) {
     try {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
