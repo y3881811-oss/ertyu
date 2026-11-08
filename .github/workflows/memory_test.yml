@@ -1,7 +1,7 @@
 name: Memory Test
 
 on:
-  workflow_dispatch: # 允许在 Actions 页面手动点击触发
+  workflow_dispatch:
 
 jobs:
   memory-test:
@@ -22,47 +22,57 @@ jobs:
         with:
           gradle-version: '9.4.1'
 
-      # 1. 编译 Debug 包 (内存测试用 Debug 包更贴近实际开发状态)
+      # 👇 关键点 1：确保 GitHub 的 Runner 启用 KVM 硬件加速
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --build-cache
 
-      # 2. 启动模拟器并执行测试脚本
       - name: Run Memory Test on Emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30 # 推荐使用 API 30 或以上，运行更快
+          api-level: 30
           target: google_apis
           arch: x86_64
           profile: pixel_5
           disable-animations: true
+          # 👇 关键点 2：增加启动超时时间，并启用无头模式加速启动
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-boot-timeout: 900 # 等待模拟器最多 15 分钟
           script: |
-            # 等待模拟器完全启动
-            adb wait-for-device
-            
-            # 安装编译好的 APK
+            # 👇 关键点 3：杀掉旧的 adb 服务，避免端口冲突
+            adb kill-server
+            adb start-server
+
             echo "Installing APK..."
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             
-            # 启动 App (确保包名 com.ertyu 和启动页 MainActivity 正确)
             echo "Launching App..."
             adb shell am start -W -n com.ertyu/.MainActivity
+
+            # 👇 关键点 4：等待系统彻底完成启动（极其重要！）
+            echo "等待模拟器系统完全启动..."
+            adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;'
             
-            # 等待 15 秒让 App 完全加载初始界面
-            echo "Waiting for App to settle..."
+            # 等待 App 加载完毕（给 App 留出 15 秒渲染首屏）
+            echo "等待 App 界面渲染..."
             sleep 15
             
-            # 抓取内存信息
             echo "Dumping memory info..."
             adb shell dumpsys meminfo com.ertyu > meminfo_full.txt
             
-            # 提取并打印关键内存指标
             echo "================ Memory Summary ================"
             grep -E "TOTAL PSS|TOTAL RSS|Java Heap|Native Heap" meminfo_full.txt || cat meminfo_full.txt
             echo "================================================"
 
-      # 3. 将完整的内存报告保存下来，供你下载查看
       - name: Upload Memory Report
+        if: always() # 就算 adb 报错了，也把已经抓到的文件传上去
         uses: actions/upload-artifact@v4
         with:
           name: memory-report
           path: meminfo_full.txt
+          if-no-files-found: warn
