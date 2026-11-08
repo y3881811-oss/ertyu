@@ -50,7 +50,6 @@ fun AboutScreen(vm: MainViewModel) {
 
     val updateState by _updateState.collectAsState()
     
-    // 控制下载节点选择弹窗
     var showDownloadOptions by remember { mutableStateOf(false) }
 
     // ================== 发现新版本弹窗 ==================
@@ -70,11 +69,9 @@ fun AboutScreen(vm: MainViewModel) {
             confirmButton = {
                 TextButton(onClick = {
                     if (updateState.downloadUrl.isNotBlank()) {
-                        // 如果拿到了 APK 直链，弹出节点选择
                         showDownloadOptions = true
                         vm.dismissUpdateDialog()
                     } else {
-                        // 如果没拿到直链，直接打开网页
                         vm.startDownload(updateState.htmlUrl)
                         vm.dismissUpdateDialog()
                     }
