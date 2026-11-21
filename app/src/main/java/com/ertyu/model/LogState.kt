@@ -5,9 +5,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 data class LogState(
     val visible: Boolean = false,
     val logs: List<LogEntry> = emptyList(),
+    val logcatLines: List<String> = emptyList(), // 👈 将 Logcat 按行拆分，方便 LazyColumn 渲染
     val searchQuery: String = "",
     val filterLevel: String? = null,
-    val isExporting: Boolean = false
+    val isExporting: Boolean = false,
+    val isLoading: Boolean = false
 ) {
     val filteredLogs: List<LogEntry>
         get() = logs.filter {
