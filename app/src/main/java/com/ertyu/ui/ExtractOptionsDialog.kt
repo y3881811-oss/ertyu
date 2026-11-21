@@ -9,6 +9,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ertyu.MainViewModel
 import com.ertyu.model.ArchiveOptionsHolder
+// 👇 补上跨包导入
+import com.ertyu.cancelExtractOptions
+import com.ertyu.executeAdvancedExtract
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
