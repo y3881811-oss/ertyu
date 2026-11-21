@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.ArchiveFormat
+import com.ertyu.ui.CompressOptionsDialog
+import com.ertyu.ui.ExtractOptionsDialog
 import com.ertyu.ui.FileConflictDialog
 import com.ertyu.ui.SelectionActionSheet
 import kotlinx.coroutines.launch
@@ -39,7 +41,6 @@ fun FilePanel(
     val state by panelFlow.collectAsState()
     val settings by vm.settingsState.collectAsState()
     val conflictState by vm.fileConflictState.collectAsState()
-    // 👇 确保 fileClipboardState 正常获取
     val clipboard by vm.fileClipboardState.collectAsState()
 
     val currentUriStr = state.currentUri?.toString() ?: ""
@@ -53,9 +54,13 @@ fun FilePanel(
 
     var showSelectionSheet by remember { mutableStateOf(false) }
 
+    // 返回键拦截：优先关闭底部弹窗 -> 其次退出多选
     BackHandler(enabled = showSelectionSheet || state.isSelectionMode) {
-        if (showSelectionSheet) { showSelectionSheet = false } 
-        else if (state.isSelectionMode) { vm.clearSelection(isLeft) }
+        if (showSelectionSheet) {
+            showSelectionSheet = false
+        } else if (state.isSelectionMode) {
+            vm.clearSelection(isLeft)
+        }
     }
 
     LaunchedEffect(listState, currentUriStr) {
@@ -66,39 +71,21 @@ fun FilePanel(
     }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        if (!isCompact) {
-            // 如果你有 FileTabBar，请保留你原来的调用
-            // FileTabBar(isLeft = isLeft, tabs = tabs, activeIndex = activeIndex, currentState = state, vm = vm)
-        }
-        if (state.isSelectionMode) {
-            SelectionToolbar(
-                count = state.selectedUris.size,
-                onClear = { vm.clearSelection(isLeft) },
-                onSelectAll = { vm.selectAll(isLeft) },
-                onInvert = { vm.invertSelection(isLeft) },
-                onSelectByType = { type -> vm.selectByType(isLeft, type) },
-                onRename = { vm.openBatchRename(isLeft) },
-                onZip = { vm.requestCompress(isLeft) },
-                onCopy = { vm.batchCopy(isLeft) },
-                onMove = { vm.batchMove(isLeft) },
-                onDelete = { vm.batchDelete(isLeft) },
-                onDiff = { vm.startFileDiff(isLeft) }
-            )
-        } else {
-            FileToolbar(
-                isLeft = isLeft,
-                isCompact = isCompact,
-                vm = vm,
-                isGridMode = settings.isGridMode,
-                onToggleGrid = { vm.toggleGridMode() },
-                path = state.currentUri?.path ?: "未选择目录",
-                canGoUp = state.canGoUp,
-                showHidden = state.showHidden,
-                showSwitch = onSwitchPanel != null,
-                onSwitchPanel = { onSwitchPanel?.invoke() },
-                onOpenDrawer = onOpenDrawer
-            )
-        }
+        
+        // 顶部路径栏
+        FileToolbar(
+            isLeft = isLeft,
+            isCompact = isCompact,
+            vm = vm,
+            isGridMode = settings.isGridMode,
+            onToggleGrid = { vm.toggleGridMode() },
+            path = state.currentUri?.path ?: "未选择目录",
+            canGoUp = state.canGoUp,
+            showHidden = state.showHidden,
+            showSwitch = onSwitchPanel != null,
+            onSwitchPanel = { onSwitchPanel?.invoke() },
+            onOpenDrawer = onOpenDrawer
+        )
         HorizontalDivider()
 
         Box(modifier = Modifier.weight(1f)) {
@@ -118,9 +105,13 @@ fun FilePanel(
                                 isSelected = { state.selectedUris.contains(item.uriString) },
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
-                                    if (!state.isSelectionMode) { vm.enterSelection(isLeft, item.uriString) } 
-                                    else if (item.uriString in state.selectedUris) { showSelectionSheet = true } 
-                                    else { vm.toggleSelection(isLeft, item.uriString) }
+                                    if (!state.isSelectionMode) {
+                                        vm.enterSelection(isLeft, item.uriString)
+                                    } else if (item.uriString in state.selectedUris) {
+                                        showSelectionSheet = true
+                                    } else {
+                                        vm.toggleSelection(isLeft, item.uriString)
+                                    }
                                 }
                             )
                         }
@@ -139,9 +130,13 @@ fun FilePanel(
                                 isSelectionMode = state.isSelectionMode,
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
-                                    if (!state.isSelectionMode) { vm.enterSelection(isLeft, item.uriString) } 
-                                    else if (item.uriString in state.selectedUris) { showSelectionSheet = true } 
-                                    else { vm.toggleSelection(isLeft, item.uriString) }
+                                    if (!state.isSelectionMode) {
+                                        vm.enterSelection(isLeft, item.uriString)
+                                    } else if (item.uriString in state.selectedUris) {
+                                        showSelectionSheet = true
+                                    } else {
+                                        vm.toggleSelection(isLeft, item.uriString)
+                                    }
                                 },
                                 onMoreClick = { vm.openActionDialog(isLeft, item) }
                             )
@@ -160,12 +155,13 @@ fun FilePanel(
             }
         }
 
+        // ================== 底部多选菜单 ==================
         val selectedItems = state.items.filter { it.uriString in state.selectedUris }
         SelectionActionSheet(
             visible = showSelectionSheet,
             selectedItems = selectedItems,
             defaultUseTrash = settings.useRecycleBin,
-            hasClipboardItems = !clipboard.isEmpty, // 👈 这里必须是 FileClipboardState 类型的 isEmpty
+            hasClipboardItems = !clipboard.isEmpty,
             onDismiss = { showSelectionSheet = false },
             onSelectAll = { vm.selectAll(isLeft) },
             onInvertSelection = { vm.invertSelection(isLeft) },
@@ -175,11 +171,17 @@ fun FilePanel(
             onCopyToOther = { vm.batchCopy(isLeft) },
             onMoveToOther = { vm.batchMove(isLeft) },
             onDelete = { useTrash -> vm.batchDelete(isLeft, useTrash) },
-            onCompress = { vm.requestCompress(isLeft) },
-            onBatchRename = { vm.openBatchRename(isLeft) }
+            onCompress = { items -> vm.openCompressOptions(items, isLeft) },     // 触发压缩弹窗
+            onBatchRename = { vm.openBatchRename(isLeft) },
+            onInstallApk = { item -> vm.installApk(item) },
+            onBrowseApk = { item -> vm.openApkBrowser(isLeft, item) },
+            onExtractArchive = { items -> vm.openExtractOptions(items, isLeft) } // 触发解压弹窗
         )
 
+        // ================== 挂载新弹窗 ==================
         FileConflictDialog(state = conflictState, onDismiss = { vm.clearConflictState() })
+        ExtractOptionsDialog(vm)
+        CompressOptionsDialog(vm)
     }
 }
 
@@ -189,7 +191,10 @@ private fun handleItemClick(
     state: com.ertyu.model.PanelState,
     vm: MainViewModel
 ) {
-    if (state.isSelectionMode) { vm.handleSelectionClick(isLeft, item); return }
+    if (state.isSelectionMode) {
+        vm.handleSelectionClick(isLeft, item)
+        return
+    }
     if (item.isDirectory) {
         FilePanelScrollStore.save(isLeft, "", 0, 0)
         vm.openDirectory(isLeft, item.uri)
