@@ -3,16 +3,19 @@ package com.ertyu
 import android.app.Application
 import com.ertyu.engine.AppLogger
 import com.ertyu.engine.CrashHandler
+import com.ertyu.engine.LogcatCollector
 
 class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         
-        // 1. 初始化日志系统（必须在最前面，以捕获后续可能的崩溃）
+        // 1. 初始化日志系统
         AppLogger.init(this)
-        AppLogger.i("App", "EYU文件管理器启动，版本: ${packageManager.getPackageInfo(packageName, 0).versionName}")
         
-        // 2. 初始化全局崩溃捕获
+        // 2. 初始化全局崩溃捕获（写入崩溃日志）
         CrashHandler.init(this)
+        
+        // 3. 👇 启动底层 Logcat 监听器，将系统报错混写进 app_xxx.log
+        LogcatCollector.start()
     }
 }
