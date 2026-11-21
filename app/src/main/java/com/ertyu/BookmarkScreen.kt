@@ -1,8 +1,6 @@
 package com.ertyu
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -73,7 +71,8 @@ fun BookmarkScreen(vm: MainViewModel) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            TabRow(selectedTabIndex = if (state.showRecents) 1 else 0) {
+            // 👇 这里把 TabRow 改成了 PrimaryTabRow
+            PrimaryTabRow(selectedTabIndex = if (state.showRecents) 1 else 0) {
                 Tab(
                     selected = !state.showRecents,
                     onClick = { vm.toggleBookmarkTab(false) },
