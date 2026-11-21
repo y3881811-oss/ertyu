@@ -2,15 +2,14 @@ package com.ertyu
 
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
-import com.ertyu.engine.AppLogger
 import com.ertyu.engine.ArchiveEngine
 import com.ertyu.model.*
+import kotlinx.coroutines.flow.update // 👈 补上这个关键导包
 import kotlinx.coroutines.launch
 import java.io.File
 
 // ================== 解压逻辑 ==================
 fun MainViewModel.openExtractOptions(items: List<FileItem>, isLeft: Boolean) {
-    // 如果是多个文件，默认解压到各自同名文件夹
     val defaultName = if (items.size == 1) {
         items[0].name.substringBeforeLast(".")
     } else {
@@ -42,12 +41,9 @@ fun MainViewModel.executeAdvancedExtract(folderName: String, toOtherPanel: Boole
             val archiveFile = item.uri.path?.let(::File) ?: continue
             _fileTransferState.update { it.copy(currentFile = archiveFile.name, copiedBytes = index.toLong()) }
 
-            // 确定每个文件的目标路径
             val finalDestDir = if (targets.size > 1) {
-                // 多文件时，每个包解压到以自己名字命名的文件夹里
                 File(parentDir, item.name.substringBeforeLast("."))
             } else {
-                // 单文件，看用户输入
                 if (folderName.isNotBlank()) File(parentDir, folderName) else parentDir
             }
 
@@ -97,11 +93,23 @@ fun MainViewModel.executeAdvancedCompress(
         _fileTransferState.value = FileTransferState(visible = true, title = "正在压缩", totalBytes = targets.size.toLong())
         
         try {
+            // 手写一个后缀解析，避免依赖 ArchiveFormat.extensions
+            val ext = when(format) {
+                ArchiveFormat.ZIP -> ".zip"
+                ArchiveFormat.TAR -> ".tar"
+                ArchiveFormat.TAR_GZ -> ".tar.gz"
+                ArchiveFormat.TAR_BZ2 -> ".tar.bz2"
+                ArchiveFormat.TAR_XZ -> ".tar.xz"
+                ArchiveFormat.TAR_ZST -> ".tar.zst"
+                ArchiveFormat.SEVEN_Z -> ".7z"
+                else -> ".zip"
+            }
+
             if (separate && targets.size > 1) {
                 // 多文件分别压缩
                 for ((index, item) in targets.withIndex()) {
                     val src = File(item.uri.path ?: continue)
-                    val dest = File(parentDir, "${src.nameWithoutExtension}${format.extensions.firstOrNull()?.let { ".$it" } ?: ".zip"}")
+                    val dest = File(parentDir, "${src.nameWithoutExtension}$ext")
                     _fileTransferState.update { it.copy(currentFile = src.name, copiedBytes = index.toLong()) }
                     ArchiveEngine.compress(listOf(src), dest, format)
                 }
