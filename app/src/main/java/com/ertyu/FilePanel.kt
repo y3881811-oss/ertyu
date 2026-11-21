@@ -39,7 +39,6 @@ fun FilePanel(
     val state by panelFlow.collectAsState()
     val settings by vm.settingsState.collectAsState()
     val conflictState by vm.fileConflictState.collectAsState()
-    // 👇 确保 fileClipboardState 正常获取
     val clipboard by vm.fileClipboardState.collectAsState()
 
     val currentUriStr = state.currentUri?.toString() ?: ""
@@ -54,8 +53,11 @@ fun FilePanel(
     var showSelectionSheet by remember { mutableStateOf(false) }
 
     BackHandler(enabled = showSelectionSheet || state.isSelectionMode) {
-        if (showSelectionSheet) { showSelectionSheet = false } 
-        else if (state.isSelectionMode) { vm.clearSelection(isLeft) }
+        if (showSelectionSheet) {
+            showSelectionSheet = false
+        } else if (state.isSelectionMode) {
+            vm.clearSelection(isLeft)
+        }
     }
 
     LaunchedEffect(listState, currentUriStr) {
@@ -66,39 +68,21 @@ fun FilePanel(
     }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        if (!isCompact) {
-            // 如果你有 FileTabBar，请保留你原来的调用
-            // FileTabBar(isLeft = isLeft, tabs = tabs, activeIndex = activeIndex, currentState = state, vm = vm)
-        }
-        if (state.isSelectionMode) {
-            SelectionToolbar(
-                count = state.selectedUris.size,
-                onClear = { vm.clearSelection(isLeft) },
-                onSelectAll = { vm.selectAll(isLeft) },
-                onInvert = { vm.invertSelection(isLeft) },
-                onSelectByType = { type -> vm.selectByType(isLeft, type) },
-                onRename = { vm.openBatchRename(isLeft) },
-                onZip = { vm.requestCompress(isLeft) },
-                onCopy = { vm.batchCopy(isLeft) },
-                onMove = { vm.batchMove(isLeft) },
-                onDelete = { vm.batchDelete(isLeft) },
-                onDiff = { vm.startFileDiff(isLeft) }
-            )
-        } else {
-            FileToolbar(
-                isLeft = isLeft,
-                isCompact = isCompact,
-                vm = vm,
-                isGridMode = settings.isGridMode,
-                onToggleGrid = { vm.toggleGridMode() },
-                path = state.currentUri?.path ?: "未选择目录",
-                canGoUp = state.canGoUp,
-                showHidden = state.showHidden,
-                showSwitch = onSwitchPanel != null,
-                onSwitchPanel = { onSwitchPanel?.invoke() },
-                onOpenDrawer = onOpenDrawer
-            )
-        }
+        
+        // 顶部只保留路径栏
+        FileToolbar(
+            isLeft = isLeft,
+            isCompact = isCompact,
+            vm = vm,
+            isGridMode = settings.isGridMode,
+            onToggleGrid = { vm.toggleGridMode() },
+            path = state.currentUri?.path ?: "未选择目录",
+            canGoUp = state.canGoUp,
+            showHidden = state.showHidden,
+            showSwitch = onSwitchPanel != null,
+            onSwitchPanel = { onSwitchPanel?.invoke() },
+            onOpenDrawer = onOpenDrawer
+        )
         HorizontalDivider()
 
         Box(modifier = Modifier.weight(1f)) {
@@ -118,9 +102,13 @@ fun FilePanel(
                                 isSelected = { state.selectedUris.contains(item.uriString) },
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
-                                    if (!state.isSelectionMode) { vm.enterSelection(isLeft, item.uriString) } 
-                                    else if (item.uriString in state.selectedUris) { showSelectionSheet = true } 
-                                    else { vm.toggleSelection(isLeft, item.uriString) }
+                                    if (!state.isSelectionMode) {
+                                        vm.enterSelection(isLeft, item.uriString)
+                                    } else if (item.uriString in state.selectedUris) {
+                                        showSelectionSheet = true
+                                    } else {
+                                        vm.toggleSelection(isLeft, item.uriString)
+                                    }
                                 }
                             )
                         }
@@ -139,9 +127,13 @@ fun FilePanel(
                                 isSelectionMode = state.isSelectionMode,
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
-                                    if (!state.isSelectionMode) { vm.enterSelection(isLeft, item.uriString) } 
-                                    else if (item.uriString in state.selectedUris) { showSelectionSheet = true } 
-                                    else { vm.toggleSelection(isLeft, item.uriString) }
+                                    if (!state.isSelectionMode) {
+                                        vm.enterSelection(isLeft, item.uriString)
+                                    } else if (item.uriString in state.selectedUris) {
+                                        showSelectionSheet = true
+                                    } else {
+                                        vm.toggleSelection(isLeft, item.uriString)
+                                    }
                                 },
                                 onMoreClick = { vm.openActionDialog(isLeft, item) }
                             )
@@ -165,7 +157,7 @@ fun FilePanel(
             visible = showSelectionSheet,
             selectedItems = selectedItems,
             defaultUseTrash = settings.useRecycleBin,
-            hasClipboardItems = !clipboard.isEmpty, // 👈 这里必须是 FileClipboardState 类型的 isEmpty
+            hasClipboardItems = !clipboard.isEmpty,
             onDismiss = { showSelectionSheet = false },
             onSelectAll = { vm.selectAll(isLeft) },
             onInvertSelection = { vm.invertSelection(isLeft) },
@@ -176,7 +168,14 @@ fun FilePanel(
             onMoveToOther = { vm.batchMove(isLeft) },
             onDelete = { useTrash -> vm.batchDelete(isLeft, useTrash) },
             onCompress = { vm.requestCompress(isLeft) },
-            onBatchRename = { vm.openBatchRename(isLeft) }
+            onBatchRename = { vm.openBatchRename(isLeft) },
+            
+            // 👇 APK 专属回调
+            onInstallApk = { item -> vm.installApk(item) },
+            onBrowseApk = { item -> vm.openApkBrowser(isLeft, item) },
+            
+            // 👇 新增：压缩包专属回调（调用之前的提取方法）
+            onExtractArchive = { item -> vm.extractZipHere(isLeft, item) }
         )
 
         FileConflictDialog(state = conflictState, onDismiss = { vm.clearConflictState() })
@@ -189,7 +188,10 @@ private fun handleItemClick(
     state: com.ertyu.model.PanelState,
     vm: MainViewModel
 ) {
-    if (state.isSelectionMode) { vm.handleSelectionClick(isLeft, item); return }
+    if (state.isSelectionMode) {
+        vm.handleSelectionClick(isLeft, item)
+        return
+    }
     if (item.isDirectory) {
         FilePanelScrollStore.save(isLeft, "", 0, 0)
         vm.openDirectory(isLeft, item.uri)
