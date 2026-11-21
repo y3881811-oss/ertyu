@@ -2,8 +2,8 @@ package com.ertyu.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons // 👈 补上
-import androidx.compose.material.icons.filled.ArrowDropDown // 👈 补上
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,6 +12,9 @@ import androidx.compose.ui.unit.dp
 import com.ertyu.MainViewModel
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.ArchiveOptionsHolder
+// 👇 补上跨包导入
+import com.ertyu.cancelCompressOptions
+import com.ertyu.executeAdvancedCompress
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
