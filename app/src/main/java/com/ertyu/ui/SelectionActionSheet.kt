@@ -1,13 +1,30 @@
 package com.ertyu.ui
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.FileItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -16,24 +33,34 @@ fun SelectionActionSheet(
     visible: Boolean,
     selectedItems: List<FileItem>,
     defaultUseTrash: Boolean,
-    hasClipboardItems: Boolean, // 👈 新增：是否有剪贴板内容
+    hasClipboardItems: Boolean,
     onDismiss: () -> Unit,
     onSelectAll: () -> Unit,
     onInvertSelection: () -> Unit,
-    onCopyToClipboard: () -> Unit, // 👈 新增
-    onCutToClipboard: () -> Unit,  // 👈 新增
-    onPaste: () -> Unit,           // 👈 新增
-    onCopyToOther: () -> Unit,     // 👈 你原来的直接复制到对侧
-    onMoveToOther: () -> Unit,     // 👈 你原来的直接移动到对侧
+    onCopyToClipboard: () -> Unit,
+    onCutToClipboard: () -> Unit,
+    onPaste: () -> Unit,
+    onCopyToOther: () -> Unit,
+    onMoveToOther: () -> Unit,
     onDelete: (Boolean) -> Unit,
     onCompress: () -> Unit,
-    onBatchRename: () -> Unit
+    onBatchRename: () -> Unit,
+    onInstallApk: ((FileItem) -> Unit)? = null,
+    onBrowseApk: ((FileItem) -> Unit)? = null,
+    onExtractArchive: ((FileItem) -> Unit)? = null
 ) {
     if (!visible) return
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var useTrash by remember(defaultUseTrash) { mutableStateOf(defaultUseTrash) }
-    val single = selectedItems.singleOrNull()
+    
+    val isSingle = selectedItems.size == 1
+    val singleItem = selectedItems.firstOrNull()
+    
+    // 判断是否选中了单个 APK 文件
+    val isApk = isSingle && singleItem?.name?.endsWith(".apk", ignoreCase = true) == true
+    // 判断是否选中了单个压缩包
+    val isArchive = isSingle && singleItem != null && ArchiveFormat.isArchive(singleItem.name)
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -42,42 +69,62 @@ fun SelectionActionSheet(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             Text(
-                text = if (selectedItems.size == 1) "已选择 1 项" else "已选择 ${selectedItems.size} 项",
+                text = if (isSingle) "已选择 1 项" else "已选择 ${selectedItems.size} 项",
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(Modifier.height(8.dp))
 
+            // ================== 1. 单文件专属操作 ==================
+            if (isApk) {
+                onInstallApk?.let {
+                    SheetItem("安装应用", isPrimary = true) { it(singleItem!!); onDismiss() }
+                }
+                onBrowseApk?.let {
+                    SheetItem("浏览内部", isPrimary = true) { it(singleItem!!); onDismiss() }
+                }
+                Spacer(Modifier.height(8.dp))
+            } else if (isArchive) {
+                onExtractArchive?.let {
+                    SheetItem("解压到当前目录", isPrimary = true) { it(singleItem!!); onDismiss() }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // ================== 2. 通用与多选操作 ==================
             SheetItem("全选") { onSelectAll(); onDismiss() }
             SheetItem("反选") { onInvertSelection(); onDismiss() }
-
-            // 👇 剪贴板功能
+            
+            SheetItem("复制 (到剪贴板)") { onCopyToClipboard(); onDismiss() }
+            SheetItem("剪切 (到剪贴板)") { onCutToClipboard(); onDismiss() }
+            
             if (hasClipboardItems) {
-                SheetItem("粘贴到当前目录") { onPaste(); onDismiss() }
+                SheetItem("粘贴到当前目录", isPrimary = true) { onPaste(); onDismiss() }
             }
             
-            if (selectedItems.isNotEmpty()) {
-                SheetItem("复制 (到剪贴板)") { onCopyToClipboard(); onDismiss() }
-                SheetItem("剪切 (到剪贴板)") { onCutToClipboard(); onDismiss() }
-                
-                // 保留你原有的快捷操作
-                SheetItem("直接复制到对侧") { onCopyToOther(); onDismiss() }
-                SheetItem("直接移动到对侧") { onMoveToOther(); onDismiss() }
-            }
-
+            SheetItem("直接复制到对侧") { onCopyToOther(); onDismiss() }
+            SheetItem("直接移动到对侧") { onMoveToOther(); onDismiss() }
+            
             SheetItem("删除", isDanger = true) {
                 useTrash = defaultUseTrash
                 showDeleteConfirm = true
             }
 
-            if (single != null) {
-                SheetItem("重命名") { onBatchRename(); onDismiss() }
-                SheetItem("压缩") { onCompress(); onDismiss() }
+            // 👇 根据单/多选，动态改变文案
+            if (selectedItems.isNotEmpty()) {
+                if (isSingle) {
+                    SheetItem("重命名") { onBatchRename(); onDismiss() }
+                    SheetItem("压缩") { onCompress(); onDismiss() }
+                } else {
+                    SheetItem("批量重命名") { onBatchRename(); onDismiss() }
+                    SheetItem("打包压缩") { onCompress(); onDismiss() }
+                }
             }
 
             Spacer(Modifier.height(16.dp))
         }
     }
 
+    // ================== 删除确认弹窗 ==================
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
@@ -85,7 +132,7 @@ fun SelectionActionSheet(
             text = {
                 Column {
                     Text(
-                        if (selectedItems.size == 1) "确定删除「${selectedItems.firstOrNull()?.name ?: ""}」吗？"
+                        if (isSingle) "确定删除「${singleItem?.name ?: ""}」吗？"
                         else "确定删除选中的 ${selectedItems.size} 项吗？"
                     )
                     Spacer(Modifier.height(12.dp))
@@ -118,14 +165,22 @@ fun SelectionActionSheet(
 }
 
 @Composable
-private fun SheetItem(text: String, isDanger: Boolean = false, onClick: () -> Unit) {
+private fun SheetItem(text: String, isDanger: Boolean = false, isPrimary: Boolean = false, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 14.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp)
     ) {
         Text(
             text,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (isDanger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+            color = when {
+                isDanger -> MaterialTheme.colorScheme.error
+                isPrimary -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+            fontWeight = if (isPrimary) FontWeight.Bold else FontWeight.Normal
         )
     }
 }
