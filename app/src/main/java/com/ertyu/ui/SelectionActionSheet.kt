@@ -43,11 +43,11 @@ fun SelectionActionSheet(
     onCopyToOther: () -> Unit,
     onMoveToOther: () -> Unit,
     onDelete: (Boolean) -> Unit,
-    onCompress: () -> Unit,
+    onCompress: (List<FileItem>) -> Unit,         // 👈 改成传 List
     onBatchRename: () -> Unit,
     onInstallApk: ((FileItem) -> Unit)? = null,
     onBrowseApk: ((FileItem) -> Unit)? = null,
-    onExtractArchive: ((FileItem) -> Unit)? = null
+    onExtractArchive: ((List<FileItem>) -> Unit)? = null // 👈 改成传 List
 ) {
     if (!visible) return
 
@@ -59,8 +59,8 @@ fun SelectionActionSheet(
     
     // 判断是否选中了单个 APK 文件
     val isApk = isSingle && singleItem?.name?.endsWith(".apk", ignoreCase = true) == true
-    // 判断是否选中了单个压缩包
-    val isArchive = isSingle && singleItem != null && ArchiveFormat.isArchive(singleItem.name)
+    // 判断是否选中了压缩包（单个或多个都支持）
+    val hasArchive = selectedItems.any { ArchiveFormat.isArchive(it.name) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -74,7 +74,7 @@ fun SelectionActionSheet(
             )
             Spacer(Modifier.height(8.dp))
 
-            // ================== 1. 单文件专属操作 ==================
+            // ================== 1. 专属操作 ==================
             if (isApk) {
                 onInstallApk?.let {
                     SheetItem("安装应用", isPrimary = true) { it(singleItem!!); onDismiss() }
@@ -83,14 +83,15 @@ fun SelectionActionSheet(
                     SheetItem("浏览内部", isPrimary = true) { it(singleItem!!); onDismiss() }
                 }
                 Spacer(Modifier.height(8.dp))
-            } else if (isArchive) {
+            } else if (hasArchive) {
+                // 👇 只要有压缩包，就显示解压
                 onExtractArchive?.let {
-                    SheetItem("解压到当前目录", isPrimary = true) { it(singleItem!!); onDismiss() }
+                    SheetItem("解压文件", isPrimary = true) { it(selectedItems); onDismiss() }
                 }
                 Spacer(Modifier.height(8.dp))
             }
 
-            // ================== 2. 通用与多选操作 ==================
+            // ================== 2. 通用操作 ==================
             SheetItem("全选") { onSelectAll(); onDismiss() }
             SheetItem("反选") { onInvertSelection(); onDismiss() }
             
@@ -109,14 +110,14 @@ fun SelectionActionSheet(
                 showDeleteConfirm = true
             }
 
-            // 👇 根据单/多选，动态改变文案
+            // ================== 3. 重命名与压缩 ==================
             if (selectedItems.isNotEmpty()) {
                 if (isSingle) {
                     SheetItem("重命名") { onBatchRename(); onDismiss() }
-                    SheetItem("压缩") { onCompress(); onDismiss() }
+                    SheetItem("压缩") { onCompress(selectedItems); onDismiss() }
                 } else {
                     SheetItem("批量重命名") { onBatchRename(); onDismiss() }
-                    SheetItem("打包压缩") { onCompress(); onDismiss() }
+                    SheetItem("打包压缩") { onCompress(selectedItems); onDismiss() }
                 }
             }
 
