@@ -19,7 +19,7 @@ fun ExtractOptionsDialog(vm: MainViewModel) {
     var folderName by remember { mutableStateOf(state.folderName) }
     var toOtherPanel by remember { mutableStateOf(state.toOtherPanel) }
     var deleteSource by remember { mutableStateOf(state.deleteSource) }
-    var isFolderMode by remember { mutableStateOf(true) } // 默认选中文件夹模式
+    var isFolderMode by remember { mutableStateOf(true) }
 
     AlertDialog(
         onDismissRequest = { vm.cancelExtractOptions() },
