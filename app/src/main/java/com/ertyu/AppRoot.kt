@@ -10,12 +10,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
-import java.io.File
+import com.ertyu.model.LogStateHolder
 
 @Composable
 fun AppRoot(vm: MainViewModel) {
     val context = LocalContext.current
 
+    // ================== 状态收集 ==================
     val editor by vm.editor.collectAsState()
     val imageViewer by vm.imageViewer.collectAsState()
     val hexViewerState by vm.hexViewerState.collectAsState()
@@ -26,10 +27,13 @@ fun AppRoot(vm: MainViewModel) {
     val installedAppsState by vm.installedAppsState.collectAsState()
     val settingsVisible by vm.settingsVisible.collectAsState()
     val helpVisible by vm.helpVisible.collectAsState()
-    
-    // 👇 新增的关于界面状态
-    val aboutVisible by _aboutVisible.collectAsState()
 
+    // 新增的关于界面状态
+    val aboutVisible by _aboutVisible.collectAsState()
+    // 新增的日志界面状态
+    val logState by LogStateHolder.state.collectAsState()
+
+    // 各种 Holder 状态
     val signerState by ApkToolsState.signerState.collectAsState()
     val dexViewerState by ApkToolsState.dexViewerState.collectAsState()
     val diffState by DiffStateHolder.state.collectAsState()
@@ -41,17 +45,16 @@ fun AppRoot(vm: MainViewModel) {
     val sqliteState by SqliteStateHolder.state.collectAsState()
     val networkState by NetworkShareStateHolder.state.collectAsState()
     val fontState by FontPreviewStateHolder.state.collectAsState()
-    val logState by LogStateHolder.state.collectAsState()
     val recycleBinState by RecycleBinStateHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
 
-    // 新增功能的状态
+    // 高级功能状态
     val contentSearchState by vm.contentSearchState.collectAsState()
     val duplicateScanState by vm.duplicateScanState.collectAsState()
 
-    // ================== SAF 文件夹授权逻辑 ==================
+    // ================== SAF 授权逻辑 ==================
     val safLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
@@ -76,12 +79,14 @@ fun AppRoot(vm: MainViewModel) {
             safLauncher.launch(null)
         }
     }
-    // ==========================================================
 
+    // ================== 全局弹窗 ==================
     AppDialogs(vm)
     CryptoDialog(vm)
 
+    // ================== 页面路由 ==================
     when {
+        // --- 优先级最高的全屏工具类 ---
         editor.isOpen -> {
             BackHandler { vm.closeEditor() }
             EditorScreen(vm)
@@ -92,11 +97,11 @@ fun AppRoot(vm: MainViewModel) {
         }
         contentSearchState.isSearching || contentSearchState.results.isNotEmpty() -> {
             BackHandler { vm.closeContentSearch() }
-            ContentSearchScreen(vm, File("/storage/emulated/0"))
+            ContentSearchScreen(vm, java.io.File("/storage/emulated/0"))
         }
         duplicateScanState.isScanning || duplicateScanState.groups.isNotEmpty() -> {
             BackHandler { vm.closeDuplicateScan() }
-            DuplicateScanScreen(vm, File("/storage/emulated/0"))
+            DuplicateScanScreen(vm, java.io.File("/storage/emulated/0"))
         }
         galleryState.visible -> {
             GalleryScreen(vm)
@@ -170,10 +175,13 @@ fun AppRoot(vm: MainViewModel) {
             BackHandler { vm.closeInstalledApps() }
             InstalledAppsScreen(vm)
         }
+        
+        // --- 新增：日志查看器 ---
         logState.visible -> {
             BackHandler { vm.closeLogViewer() }
             LogViewerScreen(vm)
         }
+        
         recycleBinState.visible -> {
             BackHandler { vm.closeRecycleBin() }
             RecycleBinScreen(vm)
@@ -194,11 +202,14 @@ fun AppRoot(vm: MainViewModel) {
             BackHandler { vm.closeHelp() }
             HelpScreen(vm)
         }
-        // 👇 挂载关于界面
+        
+        // --- 新增：关于软件 ---
         aboutVisible -> {
             BackHandler { vm.closeAbout() }
             AboutScreen(vm)
         }
+        
+        // --- 默认：主文件浏览界面 ---
         else -> {
             MainScreen(vm)
         }
