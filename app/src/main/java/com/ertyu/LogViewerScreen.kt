@@ -56,42 +56,82 @@ fun LogViewerScreen(vm: MainViewModel) {
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            
+            if (state.isLoading) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+
+            // 搜索与过滤
             OutlinedTextField(
                 value = state.searchQuery,
                 onValueChange = { vm.updateLogSearch(it) },
-                placeholder = { Text("搜索...") },
+                placeholder = { Text("搜索应用模块或内容...") },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = {
                     if (state.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { vm.updateLogSearch("") }) {
-                            Icon(Icons.Default.Close, null)
-                        }
+                        IconButton(onClick = { vm.updateLogSearch("") }) { Icon(Icons.Default.Close, null) }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 singleLine = true
             )
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = state.filterLevel == null, onClick = { vm.setLogFilter(null) }, label = { Text("全部") })
                 FilterChip(selected = state.filterLevel == "E", onClick = { vm.setLogFilter("E") }, label = { Text("错误") })
                 FilterChip(selected = state.filterLevel == "W", onClick = { vm.setLogFilter("W") }, label = { Text("警告") })
                 FilterChip(selected = state.filterLevel == "I", onClick = { vm.setLogFilter("I") }, label = { Text("信息") })
             }
             HorizontalDivider(Modifier.padding(top = 8.dp))
-            if (state.filteredLogs.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("暂无日志", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            // 统一列表展示
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 1. 上半部分：应用结构化日志
+                if (state.filteredLogs.isEmpty()) {
+                    item {
+                        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                            Text("暂无结构化应用日志", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    items(state.filteredLogs) { log -> 
+                        LogRow(log) 
+                    }
                 }
-            } else {
-                LazyColumn(
-                    Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(state.filteredLogs) { log -> LogRow(log) }
+
+                // 2. 下半部分：底层系统 Logcat
+                if (state.logcatLines.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(24.dp))
+                        HorizontalDivider()
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "底层系统日志 (Logcat)", 
+                            style = MaterialTheme.typography.titleMedium, 
+                            fontWeight = FontWeight.Bold, 
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        // 放在一个深色卡片里，像终端一样
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF1E1E1E), RoundedCornerShape(8.dp))
+                                .padding(12.dp)
+                        ) {
+                            state.logcatLines.forEach { line ->
+                                Text(
+                                    text = line,
+                                    color = Color(0xFFBBBBBB),
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

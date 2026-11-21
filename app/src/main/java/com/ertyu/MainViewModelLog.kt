@@ -42,7 +42,11 @@ fun MainViewModel.updateLogDirectory(newPath: String?) {
 }
 
 fun MainViewModel.refreshLogs() {
+    if (LogStateHolder.state.value.isLoading) return
+    LogStateHolder.state.update { it.copy(isLoading = true) }
+
     viewModelScope.launch(Dispatchers.IO) {
+        // 1. 读取结构化应用日志
         val logDir = AppLogger.getLogDir()
         val allEntries = mutableListOf<LogEntry>()
         if (logDir.exists() && logDir.isDirectory) {
@@ -61,8 +65,29 @@ fun MainViewModel.refreshLogs() {
                 } catch (_: Exception) { }
             }
         }
+
+        // 2. 抓取底层系统 Logcat
+        val logcatLines = mutableListOf<String>()
+        try {
+            val process = Runtime.getRuntime().exec("logcat -d -v time")
+            val reader = process.inputStream.bufferedReader()
+            var line: String?
+            // 只取最近 1500 行，防止卡顿
+            while (reader.readLine().also { line = it } != null) {
+                logcatLines.add(line!!)
+                if (logcatLines.size > 1500) logcatLines.removeAt(0)
+            }
+            reader.close()
+        } catch (_: Exception) { }
+
         withContext(Dispatchers.Main) {
-            LogStateHolder.state.update { it.copy(logs = allEntries.reversed()) }
+            LogStateHolder.state.update { 
+                it.copy(
+                    logs = allEntries.reversed(), 
+                    logcatLines = logcatLines,
+                    isLoading = false
+                ) 
+            }
         }
     }
 }
@@ -70,7 +95,9 @@ fun MainViewModel.refreshLogs() {
 fun MainViewModel.clearLogs() {
     viewModelScope.launch(Dispatchers.IO) {
         AppLogger.getLogDir().listFiles()?.forEach { it.delete() }
-        withContext(Dispatchers.Main) { LogStateHolder.state.update { it.copy(logs = emptyList()) } }
+        withContext(Dispatchers.Main) {
+            LogStateHolder.state.update { it.copy(logs = emptyList(), logcatLines = emptyList()) }
+        }
     }
 }
 
@@ -79,22 +106,32 @@ fun MainViewModel.exportLogs() {
         LogStateHolder.state.update { it.copy(isExporting = true) }
         try {
             val logDir = AppLogger.getLogDir()
-            if (!logDir.exists() || logDir.listFiles().isNullOrEmpty()) {
+            val state = LogStateHolder.state.value
+            
+            if ((!logDir.exists() || logDir.listFiles().isNullOrEmpty()) && state.logcatLines.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     showToast("没有日志可导出")
                     LogStateHolder.state.update { it.copy(isExporting = false) }
                 }
                 return@launch
             }
+
             val dateStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ROOT).format(Date())
             val zipFile = File(android.os.Environment.getExternalStorageDirectory(), "EYU_Logs_$dateStr.zip")
+            
             ZipOutputStream(zipFile.outputStream().buffered()).use { zos ->
+                // 打包 .log 文件
                 logDir.listFiles()?.forEach { file ->
-                    zos.putNextEntry(ZipEntry(file.name))
+                    zos.putNextEntry(ZipEntry("AppLogs/${file.name}"))
                     file.inputStream().copyTo(zos)
                     zos.closeEntry()
                 }
+                // 将内存中的 Logcat 打包
+                zos.putNextEntry(ZipEntry("SystemLogcat.txt"))
+                zos.write(state.logcatLines.joinToString("\n").toByteArray())
+                zos.closeEntry()
             }
+            
             withContext(Dispatchers.Main) {
                 val uri = FileProvider.getUriForFile(
                     getApplication(),
