@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.ArchiveFormat
+import com.ertyu.ui.CompressOptionsDialog
+import com.ertyu.ui.ExtractOptionsDialog
 import com.ertyu.ui.FileConflictDialog
 import com.ertyu.ui.SelectionActionSheet
 import kotlinx.coroutines.launch
@@ -52,6 +54,7 @@ fun FilePanel(
 
     var showSelectionSheet by remember { mutableStateOf(false) }
 
+    // 返回键拦截：优先关闭底部弹窗 -> 其次退出多选
     BackHandler(enabled = showSelectionSheet || state.isSelectionMode) {
         if (showSelectionSheet) {
             showSelectionSheet = false
@@ -69,7 +72,7 @@ fun FilePanel(
 
     Column(modifier = modifier.fillMaxHeight()) {
         
-        // 顶部只保留路径栏
+        // 顶部路径栏
         FileToolbar(
             isLeft = isLeft,
             isCompact = isCompact,
@@ -152,6 +155,7 @@ fun FilePanel(
             }
         }
 
+        // ================== 底部多选菜单 ==================
         val selectedItems = state.items.filter { it.uriString in state.selectedUris }
         SelectionActionSheet(
             visible = showSelectionSheet,
@@ -167,18 +171,17 @@ fun FilePanel(
             onCopyToOther = { vm.batchCopy(isLeft) },
             onMoveToOther = { vm.batchMove(isLeft) },
             onDelete = { useTrash -> vm.batchDelete(isLeft, useTrash) },
-            onCompress = { vm.requestCompress(isLeft) },
+            onCompress = { items -> vm.openCompressOptions(items, isLeft) },     // 触发压缩弹窗
             onBatchRename = { vm.openBatchRename(isLeft) },
-            
-            // 👇 APK 专属回调
             onInstallApk = { item -> vm.installApk(item) },
             onBrowseApk = { item -> vm.openApkBrowser(isLeft, item) },
-            
-            // 👇 新增：压缩包专属回调（调用之前的提取方法）
-            onExtractArchive = { item -> vm.extractZipHere(isLeft, item) }
+            onExtractArchive = { items -> vm.openExtractOptions(items, isLeft) } // 触发解压弹窗
         )
 
+        // ================== 挂载新弹窗 ==================
         FileConflictDialog(state = conflictState, onDismiss = { vm.clearConflictState() })
+        ExtractOptionsDialog(vm)
+        CompressOptionsDialog(vm)
     }
 }
 
