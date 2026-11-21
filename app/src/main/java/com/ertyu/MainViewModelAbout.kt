@@ -2,8 +2,8 @@ package com.ertyu
 
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.ertyu.engine.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -12,26 +12,23 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-// 数据类
 data class UpdateState(
     val isChecking: Boolean = false,
     val hasUpdate: Boolean = false,
     val latestVersion: String = "",
-    val htmlUrl: String = "",        // GitHub Release 页面
-    val downloadUrl: String = "",    // 真实的 APK 下载直链
+    val htmlUrl: String = "",
+    val downloadUrl: String = "",
     val errorMsg: String? = null
 )
 
-// 加速节点列表
 val downloadProxies = listOf(
-    "" to "直连 GitHub (需网络较好)",
+    "" to "直连 GitHub (需科学上网或网络较好)",
     "https://ghfast.top/" to "高速节点 1 (韩国/日本等 CDN)",
     "https://gh-proxy.org/" to "高速节点 2 (美国/香港 CDN)",
     "https://ghproxy.net/" to "高速节点 3 (法国 CDN)",
     "https://wget.la/" to "高速节点 4 (多地区 CDN)"
 )
 
-// 全局状态
 val _aboutVisible = MutableStateFlow(false)
 val _updateState = MutableStateFlow(UpdateState())
 
@@ -46,6 +43,7 @@ fun MainViewModel.closeAbout() {
 
 fun MainViewModel.checkForUpdates(currentVersionName: String) {
     if (_updateState.value.isChecking) return
+    AppLogger.i("Update", "开始检查更新，当前版本: $currentVersionName")
     _updateState.value = UpdateState(isChecking = true)
 
     viewModelScope.launch {
@@ -70,8 +68,7 @@ fun MainViewModel.checkForUpdates(currentVersionName: String) {
                     if (assets != null && assets.length() > 0) {
                         for (i in 0 until assets.length()) {
                             val asset = assets.getJSONObject(i)
-                            val name = asset.optString("name")
-                            if (name.endsWith(".apk")) {
+                            if (asset.optString("name").endsWith(".apk")) {
                                 apkDownloadUrl = asset.optString("browser_download_url")
                                 break
                             }
@@ -87,6 +84,7 @@ fun MainViewModel.checkForUpdates(currentVersionName: String) {
             val cleanLatest = latestTag.replace("v", "").replace("-", ".")
             
             if (cleanLatest != currentVersionName) {
+                AppLogger.i("Update", "发现新版本: $latestTag")
                 _updateState.value = UpdateState(
                     isChecking = false,
                     hasUpdate = true,
@@ -95,12 +93,13 @@ fun MainViewModel.checkForUpdates(currentVersionName: String) {
                     downloadUrl = apkDownloadUrl
                 )
             } else {
+                AppLogger.i("Update", "当前已是最新版本")
                 _updateState.value = UpdateState(isChecking = false, hasUpdate = false)
                 _toast.value = "已是最新版本"
             }
 
         } catch (e: Exception) {
-            Log.e("UpdateCheck", "检查更新失败", e)
+            AppLogger.e("Update", "检查更新失败", e)
             _updateState.value = UpdateState(isChecking = false, errorMsg = e.message)
             _toast.value = "检查更新失败：${e.message}"
         }
@@ -113,10 +112,12 @@ fun MainViewModel.dismissUpdateDialog() {
 
 fun MainViewModel.startDownload(url: String) {
     try {
+        AppLogger.i("Update", "开始下载更新: $url")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         getApplication<android.app.Application>().startActivity(intent)
     } catch (e: Exception) {
+        AppLogger.e("Update", "无法打开浏览器下载", e)
         _toast.value = "无法打开浏览器"
     }
 }

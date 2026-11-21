@@ -2,6 +2,7 @@ package com.ertyu
 
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
+import com.ertyu.engine.AppLogger
 import com.ertyu.engine.ArchiveEngine
 import com.ertyu.engine.RecycleBinManager
 import com.ertyu.model.*
@@ -11,10 +12,48 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
-// ==================== 1. 剪贴板状态与逻辑 ====================
+// ==================== 全局状态声明 ====================
+val _fileConflictState = MutableStateFlow(FileConflictState())
+val MainViewModel.fileConflictState: StateFlow<FileConflictState> get() = _fileConflictState
+
 val _fileClipboardState = MutableStateFlow(FileClipboardState())
 val MainViewModel.fileClipboardState: StateFlow<FileClipboardState> get() = _fileClipboardState
 
+// ==================== 基础文件操作 ====================
+fun MainViewModel.requestDelete(isLeft: Boolean, item: FileItem) { 
+    _deleteTargetIsLeft.value = isLeft; _deleteTarget.value = item 
+}
+
+fun MainViewModel.dismissDeleteDialog() { _deleteTarget.value = null }
+
+fun MainViewModel.confirmDelete(useTrash: Boolean) {
+    val item = _deleteTarget.value ?: return
+    val isLeft = _deleteTargetIsLeft.value
+    _deleteTarget.value = null
+    viewModelScope.launch {
+        AppLogger.i("FileOps", "删除请求: ${item.name}, 使用回收站: $useTrash")
+        val path = item.uri.path
+        if (useTrash && path != null) {
+            val ok = RecycleBinManager.moveToTrash(getApplication(), File(path), item.isDirectory, item.size)
+            if (ok) { AppLogger.i("FileOps", "已移入回收站: ${item.name}"); _toast.value = "已移入回收站" }
+            else { AppLogger.e("FileOps", "移入回收站失败，尝试直接删除: ${item.name}"); engine.delete(item.uri) }
+        } else {
+            engine.delete(item.uri)
+            AppLogger.i("FileOps", "直接删除: ${item.name}")
+            _toast.value = "已直接删除"
+        }
+        refresh(isLeft)
+    }
+}
+
+private fun formatSpeed(bytesPerSec: Long): String {
+    if (bytesPerSec < 1024) return "$bytesPerSec B/s"
+    val kb = bytesPerSec / 1024.0
+    if (kb < 1024) return String.format(java.util.Locale.ROOT, "%.1f KB/s", kb)
+    return String.format(java.util.Locale.ROOT, "%.1f MB/s", kb / 1024.0)
+}
+
+// ==================== 剪贴板操作 ====================
 fun MainViewModel.copyToClipboard(isLeft: Boolean) {
     val state = flowOf(isLeft).value
     val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
@@ -37,14 +76,14 @@ fun MainViewModel.pasteFromClipboard(targetIsLeft: Boolean) {
     val clip = _fileClipboardState.value
     if (clip.isEmpty) return
     val targetUri = flowOf(targetIsLeft).value.currentUri ?: return
+    AppLogger.i("Clipboard", "准备从剪贴板粘贴，目标: $targetUri")
     
     val targetNames = flowOf(targetIsLeft).value.items.map { it.name }.toMutableSet()
     val conflicts = clip.items.filter { targetNames.contains(it.name) }
     
     if (conflicts.isNotEmpty()) {
         _fileConflictState.value = FileConflictState(
-            visible = true,
-            conflictingNames = conflicts.map { it.name },
+            visible = true, conflictingNames = conflicts.map { it.name },
             onResolve = { action ->
                 if (action != ConflictAction.CANCEL) {
                     executePaste(clip.items, targetUri, targetIsLeft, targetNames, action, clip.isCut)
@@ -72,9 +111,7 @@ private fun MainViewModel.executePaste(
             if (conflictItem != null) {
                 when (action) {
                     ConflictAction.SKIP -> { skipCount++; continue }
-                    ConflictAction.OVERWRITE -> {
-                        engine.delete(conflictItem.uri); targetNames.remove(conflictItem.name)
-                    }
+                    ConflictAction.OVERWRITE -> { engine.delete(conflictItem.uri); targetNames.remove(conflictItem.name) }
                     ConflictAction.KEEP_BOTH -> {
                         val newName = generateUniqueFileName(conflictItem.name, targetNames)
                         engine.rename(conflictItem.uri, newName)
@@ -95,30 +132,7 @@ private fun MainViewModel.executePaste(
     }
 }
 
-// ==================== 2. 原有弹窗控制与文件操作 ====================
-fun MainViewModel.requestDelete(isLeft: Boolean, item: FileItem) { _deleteTargetIsLeft.value = isLeft; _deleteTarget.value = item }
-fun MainViewModel.dismissDeleteDialog() { _deleteTarget.value = null }
-fun MainViewModel.confirmDelete(useTrash: Boolean) {
-    val item = _deleteTarget.value ?: return
-    val isLeft = _deleteTargetIsLeft.value
-    _deleteTarget.value = null
-    viewModelScope.launch {
-        val path = item.uri.path
-        if (useTrash && path != null) {
-            val ok = RecycleBinManager.moveToTrash(getApplication(), File(path), item.isDirectory, item.size)
-            if (ok) _toast.value = "已移入回收站" else { engine.delete(item.uri); _toast.value = "移入回收站失败，已直接删除" }
-        } else { engine.delete(item.uri); _toast.value = "已直接删除" }
-        refresh(isLeft)
-    }
-}
-
-private fun formatSpeed(bytesPerSec: Long): String {
-    if (bytesPerSec < 1024) return "$bytesPerSec B/s"
-    val kb = bytesPerSec / 1024.0
-    if (kb < 1024) return String.format("%.1f KB/s", kb)
-    return String.format("%.1f MB/s", kb / 1024.0)
-}
-
+// ==================== 对侧复制/移动 ====================
 fun MainViewModel.copyToOtherPanel(fromLeft: Boolean, item: FileItem) {
     val targetUri = flowOf(!fromLeft).value.currentUri ?: return
     viewModelScope.launch {
@@ -141,11 +155,13 @@ fun MainViewModel.moveToOtherPanel(fromLeft: Boolean, item: FileItem) {
 
 fun MainViewModel.dismissTransferDialog() { _fileTransferState.value = FileTransferState() }
 
+// ==================== 批量复制/移动 ====================
 fun MainViewModel.batchCopy(fromLeft: Boolean) {
     val state = flowOf(fromLeft).value
     val targetUri = flowOf(!fromLeft).value.currentUri ?: return
     val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
     if (targets.isEmpty()) return
+    
     val targetNames = flowOf(!fromLeft).value.items.map { it.name }.toMutableSet()
     val conflicts = targets.filter { targetNames.contains(it.name) }
 
@@ -186,6 +202,7 @@ fun MainViewModel.batchMove(fromLeft: Boolean) {
     val targetUri = flowOf(!fromLeft).value.currentUri ?: return
     val targets = state.items.filter { state.selectedUris.contains(it.uriString) }
     if (targets.isEmpty()) return
+    
     val targetNames = flowOf(!fromLeft).value.items.map { it.name }.toMutableSet()
     val conflicts = targets.filter { targetNames.contains(it.name) }
 
@@ -221,89 +238,84 @@ private fun MainViewModel.executeBatchMove(fromLeft: Boolean, targets: List<File
     }
 }
 
-fun MainViewModel.createDirectory(isLeft: Boolean, name: String) {
-    val current = flowOf(isLeft).value.currentUri ?: return
-    viewModelScope.launch { engine.createDirectory(current, name); refresh(isLeft) }
+// ==================== 压缩与解压基础方法 ====================
+fun MainViewModel.requestCompress(isLeft: Boolean) {
+    val state = flowOf(isLeft).value
+    if (state.selectedUris.isEmpty()) return
+    _compressPanelIsLeft.value = isLeft
+    _compressPromptVisible.value = true
 }
 
-fun MainViewModel.rename(isLeft: Boolean, item: FileItem, newName: String) {
-    viewModelScope.launch { engine.rename(item.uri, newName); refresh(isLeft) }
-}
+fun MainViewModel.dismissCompressPrompt() { _compressPromptVisible.value = false }
 
-fun MainViewModel.createFile(name: String) {
-    _newFilePrompt.value = false
-    val isLeft = _newFilePanelIsLeft.value
-    val dir = flowOf(isLeft).value.currentUri?.path?.let(::File) ?: return
+fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
+    _compressPromptVisible.value = false
+    if (!format.canCompress) return
+    val isLeft = _compressPanelIsLeft.value
+    val state = flowOf(isLeft).value
+    val currentDir = state.currentUri?.path?.let(::File) ?: return
+    val sources = state.items.filter { state.selectedUris.contains(it.uriString) }.mapNotNull { it.uri.path?.let(::File) }
+    if (sources.isEmpty()) return
+
+    val ext = when (format) { ArchiveFormat.ZIP -> ".zip"; ArchiveFormat.TAR -> ".tar"; ArchiveFormat.TAR_GZ -> ".tar.gz"; ArchiveFormat.SEVEN_Z -> ".7z"; else -> ".zip" }
+    val fileName = if (sources.size == 1) { val base = if (sources[0].name.contains('.')) sources[0].name.substringBeforeLast('.') else sources[0].name; "$base$ext" } else { "archive_${System.currentTimeMillis()}$ext" }
+    
     viewModelScope.launch {
-        try {
-            val f = File(dir, name)
-            if (f.exists()) { _toast.value = "文件已存在"; return@launch }
-            f.parentFile?.mkdirs(); f.createNewFile(); _toast.value = "已创建：${f.name}"; refresh(isLeft)
-        } catch (e: Exception) { _toast.value = "创建失败：${e.message}" }
+        _zipProgress.value = ZipProgress(visible = true, title = "压缩中", message = fileName)
+        val result = ArchiveEngine.compress(sources, File(currentDir, fileName), format) { cur, total -> _zipProgress.value = _zipProgress.value.copy(current = cur, total = total) }
+        result.onSuccess { _zipProgress.value = _zipProgress.value.copy(done = true, message = "压缩完成：$fileName") }.onFailure { e -> _zipProgress.value = _zipProgress.value.copy(error = "压缩失败: ${e.message ?: "未知错误"}") }
+        clearSelection(isLeft); refresh(isLeft)
     }
 }
 
-fun MainViewModel.openNewFilePrompt(isLeft: Boolean) { _newFilePanelIsLeft.value = isLeft; _newFilePrompt.value = true }
-fun MainViewModel.dismissNewFilePrompt() { _newFilePrompt.value = false }
-fun MainViewModel.openNewFolderDialog(isLeft: Boolean) { _newFolderDialogIsLeft.value = isLeft; _newFolderDialogVisible.value = true }
-fun MainViewModel.dismissNewFolderDialog() { _newFolderDialogVisible.value = false }
-fun MainViewModel.openJumpDialog(isLeft: Boolean) { _jumpDialogIsLeft.value = isLeft; _jumpDialogVisible.value = true }
-fun MainViewModel.dismissJumpDialog() { _jumpDialogVisible.value = false }
-fun MainViewModel.openSortDialog(isLeft: Boolean) { _sortDialogIsLeft.value = isLeft; _sortDialogVisible.value = true }
-fun MainViewModel.dismissSortDialog() { _sortDialogVisible.value = false }
-fun MainViewModel.openActionDialog(isLeft: Boolean, item: FileItem) { _actionDialogIsLeft.value = isLeft; _actionDialogTarget.value = item }
-fun MainViewModel.dismissActionDialog() { _actionDialogTarget.value = null }
-fun MainViewModel.openInfoDialog(item: FileItem) { _infoDialogTarget.value = item }
-fun MainViewModel.dismissInfoDialog() { _infoDialogTarget.value = null; resetFolderSize() }
-fun MainViewModel.openRenameDialog(isLeft: Boolean, item: FileItem) { _renameDialogIsLeft.value = isLeft; _renameDialogTarget.value = item }
-fun MainViewModel.dismissRenameDialog() { _renameDialogTarget.value = null }
-
-// ==================== 3. 压缩与解压（新增参数版） ====================
-private var pendingExtractReq: PendingExtractReq? = null
-data class PendingExtractReq(val isLeft: Boolean, val item: FileItem, val targetDirName: String, val toOtherPanel: Boolean, val deleteSource: Boolean)
-
 fun MainViewModel.dismissZipPrompt() { _zipPrompt.value = ZipPrompt() }
+fun MainViewModel.dismissZipProgress() { _zipProgress.value = ZipProgress() }
 
-fun MainViewModel.extractArchive(isLeft: Boolean, item: FileItem, targetDirName: String, toOtherPanel: Boolean, deleteSource: Boolean, password: String? = null) {
+fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem, password: String? = null) {
     _zipPrompt.value = ZipPrompt()
-    val targetIsLeft = if (toOtherPanel) !isLeft else isLeft
-    val targetParentDir = flowOf(targetIsLeft).value.currentUri?.path?.let(::File) ?: return
-    val finalTargetDir = if (targetDirName.isNotBlank()) File(targetParentDir, targetDirName) else targetParentDir
+    val currentDir = flowOf(isLeft).value.currentUri?.path?.let(::File) ?: return
     val archiveFile = item.uri.path?.let(::File) ?: return
-
-    pendingExtractReq = PendingExtractReq(isLeft, item, targetDirName, toOtherPanel, deleteSource)
-
+    val targetDir = File(currentDir, archiveBaseName(archiveFile.name))
     viewModelScope.launch {
         _zipProgress.value = ZipProgress(visible = true, title = "解压中", message = archiveFile.name)
-        val result = ArchiveEngine.extract(archiveFile, finalTargetDir, password) { cur, total -> _zipProgress.value = _zipProgress.value.copy(current = cur, total = total) }
-        
+        val result = ArchiveEngine.extract(archiveFile, targetDir, password) { cur, total -> _zipProgress.value = _zipProgress.value.copy(current = cur, total = total) }
         result.onSuccess {
-            _zipProgress.value = _zipProgress.value.copy(done = true, message = "解压完成")
-            _toast.value = "已解压至: ${finalTargetDir.absolutePath}"
-            if (deleteSource) { if (engine.delete(item.uri)) _toast.value = "已解压至: ${finalTargetDir.absolutePath}，且删除了源文件" }
-            refresh(targetIsLeft); openDirectory(targetIsLeft, Uri.fromFile(finalTargetDir)); pendingExtractReq = null
+            _zipProgress.value = _zipProgress.value.copy(done = true, message = "解压完成：${targetDir.name}")
+            refresh(isLeft); openDirectory(isLeft, Uri.fromFile(targetDir))
         }.onFailure { e ->
             if (e.message == "PASSWORD_REQUIRED") {
-                _zipProgress.value = _zipProgress.value.copy(needsPassword = true, error = "文件已加密", pendingFileItem = item, pendingIsLeft = isLeft, pendingTargetIsLeft = targetIsLeft)
+                _zipProgress.value = _zipProgress.value.copy(needsPassword = true, error = "文件已加密", pendingFileItem = item, pendingIsLeft = isLeft, pendingTargetIsLeft = isLeft)
             } else { _zipProgress.value = _zipProgress.value.copy(error = "解压失败: ${e.message ?: "未知错误"}") }
         }
     }
 }
 
-fun MainViewModel.extractZipHere(isLeft: Boolean, item: FileItem, password: String? = null) {
-    val archiveFile = item.uri.path?.let(::File) ?: return
-    extractArchive(isLeft, item, archiveBaseName(archiveFile.name), toOtherPanel = false, deleteSource = false, password = password)
-}
-
 fun MainViewModel.extractZipToOtherPanel(isLeft: Boolean, item: FileItem, password: String? = null) {
+    _zipPrompt.value = ZipPrompt()
+    val targetDir = flowOf(!isLeft).value.currentUri?.path?.let(::File) ?: return
     val archiveFile = item.uri.path?.let(::File) ?: return
-    extractArchive(isLeft, item, archiveBaseName(archiveFile.name), toOtherPanel = true, deleteSource = false, password = password)
+    val finalDir = File(targetDir, archiveBaseName(archiveFile.name))
+    viewModelScope.launch {
+        _zipProgress.value = ZipProgress(visible = true, title = "解压中", message = archiveFile.name)
+        val result = ArchiveEngine.extract(archiveFile, finalDir, password) { cur, total -> _zipProgress.value = _zipProgress.value.copy(current = cur, total = total) }
+        result.onSuccess {
+            _zipProgress.value = _zipProgress.value.copy(done = true, message = "解压完成：${finalDir.name}")
+            openDirectory(!isLeft, Uri.fromFile(targetDir)); openDirectory(!isLeft, Uri.fromFile(finalDir))
+        }.onFailure { e ->
+            if (e.message == "PASSWORD_REQUIRED") {
+                _zipProgress.value = _zipProgress.value.copy(needsPassword = true, error = "文件已加密", pendingFileItem = item, pendingIsLeft = isLeft, pendingTargetIsLeft = !isLeft)
+            } else { _zipProgress.value = _zipProgress.value.copy(error = "解压失败: ${e.message ?: "未知错误"}") }
+        }
+    }
 }
 
 fun MainViewModel.submitZipPassword(password: String) {
-    val req = pendingExtractReq ?: return
+    val state = _zipProgress.value
+    val item = state.pendingFileItem ?: return
+    val isLeft = state.pendingIsLeft
+    val targetIsLeft = state.pendingTargetIsLeft
     _zipProgress.update { it.copy(needsPassword = false, error = null) }
-    extractArchive(req.isLeft, req.item, req.targetDirName, req.toOtherPanel, req.deleteSource, password)
+    if (isLeft == targetIsLeft) extractZipHere(isLeft, item, password) else extractZipToOtherPanel(isLeft, item, password)
 }
 
 private fun archiveBaseName(fileName: String): String {
@@ -318,28 +330,37 @@ private fun archiveBaseName(fileName: String): String {
     }
 }
 
-fun MainViewModel.requestCompress(isLeft: Boolean) {
-    if (flowOf(isLeft).value.selectedUris.isEmpty()) return
-    _compressPanelIsLeft.value = isLeft; _compressPromptVisible.value = true
+// ==================== 弹窗控制 ====================
+fun MainViewModel.createDirectory(isLeft: Boolean, name: String) {
+    val current = flowOf(isLeft).value.currentUri ?: return
+    viewModelScope.launch { engine.createDirectory(current, name); refresh(isLeft) }
 }
-fun MainViewModel.dismissCompressPrompt() { _compressPromptVisible.value = false }
-
-fun MainViewModel.compressWithFormat(format: ArchiveFormat) {
-    _compressPromptVisible.value = false
-    if (!format.canCompress) return
-    val isLeft = _compressPanelIsLeft.value
-    val state = flowOf(isLeft).value
-    val currentDir = state.currentUri?.path?.let(::File) ?: return
-    val sources = state.items.filter { state.selectedUris.contains(it.uriString) }.mapNotNull { it.uri.path?.let(::File) }
-    if (sources.isEmpty()) return
-    val ext = when (format) { ArchiveFormat.ZIP -> ".zip"; ArchiveFormat.TAR -> ".tar"; ArchiveFormat.TAR_GZ -> ".tar.gz"; ArchiveFormat.SEVEN_Z -> ".7z"; else -> ".zip" }
-    val fileName = if (sources.size == 1) { val base = if (sources[0].name.contains('.')) sources[0].name.substringBeforeLast('.') else sources[0].name; "$base$ext" } else { "archive_${System.currentTimeMillis()}$ext" }
-    
+fun MainViewModel.rename(isLeft: Boolean, item: FileItem, newName: String) {
+    viewModelScope.launch { engine.rename(item.uri, newName); refresh(isLeft) }
+}
+fun MainViewModel.createFile(name: String) {
+    _newFilePrompt.value = false
+    val isLeft = _newFilePanelIsLeft.value
+    val dir = flowOf(isLeft).value.currentUri?.path?.let(::File) ?: return
     viewModelScope.launch {
-        _zipProgress.value = ZipProgress(visible = true, title = "压缩中", message = fileName)
-        val result = ArchiveEngine.compress(sources, File(currentDir, fileName), format) { cur, total -> _zipProgress.value = _zipProgress.value.copy(current = cur, total = total) }
-        result.onSuccess { _zipProgress.value = _zipProgress.value.copy(done = true, message = "压缩完成：$fileName") }.onFailure { e -> _zipProgress.value = _zipProgress.value.copy(error = "压缩失败: ${e.message ?: "未知错误"}") }
-        clearSelection(isLeft); refresh(isLeft)
+        try {
+            val f = File(dir, name)
+            if (f.exists()) { _toast.value = "文件已存在"; return@launch }
+            f.parentFile?.mkdirs(); f.createNewFile(); _toast.value = "已创建：${f.name}"; refresh(isLeft)
+        } catch (e: Exception) { _toast.value = "创建失败：${e.message}" }
     }
 }
-fun MainViewModel.dismissZipProgress() { _zipProgress.value = ZipProgress() }
+fun MainViewModel.openNewFilePrompt(isLeft: Boolean) { _newFilePanelIsLeft.value = isLeft; _newFilePrompt.value = true }
+fun MainViewModel.dismissNewFilePrompt() { _newFilePrompt.value = false }
+fun MainViewModel.openNewFolderDialog(isLeft: Boolean) { _newFolderDialogIsLeft.value = isLeft; _newFolderDialogVisible.value = true }
+fun MainViewModel.dismissNewFolderDialog() { _newFolderDialogVisible.value = false }
+fun MainViewModel.openJumpDialog(isLeft: Boolean) { _jumpDialogIsLeft.value = isLeft; _jumpDialogVisible.value = true }
+fun MainViewModel.dismissJumpDialog() { _jumpDialogVisible.value = false }
+fun MainViewModel.openSortDialog(isLeft: Boolean) { _sortDialogIsLeft.value = isLeft; _sortDialogVisible.value = true }
+fun MainViewModel.dismissSortDialog() { _sortDialogVisible.value = false }
+fun MainViewModel.openActionDialog(isLeft: Boolean, item: FileItem) { _actionDialogIsLeft.value = isLeft; _actionDialogTarget.value = item }
+fun MainViewModel.dismissActionDialog() { _actionDialogTarget.value = null }
+fun MainViewModel.openInfoDialog(item: FileItem) { _infoDialogTarget.value = item }
+fun MainViewModel.dismissInfoDialog() { _infoDialogTarget.value = null; resetFolderSize() }
+fun MainViewModel.openRenameDialog(isLeft: Boolean, item: FileItem) { _renameDialogIsLeft.value = isLeft; _renameDialogTarget.value = item }
+fun MainViewModel.dismissRenameDialog() { _renameDialogTarget.value = null }

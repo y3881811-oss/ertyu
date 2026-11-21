@@ -16,7 +16,7 @@ object AppLogger {
     private const val PREFS_NAME = "EYU_Log_Prefs"
     private const val KEY_LOG_DIR = "custom_log_dir"
 
-    var isVerboseLoggingEnabled = true
+    var isVerboseLoggingEnabled = true 
     private var customLogPath: String? = null
 
     fun init(context: Context) {
@@ -35,16 +35,29 @@ object AppLogger {
     fun getLogDir(): File {
         if (!customLogPath.isNullOrBlank()) {
             val f = File(customLogPath!!)
-            if (f.exists() || f.mkdirs()) return f
+            if (f.exists() || f.mkdirs()) {
+                return f
+            }
         }
         val defaultDir = File(Environment.getExternalStorageDirectory(), "EYU文件管理器/logs")
         if (!defaultDir.exists()) defaultDir.mkdirs()
         return defaultDir
     }
 
+    fun d(module: String, message: String) {
+        if (!isVerboseLoggingEnabled) return
+        Log.d(TAG, "[$module] $message")
+        writeToFile("D", module, message)
+    }
+
     fun i(module: String, message: String) {
         Log.i(TAG, "[$module] $message")
         writeToFile("I", module, message)
+    }
+
+    fun w(module: String, message: String) {
+        Log.w(TAG, "[$module] $message")
+        writeToFile("W", module, message)
     }
 
     fun e(module: String, message: String, throwable: Throwable? = null) {
