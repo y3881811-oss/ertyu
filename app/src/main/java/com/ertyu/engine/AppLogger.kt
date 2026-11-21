@@ -35,9 +35,7 @@ object AppLogger {
     fun getLogDir(): File {
         if (!customLogPath.isNullOrBlank()) {
             val f = File(customLogPath!!)
-            if (f.exists() || f.mkdirs()) {
-                return f
-            }
+            if (f.exists() || f.mkdirs()) return f
         }
         val defaultDir = File(Environment.getExternalStorageDirectory(), "EYU文件管理器/logs")
         if (!defaultDir.exists()) defaultDir.mkdirs()
@@ -66,6 +64,11 @@ object AppLogger {
         writeToFile("E", module, errorMsg)
     }
 
+    // 👇 新增：专供系统 Logcat 收集器调用
+    fun sysLog(level: String, message: String) {
+        writeToFile(level, "SYS", message)
+    }
+
     private fun writeToFile(level: String, module: String, message: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -73,7 +76,17 @@ object AppLogger {
                 val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
                 val logFile = File(dir, "app_$dateStr.log")
                 val timeStr = SimpleDateFormat("HH:mm:ss.SSS", Locale.ROOT).format(Date())
-                val logLine = "$timeStr [$level] [$module] $message\n"
+                
+                // 如果是 SYS 模块，说明已经是带时间戳的原生日志，直接记录
+                val logLine = if (module == "SYS") {
+                    "$timeStr [SYS] $message\n"
+                } else {
+                    "$timeStr [$level] [$module] $message\n"
+                }
+                
+                // 限制文件大小，防止撑爆手机（例如单文件大于 5MB 就不再写入）
+                if (logFile.exists() && logFile.length() > 5 * 1024 * 1024) return@launch
+                
                 logFile.appendText(logLine)
             } catch (_: Exception) { }
         }
