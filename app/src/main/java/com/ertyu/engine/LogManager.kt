@@ -1,77 +1,85 @@
 package com.ertyu.engine
 
-import android.os.Environment
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.core.content.FileProvider
 import com.ertyu.model.LogFile
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.BufferedReader
 import java.io.File
-import java.io.InputStreamReader
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 object LogManager {
 
-    private val logDir = File(Environment.getExternalStorageDirectory(), "Download/MTFM_Logs")
-    private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-    private val displayDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-
     /**
-     * 抓取当前 App 的运行日志（限制最近 5000 行，防止内存溢出）
+     * 获取当前日志目录下的所有日志文件（按修改时间倒序）
      */
-    suspend fun saveCurrentLog(): Result<File> = withContext(Dispatchers.IO) {
-        try {
-            if (!logDir.exists()) logDir.mkdirs()
+    fun getLogFiles(): List<LogFile> {
+        val logDir = AppLogger.getLogDir()
+        if (!logDir.exists() || !logDir.isDirectory) return emptyList()
 
-            val timeStr = dateFormat.format(Date())
-            val outFile = File(logDir, "log_$timeStr.txt")
+        val files = logDir.listFiles { file -> file.isFile && file.name.endsWith(".log") } ?: return emptyList()
 
-            // 使用 logcat 抓取最近 5000 行，只抓取包含包名的或者全局的
-            // -d: 抓取完退出 (dump)
-            // -v time: 带时间戳
-            // -t 5000: 最近 5000 行
-            val process = Runtime.getRuntime().exec("logcat -d -v time -t 5000")
-            val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
-            
-            outFile.bufferedWriter().use { writer ->
-                var line: String?
-                while (bufferedReader.readLine().also { line = it } != null) {
-                    writer.write(line)
-                    writer.newLine()
-                }
-            }
-            process.destroy()
-            
-            Result.success(outFile)
-        } catch (e: Exception) {
-            Result.failure(e)
+        return files.sortedByDescending { it.lastModified() }.map { file ->
+            val sizeStr = formatSize(file.length())
+            val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(Date(file.lastModified()))
+            LogFile(
+                name = file.name,
+                path = file.absolutePath,
+                size = sizeStr,
+                time = timeStr
+            )
         }
     }
 
     /**
-     * 获取已保存的日志文件列表
+     * 分享指定的日志文件
      */
-    suspend fun getLogFiles(): List<LogFile> = withContext(Dispatchers.IO) {
-        if (!logDir.exists()) return@withContext emptyList()
-        
-        logDir.listFiles()?.filter { it.isFile && it.name.endsWith(".txt") }
-            ?.sortedByDescending { it.lastModified() }
-            ?.map {
-                LogFile(
-                    name = it.name,
-                    path = it.absolutePath,
-                    size = formatSize(it.length()),
-                    time = displayDateFormat.format(Date(it.lastModified()))
-                )
-            } ?: emptyList()
+    fun shareLogFile(context: Context, logFile: LogFile) {
+        try {
+            val file = File(logFile.path)
+            if (!file.exists()) return
+
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "分享日志").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        } catch (e: Exception) {
+            // 忽略分享异常
+        }
     }
 
-    private fun formatSize(bytes: Long): String {
-        if (bytes < 1024) return "$bytes B"
-        val kb = bytes / 1024.0
-        if (kb < 1024) return String.format("%.1f KB", kb)
+    /**
+     * 删除指定的日志文件
+     */
+    fun deleteLogFile(logFile: LogFile): Boolean {
+        return try {
+            val file = File(logFile.path)
+            if (file.exists()) file.delete() else false
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 格式化文件大小
+     */
+    private fun formatSize(size: Long): String {
+        if (size < 1024) return "$size B"
+        val kb = size / 1024.0
+        if (kb < 1024) return String.format(Locale.ROOT, "%.1f KB", kb)
         val mb = kb / 1024.0
-        return String.format("%.1f MB", mb)
+        return String.format(Locale.ROOT, "%.1f MB", mb)
     }
 }
