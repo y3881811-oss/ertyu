@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ExitToApp // 👈 修改了导包
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,7 +47,8 @@ fun LogViewerScreen(vm: MainViewModel) {
                         Icon(Icons.Default.Refresh, "刷新")
                     }
                     IconButton(onClick = { vm.exportLogs() }, enabled = !state.isExporting) {
-                        Icon(Icons.Default.ExitToApp, "导出")
+                        // 👇 修改了图标调用
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, "导出")
                     }
                     IconButton(onClick = { vm.clearLogs() }) {
                         Icon(Icons.Default.Delete, "清空")
@@ -61,7 +63,6 @@ fun LogViewerScreen(vm: MainViewModel) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
 
-            // 搜索与过滤
             OutlinedTextField(
                 value = state.searchQuery,
                 onValueChange = { vm.updateLogSearch(it) },
@@ -83,13 +84,11 @@ fun LogViewerScreen(vm: MainViewModel) {
             }
             HorizontalDivider(Modifier.padding(top = 8.dp))
 
-            // 统一列表展示
             LazyColumn(
                 Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 1. 上半部分：应用结构化日志
                 if (state.filteredLogs.isEmpty()) {
                     item {
                         Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -102,7 +101,6 @@ fun LogViewerScreen(vm: MainViewModel) {
                     }
                 }
 
-                // 2. 下半部分：底层系统 Logcat
                 if (state.logcatLines.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(24.dp))
@@ -115,7 +113,6 @@ fun LogViewerScreen(vm: MainViewModel) {
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(Modifier.height(8.dp))
-                        // 放在一个深色卡片里，像终端一样
                         Column(
                             Modifier
                                 .fillMaxWidth()

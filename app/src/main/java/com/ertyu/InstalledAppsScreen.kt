@@ -1,6 +1,7 @@
 package com.ertyu
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -66,7 +67,7 @@ private val IconBack: ImageVector = Icons.AutoMirrored.Filled.ArrowBack
 private val IconSearch: ImageVector = Icons.Default.Search
 private val IconClose: ImageVector = Icons.Default.Close
 private val IconRefresh: ImageVector = Icons.Default.Refresh
-private val IconOpen: ImageVector = Icons.Default.OpenInNew
+private val IconOpen: ImageVector = Icons.AutoMirrored.Filled.OpenInNew
 private val IconInfo: ImageVector = Icons.Default.Info
 private val IconUninstall: ImageVector = Icons.Default.Delete
 private val IconExtract: ImageVector = Icons.Default.Save
