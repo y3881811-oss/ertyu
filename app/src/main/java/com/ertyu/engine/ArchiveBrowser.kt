@@ -19,8 +19,6 @@ import java.util.zip.ZipFile
 
 object ArchiveBrowser {
 
-    // ==================== 列出内部条目 ====================
-
     suspend fun list(archiveFile: File): Result<List<ArchiveEntry>> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -164,7 +162,8 @@ object ArchiveBrowser {
         try {
             var fh = archive.nextFileHeader()
             while (fh != null) {
-                val path = fh.fileNameString.replace('\\', '/')
+                // 👇 修复：将 fileNameString 改成了 fileName
+                val path = fh.fileName.replace('\\', '/')
                 val isDir = fh.isDirectory
                 val name = if (isDir)
                     path.trimEnd('/').substringAfterLast('/')
@@ -190,8 +189,6 @@ object ArchiveBrowser {
         return result
     }
 
-    // ==================== 提取单个条目 ====================
-
     suspend fun extractEntry(
         archiveFile: File,
         entryPath: String,
@@ -205,66 +202,40 @@ object ArchiveBrowser {
             val outFile = File(targetDir, entryName)
 
             when (format) {
-                ArchiveFormat.ZIP ->
-                    extractZipEntry(archiveFile, entryPath, outFile)
-                ArchiveFormat.TAR ->
-                    extractTarEntry(archiveFile, null, entryPath, outFile)
-                ArchiveFormat.TAR_GZ ->
-                    extractTarEntry(archiveFile, "gz", entryPath, outFile)
-                ArchiveFormat.TAR_BZ2 ->
-                    extractTarEntry(archiveFile, "bz2", entryPath, outFile)
-                ArchiveFormat.TAR_XZ ->
-                    extractTarEntry(archiveFile, "xz", entryPath, outFile)
-                ArchiveFormat.TAR_ZST ->
-                    extractTarEntry(archiveFile, "zst", entryPath, outFile)
-                ArchiveFormat.GZ ->
-                    extractSingle(archiveFile, "gz", outFile)
-                ArchiveFormat.BZ2 ->
-                    extractSingle(archiveFile, "bz2", outFile)
-                ArchiveFormat.XZ ->
-                    extractSingle(archiveFile, "xz", outFile)
-                ArchiveFormat.ZST ->
-                    extractSingle(archiveFile, "zst", outFile)
-                ArchiveFormat.SEVEN_Z ->
-                    extract7zEntry(archiveFile, entryPath, outFile)
-                ArchiveFormat.RAR ->
-                    extractRarEntry(archiveFile, entryPath, outFile)
+                ArchiveFormat.ZIP -> extractZipEntry(archiveFile, entryPath, outFile)
+                ArchiveFormat.TAR -> extractTarEntry(archiveFile, null, entryPath, outFile)
+                ArchiveFormat.TAR_GZ -> extractTarEntry(archiveFile, "gz", entryPath, outFile)
+                ArchiveFormat.TAR_BZ2 -> extractTarEntry(archiveFile, "bz2", entryPath, outFile)
+                ArchiveFormat.TAR_XZ -> extractTarEntry(archiveFile, "xz", entryPath, outFile)
+                ArchiveFormat.TAR_ZST -> extractTarEntry(archiveFile, "zst", entryPath, outFile)
+                ArchiveFormat.GZ -> extractSingle(archiveFile, "gz", outFile)
+                ArchiveFormat.BZ2 -> extractSingle(archiveFile, "bz2", outFile)
+                ArchiveFormat.XZ -> extractSingle(archiveFile, "xz", outFile)
+                ArchiveFormat.ZST -> extractSingle(archiveFile, "zst", outFile)
+                ArchiveFormat.SEVEN_Z -> extract7zEntry(archiveFile, entryPath, outFile)
+                ArchiveFormat.RAR -> extractRarEntry(archiveFile, entryPath, outFile)
             }
             outFile
         }
     }
 
-    private fun extractZipEntry(
-        archiveFile: File,
-        entryPath: String,
-        outFile: File
-    ) {
+    private fun extractZipEntry(archiveFile: File, entryPath: String, outFile: File) {
         ZipFile(archiveFile).use { zip ->
-            val e = zip.getEntry(entryPath)
-                ?: throw IllegalArgumentException("找不到：$entryPath")
+            val e = zip.getEntry(entryPath) ?: throw IllegalArgumentException("找不到：$entryPath")
             outFile.parentFile?.mkdirs()
             zip.getInputStream(e).use { input ->
-                BufferedOutputStream(outFile.outputStream()).use { out ->
-                    input.copyTo(out, 64 * 1024)
-                }
+                BufferedOutputStream(outFile.outputStream()).use { out -> input.copyTo(out, 64 * 1024) }
             }
         }
     }
 
-    private fun extractTarEntry(
-        archiveFile: File,
-        compressor: String?,
-        entryPath: String,
-        outFile: File
-    ) {
+    private fun extractTarEntry(archiveFile: File, compressor: String?, entryPath: String, outFile: File) {
         openTar(archiveFile, compressor).use { tar ->
             var entry = tar.nextEntry
             while (entry != null) {
                 if (entry.name == entryPath) {
                     outFile.parentFile?.mkdirs()
-                    BufferedOutputStream(outFile.outputStream()).use { out ->
-                        tar.copyTo(out, 64 * 1024)
-                    }
+                    BufferedOutputStream(outFile.outputStream()).use { out -> tar.copyTo(out, 64 * 1024) }
                     return
                 }
                 entry = tar.nextEntry
@@ -273,11 +244,7 @@ object ArchiveBrowser {
         throw IllegalArgumentException("找不到：$entryPath")
     }
 
-    private fun extractSingle(
-        archiveFile: File,
-        compressor: String,
-        outFile: File
-    ) {
+    private fun extractSingle(archiveFile: File, compressor: String, outFile: File) {
         val base: InputStream = BufferedInputStream(archiveFile.inputStream())
         val input: InputStream = when (compressor) {
             "gz" -> GzipCompressorInputStream(base)
@@ -288,17 +255,11 @@ object ArchiveBrowser {
         }
         input.use { ins ->
             outFile.parentFile?.mkdirs()
-            BufferedOutputStream(outFile.outputStream()).use { out ->
-                ins.copyTo(out, 64 * 1024)
-            }
+            BufferedOutputStream(outFile.outputStream()).use { out -> ins.copyTo(out, 64 * 1024) }
         }
     }
 
-    private fun extract7zEntry(
-        archiveFile: File,
-        entryPath: String,
-        outFile: File
-    ) {
+    private fun extract7zEntry(archiveFile: File, entryPath: String, outFile: File) {
         SevenZFile.builder().setFile(archiveFile).get().use { sz ->
             var entry = sz.nextEntry
             val buf = ByteArray(64 * 1024)
@@ -320,16 +281,13 @@ object ArchiveBrowser {
         throw IllegalArgumentException("找不到：$entryPath")
     }
 
-    private fun extractRarEntry(
-        archiveFile: File,
-        entryPath: String,
-        outFile: File
-    ) {
+    private fun extractRarEntry(archiveFile: File, entryPath: String, outFile: File) {
         val archive = Archive(archiveFile)
         try {
             var fh = archive.nextFileHeader()
             while (fh != null) {
-                val path = fh.fileNameString.replace('\\', '/')
+                // 👇 修复：同样将 fileNameString 改成了 fileName
+                val path = fh.fileName.replace('\\', '/')
                 if (path == entryPath) {
                     outFile.parentFile?.mkdirs()
                     BufferedOutputStream(outFile.outputStream()).use { out ->
