@@ -109,6 +109,7 @@ fun AppRoot(vm: MainViewModel) {
     AppDialogs(vm)
     CryptoDialog(vm)
     UpdateDownloadDialog(vm)
+    SplitDialog(vm)
     CrashPromptDialog(vm)
 
     // ================== 页面路由 ==================

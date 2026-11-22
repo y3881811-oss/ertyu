@@ -236,7 +236,9 @@ fun FilePanel(
             onExtractArchive = { items -> vm.openExtractOptions(items, isLeft) }, // 触发解压弹窗
             onBatchChecksum = { items -> vm.openBatchChecksum(items) },
             onBatchInstall = { items -> vm.openBatchInstall(items) },
-            onViewManifest = { item -> vm.openManifestViewer(item) }
+            onViewManifest = { item -> vm.openManifestViewer(item) },
+            onSplit = { item -> vm.openSplitDialog(item) },
+            onMerge = { item -> vm.openMergeDialog(item) }
         )
 
         // ================== 挂载新弹窗 ==================

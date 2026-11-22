@@ -50,7 +50,9 @@ fun SelectionActionSheet(
     onExtractArchive: ((List<FileItem>) -> Unit)? = null, // 👈 改成传 List
     onBatchChecksum: ((List<FileItem>) -> Unit)? = null,
     onBatchInstall: ((List<FileItem>) -> Unit)? = null,
-    onViewManifest: ((FileItem) -> Unit)? = null
+    onViewManifest: ((FileItem) -> Unit)? = null,
+    onSplit: ((FileItem) -> Unit)? = null,
+    onMerge: ((FileItem) -> Unit)? = null
 ) {
     if (!visible) return
 
@@ -127,6 +129,17 @@ fun SelectionActionSheet(
                 }
                 onBatchChecksum?.let { cb ->
                     SheetItem("校验哈希 (SHA-256)") { cb(selectedItems); onDismiss() }
+                }
+                if (isSingle && singleItem != null && !singleItem.isDirectory) {
+                    val target = singleItem
+                    onSplit?.let { cb ->
+                        SheetItem("分卷…") { cb(target); onDismiss() }
+                    }
+                    if (com.ertyu.engine.SplitEngine.isPart(target.name)) {
+                        onMerge?.let { cb ->
+                            SheetItem("合并分卷") { cb(target); onDismiss() }
+                        }
+                    }
                 }
                 if (selectedItems.size > 1 && selectedItems.all { it.name.endsWith(".apk", ignoreCase = true) }) {
                     onBatchInstall?.let { cb ->
