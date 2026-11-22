@@ -111,15 +111,8 @@ fun MainViewModel.dismissUpdateDialog() {
 }
 
 fun MainViewModel.startDownload(url: String) {
-    try {
-        AppLogger.i("Update", "开始下载更新: $url")
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        getApplication<android.app.Application>().startActivity(intent)
-    } catch (e: Exception) {
-        AppLogger.e("Update", "无法打开浏览器下载", e)
-        _toast.value = "无法打开浏览器"
-    }
+    // 改为 App 内置下载：SHA256 + 签名校验都通过才触发安装，不再交给浏览器（避免代理替换 APK）
+    startUpdateDownload(url)
 }
 
 /**

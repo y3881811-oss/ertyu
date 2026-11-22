@@ -95,6 +95,7 @@ fun AppRoot(vm: MainViewModel) {
     // ================== 全局弹窗 ==================
     AppDialogs(vm)
     CryptoDialog(vm)
+    UpdateDownloadDialog(vm)
 
     // ================== 页面路由 ==================
     when {
