@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import com.ertyu.model.DirCompareHolder
 import com.ertyu.model.LogStateHolder
 import com.ertyu.model.SpaceAnalyzerHolder
 
@@ -48,6 +49,7 @@ fun AppRoot(vm: MainViewModel) {
     val fontState by FontPreviewStateHolder.state.collectAsState()
     val recycleBinState by RecycleBinStateHolder.state.collectAsState()
     val spaceAnalyzerState by SpaceAnalyzerHolder.state.collectAsState()
+    val dirCompareState by DirCompareHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
@@ -184,6 +186,10 @@ fun AppRoot(vm: MainViewModel) {
             LogViewerScreen(vm)
         }
         
+        dirCompareState.visible -> {
+            BackHandler { vm.closeDirCompare() }
+            DirCompareScreen(vm)
+        }
         spaceAnalyzerState.visible -> {
             BackHandler { vm.closeSpaceAnalyzer() }
             SpaceAnalyzerScreen(vm)

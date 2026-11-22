@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
@@ -144,6 +145,10 @@ fun DrawerContent(
                 vm.startDuplicateScan(File("/storage/emulated/0"))
             }
 
+            DrawerItem("目录对比与同步", Icons.Default.CompareArrows) {
+                onDismiss()
+                vm.openDirCompare()
+            }
             DrawerItem("空间分析", Icons.Default.PieChart) {
                 onDismiss()
                 vm.openSpaceAnalyzer()
