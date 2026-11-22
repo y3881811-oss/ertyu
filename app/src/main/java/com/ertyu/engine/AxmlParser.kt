@@ -26,17 +26,20 @@ object AxmlParser {
 
     private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
 
-    fun parseApk(apkFile: java.io.File): Result? = try {
+    fun parseApk(apkFile: java.io.File): Result? {
+        return try {
         ZipFile(apkFile).use { zip ->
             val entry = zip.getEntry("AndroidManifest.xml") ?: return null
             val bytes = zip.getInputStream(entry).use { it.readBytes() }
             parse(bytes)
         }
-    } catch (_: Exception) {
-        null
+        } catch (_: Exception) {
+            null
+        }
     }
 
-    fun parse(bytes: ByteArray): Result? = try {
+    fun parse(bytes: ByteArray): Result? {
+        return try {
         val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         val headerType = buf.getShort(0).toInt() and 0xFFFF
         if (headerType != TYPE_XML) return null
@@ -110,8 +113,9 @@ object AxmlParser {
             pos += size
         }
         Result(out.toString(), permissions.distinct(), packageName)
-    } catch (_: Exception) {
-        null
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun readStringPool(buf: ByteBuffer, start: Int): List<String> {
