@@ -139,6 +139,12 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
                     if (entry.compressedSize > 0) {
                         Text("压缩后：${entry.compressedText}", style = MaterialTheme.typography.bodyMedium)
                     }
+                    if (entry.isPreviewableImage()) {
+                        TextButton(onClick = {
+                            vm.previewArchiveEntry(entry)
+                            actionTarget = null
+                        }) { Text("预览图片") }
+                    }
                 }
             },
             confirmButton = {
