@@ -40,7 +40,7 @@ fun CompressOptionsDialog(vm: MainViewModel) {
         ArchiveFormat.ZIP, ArchiveFormat.TAR, ArchiveFormat.TAR_GZ,
         ArchiveFormat.TAR_BZ2, ArchiveFormat.TAR_XZ, ArchiveFormat.TAR_ZST, ArchiveFormat.SEVEN_Z
     )
-    val supportsEncryption = format == ArchiveFormat.ZIP || format == ArchiveFormat.SEVEN_Z
+    val supportsEncryption = format == ArchiveFormat.ZIP
     val passwordMismatch = supportsEncryption && password.isNotEmpty() && password != password2
     val canConfirm = fileName.isNotBlank() && !passwordMismatch
 
@@ -132,7 +132,9 @@ fun CompressOptionsDialog(vm: MainViewModel) {
                     }
                 } else {
                     Text(
-                        text = "当前格式（${format.label}）不支持加密，密码设置已忽略",
+                        text = if (format == ArchiveFormat.SEVEN_Z)
+                            "7z 暂不支持加密写入，需要加密请选 ZIP（AES-256）"
+                        else "当前格式（${format.label}）不支持加密，密码设置已忽略",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
