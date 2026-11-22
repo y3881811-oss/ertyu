@@ -151,7 +151,15 @@ object LogcatCollector {
         if (tail.first > 0 || tail.third == 0) {
             return DumpResult(tail.first, tail.second, tail.third, true)
         }
-        // 3) 纯 -d 兜底
+        // 3) 尾部 + --pid，但不限制级别（应用可能只打了 I/D 日志）
+        val anyLevel = runDump(
+            arrayOf("/system/bin/logcat", "-v", "threadtime", "-t", TAIL_LINES.toString(), "--pid=$selfPid"),
+            selfPid
+        )
+        if (anyLevel.first > 0 || anyLevel.third == 0) {
+            return DumpResult(anyLevel.first, anyLevel.second, anyLevel.third, true)
+        }
+        // 4) 纯 -d 兜底
         val full = runDump(arrayOf("/system/bin/logcat", "-d", "-v", "threadtime", "*:W"), selfPid)
         return DumpResult(full.first, full.second, full.third, false)
     }

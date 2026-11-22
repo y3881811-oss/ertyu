@@ -18,7 +18,10 @@ object UpdateCacheCleaner {
             val cutoff = System.currentTimeMillis() - KEEP_MS
             dir.listFiles()?.forEach { f ->
                 if (keep != null && f.absolutePath == keep.absolutePath) return@forEach
-                val stale = f.name.endsWith(".part") || f.lastModified() < cutoff
+                // .part 只在 1 小时没动过时才删，避免删掉可续传的半包
+                val partStale = f.name.endsWith(".part") &&
+                    f.lastModified() < System.currentTimeMillis() - 60 * 60 * 1000L
+                val stale = partStale || f.lastModified() < cutoff
                 if (stale) {
                     try { f.delete() } catch (_: Exception) { }
                 }

@@ -81,6 +81,12 @@ fun MainViewModel.checkForUpdates(currentVersionName: String) {
             }
 
             val (latestTag, htmlUrl, apkDownloadUrl) = result
+
+            if (com.ertyu.engine.UpdatePrefs.shouldSkip(getApplication(), latestTag)) {
+                AppLogger.i("Update", "已跳过版本 $latestTag（7 天内不再提示）")
+                _updateState.value = UpdateState(isChecking = false, hasUpdate = false)
+                return@launch
+            }
             val newer = compareVersions(latestTag, currentVersionName) > 0
 
             if (newer) {
@@ -134,4 +140,14 @@ private fun compareVersions(latestTag: String, current: String): Int {
         if (x != y) return if (x > y) 1 else -1
     }
     return 0
+}
+
+/** 用户选择「跳过此版本」：同一 tag 7 天内不再提示 */
+fun MainViewModel.skipThisUpdate() {
+    val tag = _updateState.value.latestVersion
+    if (tag.isBlank()) return
+    com.ertyu.engine.UpdatePrefs.skip(getApplication(), tag)
+    _updateState.value = _updateState.value.copy(hasUpdate = false)
+    _toast.value = "已跳过 $tag，7 天内不再提示"
+    AppLogger.i("Update", "用户跳过版本 $tag")
 }
