@@ -1,5 +1,6 @@
 package com.ertyu
 
+import com.ertyu.engine.TaskCenter
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
@@ -41,8 +42,10 @@ fun MainViewModel.startUpdateDownload(url: String) {
 
     AppLogger.i("Update", "开始下载更新: $url")
     UpdateDownloadHolder.state.value = UpdateDownloadState(visible = true, phase = "连接中…")
+    val taskId = TaskCenter.start("更新 ${fileName}", "更新", null)
 
     fun fail(message: String) {
+        TaskCenter.finish(taskId, false, message)
         AppLogger.e("Update", "更新失败: $message")
         UpdateDownloadHolder.state.update { it.copy(phase = "失败", error = message) }
         showToast("更新失败：$message")
@@ -113,6 +116,7 @@ fun MainViewModel.startUpdateDownload(url: String) {
                 return@launch
             }
             AppLogger.i("Update", "已触发安装: ${dest.name}")
+            TaskCenter.finish(taskId, true, "已启动安装")
             UpdateDownloadHolder.state.update { it.copy(phase = "已启动安装", done = true, percent = 100) }
         } catch (e: kotlinx.coroutines.CancellationException) {
             UpdateDownloadHolder.state.update { it.copy(phase = "已取消") }

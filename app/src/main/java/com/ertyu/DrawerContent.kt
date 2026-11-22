@@ -1,5 +1,6 @@
 package com.ertyu
 
+import androidx.compose.material.icons.filled.CheckCircle
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -157,6 +158,10 @@ fun DrawerContent(
             DrawerItem("目录对比与同步", Icons.Default.CompareArrows) {
                 onDismiss()
                 vm.openDirCompare()
+            }
+            DrawerItem("任务中心", Icons.Default.CheckCircle) {
+                onDismiss()
+                vm.openTaskCenter()
             }
             DrawerItem("空间分析", Icons.Default.PieChart) {
                 onDismiss()

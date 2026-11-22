@@ -1,5 +1,7 @@
 package com.ertyu
 
+import kotlinx.coroutines.Job
+import com.ertyu.engine.TaskCenter
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.AppLogger
@@ -36,6 +38,7 @@ fun MainViewModel.executeAdvancedExtract(folderName: String, toOtherPanel: Boole
 
     viewModelScope.launch {
         _fileTransferState.value = FileTransferState(visible = true, title = "正在解压", totalBytes = targets.size.toLong())
+        val taskId = TaskCenter.start("解压 ${targets.size} 个压缩包", "解压", coroutineContext[Job])
         var successCount = 0
 
         for ((index, item) in targets.withIndex()) {
@@ -56,6 +59,7 @@ fun MainViewModel.executeAdvancedExtract(folderName: String, toOtherPanel: Boole
         }
         
         _fileTransferState.value = FileTransferState()
+        TaskCenter.finish(taskId, successCount > 0, if (successCount > 0) "成功 $successCount 项" else "失败")
         _toast.value = "解压完成，成功 $successCount 项"
         refresh(targetIsLeft)
     }
@@ -98,6 +102,7 @@ fun MainViewModel.executeAdvancedCompress(
     
     viewModelScope.launch {
         _fileTransferState.value = FileTransferState(visible = true, title = "正在压缩", totalBytes = targets.size.toLong())
+        val taskId = TaskCenter.start("压缩 ${targets.size} 项", "压缩", coroutineContext[Job])
         
         try {
             // 手写一个后缀解析，避免依赖 ArchiveFormat.extensions
@@ -157,6 +162,7 @@ fun MainViewModel.executeAdvancedCompress(
                 }
             }
 
+            TaskCenter.finish(taskId, okCount > 0, if (okCount > 0) "成功 $okCount 个" else "失败")
             _toast.value = when {
                 failCount == 0 -> "压缩完成"
                 okCount == 0 -> "压缩失败：${if (password != null) "密码或存储空间可能有问题" else "请检查存储空间或文件名"}"

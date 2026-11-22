@@ -1,5 +1,7 @@
 package com.ertyu
 
+import kotlinx.coroutines.flow.collectAsState
+import com.ertyu.model.TaskCenterHolder
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -67,6 +69,7 @@ fun AppRoot(vm: MainViewModel) {
     val sftpState by SftpHolder.state.collectAsState()
     val batchInstallState by BatchInstallHolder.state.collectAsState()
     val lanScanState by LanScanHolder.state.collectAsState()
+    val taskCenterVisible by TaskCenterHolder.visible.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
@@ -205,6 +208,10 @@ fun AppRoot(vm: MainViewModel) {
             LogViewerScreen(vm)
         }
         
+        taskCenterVisible -> {
+            BackHandler { vm.closeTaskCenter() }
+            TaskCenterScreen(vm)
+        }
         lanScanState.visible -> {
             BackHandler { vm.closeLanScan() }
             LanScanScreen(vm)

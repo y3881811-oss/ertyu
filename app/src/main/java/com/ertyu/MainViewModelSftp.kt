@@ -1,5 +1,6 @@
 package com.ertyu
 
+import com.ertyu.engine.TaskCenter
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.AppLogger
 import com.ertyu.engine.ItemSizeEngine
@@ -97,6 +98,7 @@ fun MainViewModel.sftpDownload(entry: RemoteEntry) {
     val finalName = generateUniqueFileName(entry.name, existing)
     val target = File(localDir, finalName)
     SftpHolder.state.update { it.copy(busyText = "正在下载 ${entry.name}") }
+    val taskId = TaskCenter.start("下载 ${entry.name}", "SFTP", null)
     viewModelScope.launch {
         SftpEngine.download(session, entry.path, target) { done ->
             val total = entry.size.coerceAtLeast(1)
@@ -104,11 +106,13 @@ fun MainViewModel.sftpDownload(entry: RemoteEntry) {
                 it.copy(busyText = "正在下载 ${entry.name}（${ItemSizeEngine.format(done)}/${ItemSizeEngine.format(total)}）")
             }
         }.onSuccess {
+            TaskCenter.finish(taskId, true, "已下载 ${entry.name}")
             SftpHolder.state.update { it.copy(busyText = "") }
             showToast(if (finalName == entry.name) "已下载 ${entry.name}" else "已下载为 $finalName（同名已存在）")
             invalidateSizeFor(localDir.absolutePath)
             refresh(true)
         }.onFailure { e ->
+            TaskCenter.finish(taskId, false, e.message ?: "下载失败")
             AppLogger.e("Sftp", "下载失败 ${entry.path}", e)
             SftpHolder.state.update { it.copy(busyText = "", error = e.message ?: "下载失败") }
         }
@@ -126,6 +130,7 @@ fun MainViewModel.sftpUploadSelected() {
         return
     }
     val remoteDir = snap.path
+    val taskId = TaskCenter.start("上传 ${items.size} 个文件", "SFTP", null)
     viewModelScope.launch {
         var ok = 0
         var fail = 0
@@ -152,6 +157,7 @@ fun MainViewModel.sftpUploadSelected() {
                 AppLogger.e("Sftp", "上传失败 ${item.path} -> $remotePath", r.exceptionOrNull())
             }
         }
+        TaskCenter.finish(taskId, ok > 0, "成功 $ok 项${if (fail > 0) "，失败 $fail 项" else ""}")
         SftpHolder.state.update { it.copy(busyText = "") }
         showToast(
             buildString {
