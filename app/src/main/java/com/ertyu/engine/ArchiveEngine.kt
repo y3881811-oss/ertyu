@@ -68,7 +68,9 @@ object ArchiveEngine {
         sources: List<File>,
         targetFile: File,
         format: ArchiveFormat,
-        onProgress: (Int, Int) -> Unit = { _, _ -> }
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+        password: String? = null,
+        compressionLevel: Int = 5
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val entries = mutableListOf<Pair<File, String>>()
@@ -76,13 +78,13 @@ object ArchiveEngine {
             if (entries.isEmpty()) throw IllegalArgumentException("没有可压缩的内容")
 
             when (format) {
-                ArchiveFormat.ZIP -> return@withContext ZipEngine.compress(sources, targetFile, onProgress)
+                ArchiveFormat.ZIP -> return@withContext ZipEngine.compress(sources, targetFile, onProgress, password, compressionLevel)
                 ArchiveFormat.TAR -> compressTar(entries, targetFile, null, onProgress)
                 ArchiveFormat.TAR_GZ -> compressTar(entries, targetFile, "gz", onProgress)
                 ArchiveFormat.TAR_BZ2 -> compressTar(entries, targetFile, "bz2", onProgress)
                 ArchiveFormat.TAR_XZ -> compressTar(entries, targetFile, "xz", onProgress)
                 ArchiveFormat.TAR_ZST -> compressTar(entries, targetFile, "zst", onProgress)
-                ArchiveFormat.SEVEN_Z -> compress7z(entries, targetFile, onProgress)
+                ArchiveFormat.SEVEN_Z -> compress7z(entries, targetFile, onProgress, password)
                 else -> throw IllegalArgumentException("不支持压缩为 ${format.label}")
             }
             Result.success(Unit)
@@ -92,8 +94,15 @@ object ArchiveEngine {
         }
     }
 
-    private fun compress7z(entries: List<Pair<File, String>>, target: File, onProgress: (Int, Int) -> Unit) {
+    private fun compress7z(
+        entries: List<Pair<File, String>>,
+        target: File,
+        onProgress: (Int, Int) -> Unit,
+        password: String? = null
+    ) {
         SevenZOutputFile(target).use { out ->
+            // 非空密码 = AES-256 加密
+            if (!password.isNullOrEmpty()) out.setPassword(password.toCharArray())
             var current = 0
             for ((file, name) in entries) {
                 val entryName = if (file.isDirectory) "$name/" else name

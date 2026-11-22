@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import net.lingala.zip4j.ZipFile
 import net.lingala.zip4j.exception.ZipException
 import net.lingala.zip4j.model.ZipParameters
+import net.lingala.zip4j.model.enums.AESKeyStrength
+import net.lingala.zip4j.model.enums.EncryptionMethod
 import java.io.File
 import java.nio.charset.Charset
 
@@ -74,7 +76,9 @@ object ZipEngine {
     suspend fun compress(
         sources: List<File>,
         targetZip: File,
-        onProgress: (Int, Int) -> Unit = { _, _ -> }
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+        password: String? = null,
+        compressionLevel: Int = 5
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             if (targetZip.exists()) targetZip.delete()
@@ -90,6 +94,13 @@ object ZipEngine {
                 val params = ZipParameters().apply {
                     // 如果是目录，确保路径带斜杠（通常 zip4j 会自动处理，但显式加上更保险）
                     fileNameInZip = if (file.isDirectory && !entryName.endsWith("/")) "$entryName/" else entryName
+                    setCompressionLevel(compressionLevel.coerceIn(0, 9))
+                    if (!password.isNullOrEmpty()) {
+                        setEncryptFiles(true)
+                        setEncryptionMethod(EncryptionMethod.AES)
+                        setAesKeyStrength(AESKeyStrength.AES_256)
+                        setPassword(password.toCharArray())
+                    }
                 }
                 
                 if (file.isDirectory) {
