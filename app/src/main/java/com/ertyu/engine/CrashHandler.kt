@@ -2,7 +2,6 @@ package com.ertyu.engine
 
 import android.content.Context
 import android.os.Build
-import android.os.Environment
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -17,7 +16,7 @@ object CrashHandler {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
                 handleCrash(context, throwable)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // 忽略保存日志时的二次崩溃
             } finally {
                 defaultHandler?.uncaughtException(thread, throwable)
@@ -26,37 +25,50 @@ object CrashHandler {
     }
 
     private fun handleCrash(context: Context, throwable: Throwable) {
-        val time = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ROOT).format(Date())
-        val fileName = "crash_$time.txt"
+        val timeText = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(Date())
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ROOT).format(Date())
 
-        val dir = File(Environment.getExternalStorageDirectory(), "MTFM/logs")
-        if (!dir.exists()) dir.mkdirs()
-        val file = File(dir, fileName)
+        val sw = StringWriter()
+        throwable.printStackTrace(PrintWriter(sw))
+        val stack = sw.toString()
+        val summary = throwable.toString()
 
-        file.printWriter().use { writer ->
-            writer.println("=== 崩溃日志 ===")
-            writer.println("时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(Date())}")
-            writer.println("设备: ${Build.MANUFACTURER} ${Build.MODEL}")
-            writer.println("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-            
-            // 👇 修复：兼容 API 26~27，避免在 Android 8 上崩溃
-            try {
-                val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    pInfo.longVersionCode.toString()
-                } else {
-                    @Suppress("DEPRECATION")
-                    pInfo.versionCode.toString()
-                }
-                writer.println("版本: ${pInfo.versionName} ($versionCode)")
-            } catch (e: Exception) {
-                writer.println("版本: 未知")
+        // 1) 独立的崩溃文件，放在当前日志目录（跟随用户自定义目录）
+        var logPath = ""
+        try {
+            val dir = AppLogger.getLogDir()
+            val file = File(dir, "crash_$stamp.txt")
+            file.printWriter().use { w ->
+                w.println("=== 崩溃日志 ===")
+                w.println("时间: $timeText")
+                w.println("设备: ${Build.MANUFACTURER} ${Build.MODEL}")
+                w.println("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                w.println("版本: ${versionText(context)}")
+                w.println()
+                w.println(stack)
             }
-            writer.println()
+            logPath = file.absolutePath
+        } catch (_: Exception) { }
 
-            val sw = StringWriter()
-            throwable.printStackTrace(PrintWriter(sw))
-            writer.println(sw.toString())
+        // 2) 混进主日志，方便按时间线排查
+        try {
+            AppLogger.e("Crash", "应用崩溃：$summary", throwable)
+        } catch (_: Exception) { }
+
+        // 3) 标记，下次启动提示用户去看日志
+        try {
+            CrashMarker.save(context, timeText, summary, logPath)
+        } catch (_: Exception) { }
+    }
+
+    private fun versionText(context: Context): String = try {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
         }
+        "${info.versionName} ($code)"
+    } catch (_: Exception) {
+        "未知"
     }
 }

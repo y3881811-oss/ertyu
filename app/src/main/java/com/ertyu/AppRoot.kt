@@ -22,6 +22,15 @@ import com.ertyu.model.SpaceAnalyzerHolder
 fun AppRoot(vm: MainViewModel) {
     val context = LocalContext.current
 
+    // 上次触发的安装是否真的装上了：没装上就提示一次（安装包还在缓存里）
+    LaunchedEffect(Unit) {
+        com.ertyu.engine.PendingInstall.takeOutcome(context)?.let { o ->
+            if (!o.success) {
+                vm.showToast("上次更新未完成（可能被取消了），安装包仍在缓存，可重新下载安装")
+            }
+        }
+    }
+
     // ================== 状态收集 ==================
     val editor by vm.editor.collectAsState()
     val imageViewer by vm.imageViewer.collectAsState()
@@ -96,6 +105,7 @@ fun AppRoot(vm: MainViewModel) {
     AppDialogs(vm)
     CryptoDialog(vm)
     UpdateDownloadDialog(vm)
+    CrashPromptDialog(vm)
 
     // ================== 页面路由 ==================
     when {

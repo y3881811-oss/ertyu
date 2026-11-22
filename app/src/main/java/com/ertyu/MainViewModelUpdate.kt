@@ -101,8 +101,12 @@ fun MainViewModel.startUpdateDownload(url: String) {
                 return@launch
             }
 
-            // 5) 触发安装
+            // 5) 触发安装（先记下目标版本，下次启动判断是否真的装上了）
             UpdateDownloadHolder.state.update { it.copy(phase = "启动安装…") }
+            val targetCode = com.ertyu.engine.PendingInstall.apkVersionCode(app, dest)
+            if (targetCode > 0) {
+                com.ertyu.engine.PendingInstall.record(app, dest.absolutePath, targetCode)
+            }
             val installed = triggerInstall(app, dest)
             if (!installed) {
                 fail("无法启动安装程序")
