@@ -28,24 +28,27 @@ import com.ertyu.model.DirCompareHolder
 fun DirCompareScreen(vm: MainViewModel) {
     val state by DirCompareHolder.state.collectAsState()
     var pendingToRight by remember { mutableStateOf<Boolean?>(null) }
+    var showCloseConfirm by remember { mutableStateOf(false) }
+    val busy = state.isScanning || state.isSyncing
 
-    BackHandler { vm.closeDirCompare() }
+    fun requestClose() {
+        if (state.isSyncing) showCloseConfirm = true else vm.closeDirCompare()
+    }
+
+    BackHandler { requestClose() }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("目录对比与同步") },
                 navigationIcon = {
-                    IconButton(onClick = { vm.closeDirCompare() }) {
+                    IconButton(onClick = { requestClose() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { vm.startDirCompare() }, enabled = !state.isScanning && !state.isSyncing) {
+                    IconButton(onClick = { vm.startDirCompare() }, enabled = !busy) {
                         Icon(Icons.Default.Refresh, contentDescription = "重新对比")
-                    }
-                    TextButton(onClick = { vm.selectAllDirDiffs() }, enabled = !state.isScanning) {
-                        Text("全选差异")
                     }
                 }
             )
@@ -69,27 +72,38 @@ fun DirCompareScreen(vm: MainViewModel) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
                             checked = state.onlyDiff,
-                            onCheckedChange = { vm.setDirCompareOnlyDiff(it) }
+                            onCheckedChange = { vm.setDirCompareOnlyDiff(it) },
+                            enabled = !state.isSyncing
                         )
                         Text("只看差异", style = MaterialTheme.typography.bodySmall)
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(10.dp))
                         Checkbox(
                             checked = state.deep,
-                            onCheckedChange = { vm.setDirCompareDeep(it) }
+                            onCheckedChange = { vm.setDirCompareDeep(it) },
+                            enabled = !busy
                         )
-                        Text("比较修改时间/大小", style = MaterialTheme.typography.bodySmall)
+                        Text("比大小和修改时间", style = MaterialTheme.typography.bodySmall)
                     }
-                    Text(
-                        text = state.progressText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = state.progressText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (state.isSyncing) {
+                            TextButton(onClick = { vm.cancelDirDiffSync() }) {
+                                Text("停止", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
                 }
             }
 
-            if (state.isScanning || state.isSyncing) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-            }
+            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+
             state.error?.let {
                 Text(
                     "出错了：$it",
@@ -105,7 +119,11 @@ fun DirCompareScreen(vm: MainViewModel) {
                 if (list.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = if (state.isScanning) "正在对比…" else "两侧完全一致 🎉",
+                            text = when {
+                                state.isScanning -> "正在对比…"
+                                state.error != null -> "对比失败，可点右上角重试"
+                                else -> "两侧完全一致 🎉"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -116,6 +134,7 @@ fun DirCompareScreen(vm: MainViewModel) {
                             DirDiffRow(
                                 entry = entry,
                                 selected = entry.relPath in state.selected,
+                                enabled = !state.isSyncing,
                                 onClick = { vm.toggleDirDiffSelection(entry.relPath) }
                             )
                             HorizontalDivider()
@@ -124,50 +143,91 @@ fun DirCompareScreen(vm: MainViewModel) {
                 }
             }
 
-            // ================= 底部同步条 =================
+            // ================= 底部：选择 + 同步 =================
             Surface(tonalElevation = 6.dp, shadowElevation = 8.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (state.selected.isEmpty()) "同步全部差异" else "已选 ${state.selected.size} 项",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (state.selected.isNotEmpty()) {
-                        TextButton(onClick = { vm.clearDirDiffSelection() }) { Text("清空") }
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (state.selected.isEmpty()) "未勾选：按全部差异处理"
+                            else "已勾选 ${state.selected.size} 项",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        TextButton(
+                            onClick = { vm.selectAllDirDiffs() },
+                            enabled = !busy && list.any { it.kind != DiffKind.SAME }
+                        ) { Text("全选") }
+                        TextButton(
+                            onClick = { vm.invertDirDiffSelection() },
+                            enabled = !busy && list.any { it.kind != DiffKind.SAME }
+                        ) { Text("反选") }
+                        TextButton(
+                            onClick = { vm.clearDirDiffSelection() },
+                            enabled = !busy && state.selected.isNotEmpty()
+                        ) { Text("清空") }
                     }
-                    TextButton(
-                        onClick = { pendingToRight = false },
-                        enabled = !state.isSyncing && !state.isScanning
-                    ) { Text("← 复制到左侧") }
-                    TextButton(
-                        onClick = { pendingToRight = true },
-                        enabled = !state.isSyncing && !state.isScanning
-                    ) { Text("复制到右侧 →") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val toLeftCount = state.targets(false).size
+                        val toRightCount = state.targets(true).size
+                        FilledTonalButton(
+                            onClick = { pendingToRight = false },
+                            enabled = !busy && toLeftCount > 0,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("← 同步到左侧 ($toLeftCount)", maxLines = 1) }
+                        FilledTonalButton(
+                            onClick = { pendingToRight = true },
+                            enabled = !busy && toRightCount > 0,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("同步到右侧 → ($toRightCount)", maxLines = 1) }
+                    }
+                    val skippedRight = state.skipped(true)
+                    if (state.selected.isNotEmpty() && (state.skipped(false) > 0 || skippedRight > 0)) {
+                        Text(
+                            text = "提示：勾选里有一部分只存在于目标侧（没有来源），不会参与同步。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
     }
 
+    // ================= 同步确认 =================
     pendingToRight?.let { toRight ->
+        val targets = state.targets(toRight)
+        val bytes = state.sourceBytes(toRight)
+        val overwrite = state.overwriteCount(toRight)
+        val dirCount = targets.count { it.isDirectory }
         AlertDialog(
             onDismissRequest = { pendingToRight = null },
-            title = { Text(if (toRight) "复制到右侧" else "复制到左侧") },
+            title = { Text(if (toRight) "同步到右侧" else "同步到左侧") },
             text = {
                 Column {
                     Text(
-                        if (state.selected.isEmpty())
-                            "将把全部差异项复制到${if (toRight) "右" else "左"}侧（目标侧独有的文件不会被删除）。"
-                        else
-                            "将把选中的 ${state.selected.size} 项复制到${if (toRight) "右" else "左"}侧。"
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "已有的同名文件会被覆盖。",
+                        text = if (state.selected.isEmpty()) "范围：全部差异"
+                        else "范围：已勾选的 ${state.selected.size} 项",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text("将复制 ${targets.size - dirCount} 个文件" + if (dirCount > 0) "、创建 $dirCount 个文件夹" else "")
+                    Text("总大小约 ${ItemSizeEngine.format(bytes)}")
+                    if (overwrite > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "$overwrite 项目标侧已存在，会被覆盖",
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "目标侧独有的文件不会被删除，只会新增或覆盖。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
@@ -176,10 +236,28 @@ fun DirCompareScreen(vm: MainViewModel) {
                     val dir = toRight
                     pendingToRight = null
                     vm.syncDirDiffs(dir)
-                }) { Text("开始同步") }
+                }) { Text(if (overwrite > 0) "覆盖并同步" else "开始同步") }
             },
             dismissButton = {
                 TextButton(onClick = { pendingToRight = null }) { Text("取消") }
+            }
+        )
+    }
+
+    // ================= 同步中退出确认 =================
+    if (showCloseConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCloseConfirm = false },
+            title = { Text("正在同步") },
+            text = { Text("退出会中止同步，已经复制的文件不会回滚。确定退出吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCloseConfirm = false
+                    vm.closeDirCompare()
+                }) { Text("中止并退出", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCloseConfirm = false }) { Text("继续同步") }
             }
         )
     }
@@ -208,10 +286,7 @@ private fun RootLine(tag: String, path: String) {
 @Composable
 private fun CountChip(text: String, kind: DiffKind) {
     val color = kindColor(kind)
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = color.copy(alpha = 0.15f)
-    ) {
+    Surface(shape = MaterialTheme.shapes.small, color = color.copy(alpha = 0.15f)) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
@@ -229,17 +304,22 @@ private fun kindColor(kind: DiffKind): Color = when (kind) {
 }
 
 @Composable
-private fun DirDiffRow(entry: DirDiffEntry, selected: Boolean, onClick: () -> Unit) {
+private fun DirDiffRow(
+    entry: DirDiffEntry,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
     val color = kindColor(entry.kind)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Checkbox(checked = selected, onCheckedChange = { onClick() })
+        Checkbox(checked = selected, onCheckedChange = { if (enabled) onClick() }, enabled = enabled)
         Surface(shape = MaterialTheme.shapes.small, color = color.copy(alpha = 0.15f)) {
             Text(
                 entry.kind.label,
@@ -256,8 +336,8 @@ private fun DirDiffRow(entry: DirDiffEntry, selected: Boolean, onClick: () -> Un
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            val leftText = if (entry.leftPath.isNotEmpty() && entry.kind != DiffKind.RIGHT_ONLY) ItemSizeEngine.format(entry.leftSize) else "—"
-            val rightText = if (entry.kind != DiffKind.LEFT_ONLY) ItemSizeEngine.format(entry.rightSize) else "—"
+            val leftText = if (entry.kind == DiffKind.RIGHT_ONLY) "—" else ItemSizeEngine.format(entry.leftSize)
+            val rightText = if (entry.kind == DiffKind.LEFT_ONLY) "—" else ItemSizeEngine.format(entry.rightSize)
             Text(
                 text = "左 $leftText   右 $rightText",
                 style = MaterialTheme.typography.labelSmall,
