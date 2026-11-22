@@ -109,7 +109,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          cp "$APK_PATH" "release/${APP_NAME}-${{ steps.version.outputs.tag }}.apk"
+          # 资产名必须纯 ASCII：GitHub 会把非 ASCII 字符替换成 “.”，中文名会变成 EYU.-v2026...
+          cp "$APK_PATH" "release/EYU-FileManager-${{ steps.version.outputs.tag }}.apk"
           ( cd release && sha256sum ./*.apk > SHA256SUMS.txt )
           ls -lh release/
 
