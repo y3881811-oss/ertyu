@@ -234,7 +234,8 @@ fun FilePanel(
             onInstallApk = { item -> vm.installApk(item) },
             onBrowseApk = { item -> vm.openApkBrowser(isLeft, item) },
             onExtractArchive = { items -> vm.openExtractOptions(items, isLeft) }, // 触发解压弹窗
-            onBatchChecksum = { items -> vm.openBatchChecksum(items) }
+            onBatchChecksum = { items -> vm.openBatchChecksum(items) },
+            onBatchInstall = { items -> vm.openBatchInstall(items) }
         )
 
         // ================== 挂载新弹窗 ==================

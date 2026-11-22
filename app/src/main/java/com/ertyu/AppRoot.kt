@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import com.ertyu.model.BatchChecksumHolder
+import com.ertyu.model.BatchInstallHolder
 import com.ertyu.model.DirCompareHolder
 import com.ertyu.model.LogStateHolder
 import com.ertyu.model.SftpHolder
@@ -54,6 +55,7 @@ fun AppRoot(vm: MainViewModel) {
     val dirCompareState by DirCompareHolder.state.collectAsState()
     val batchChecksumState by BatchChecksumHolder.state.collectAsState()
     val sftpState by SftpHolder.state.collectAsState()
+    val batchInstallState by BatchInstallHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
@@ -190,6 +192,10 @@ fun AppRoot(vm: MainViewModel) {
             LogViewerScreen(vm)
         }
         
+        batchInstallState.visible -> {
+            BackHandler { vm.closeBatchInstall() }
+            BatchInstallScreen(vm)
+        }
         sftpState.visible -> {
             BackHandler { vm.closeSftp() }
             SftpScreen(vm)
