@@ -77,6 +77,7 @@ class DirectFileEngine : FileEngine {
                                 val buffer = ByteArray(64 * 1024)
                                 var len: Int
                                 while (input.read(buffer).also { len = it } != -1) {
+                                    TransferGate.checkpoint()
                                     output.write(buffer, 0, len)
                                     copiedBytes += len
                                     
@@ -97,6 +98,8 @@ class DirectFileEngine : FileEngine {
                 copyRecursiveWithProgress(src, destFile)
                 onProgress(TransferProgress(totalBytes, totalBytes, src.name, 0L)) // 完成
                 true
+            } catch (e: TransferGate.TransferCancelled) {
+                false
             } catch (e: Exception) {
                 false
             }

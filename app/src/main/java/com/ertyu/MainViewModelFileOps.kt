@@ -2,6 +2,7 @@ package com.ertyu
 
 import kotlinx.coroutines.Job
 import com.ertyu.engine.TaskCenter
+import com.ertyu.engine.TransferGate
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.AppLogger
@@ -177,7 +178,8 @@ fun MainViewModel.batchCopy(fromLeft: Boolean) {
 private fun MainViewModel.executeBatchCopy(fromLeft: Boolean, targets: List<FileItem>, targetUri: Uri, targetNames: MutableSet<String>, action: ConflictAction) {
     viewModelScope.launch {
         _fileTransferState.value = FileTransferState(visible = true, title = "批量复制中", totalBytes = targets.sumOf { it.size })
-        val taskId = TaskCenter.start("复制 ${targets.size} 项", "复制", coroutineContext[Job])
+        TransferGate.reset()
+        val taskId = TaskCenter.start("复制 ${targets.size} 项", "复制", coroutineContext[Job], pausable = true)
         var totalCopied = 0L
         for (item in targets) {
             val conflictItem = flowOf(!fromLeft).value.items.find { it.name == item.name }
@@ -196,6 +198,12 @@ private fun MainViewModel.executeBatchCopy(fromLeft: Boolean, targets: List<File
             if (ok) { totalCopied += item.size; targetNames.add(item.name) }
         }
         _fileTransferState.update { it.copy(isDone = true) }
+        if (TransferGate.cancelRequested) {
+            TaskCenter.finish(taskId, false, "已取消")
+            TransferGate.reset()
+            clearSelection(fromLeft)
+            return@launch
+        }
         TaskCenter.finish(taskId, true, "已完成")
         clearSelection(fromLeft); openDirectory(!fromLeft, targetUri); clearConflictState()
     }
@@ -220,7 +228,8 @@ fun MainViewModel.batchMove(fromLeft: Boolean) {
 private fun MainViewModel.executeBatchMove(fromLeft: Boolean, targets: List<FileItem>, targetUri: Uri, targetNames: MutableSet<String>, action: ConflictAction) {
     viewModelScope.launch {
         _fileTransferState.value = FileTransferState(visible = true, title = "批量移动中", totalBytes = targets.sumOf { it.size })
-        val taskId = TaskCenter.start("移动 ${targets.size} 项", "移动", coroutineContext[Job])
+        TransferGate.reset()
+        val taskId = TaskCenter.start("移动 ${targets.size} 项", "移动", coroutineContext[Job], pausable = true)
         var totalCopied = 0L
         for (item in targets) {
             val conflictItem = flowOf(!fromLeft).value.items.find { it.name == item.name }
@@ -239,6 +248,12 @@ private fun MainViewModel.executeBatchMove(fromLeft: Boolean, targets: List<File
             if (ok) { totalCopied += item.size; targetNames.add(item.name) }
         }
         _fileTransferState.update { it.copy(isDone = true) }
+        if (TransferGate.cancelRequested) {
+            TaskCenter.finish(taskId, false, "已取消")
+            TransferGate.reset()
+            clearSelection(fromLeft); refresh(fromLeft)
+            return@launch
+        }
         TaskCenter.finish(taskId, true, "已完成")
         clearSelection(fromLeft); refresh(fromLeft); openDirectory(!fromLeft, targetUri); clearConflictState()
     }

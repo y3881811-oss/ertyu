@@ -15,12 +15,12 @@ object TaskCenter {
     private var seq = 0L
     private val jobs = HashMap<Long, Job>()
 
-    fun start(title: String, kind: String, job: Job? = null): Long {
+    fun start(title: String, kind: String, job: Job? = null, pausable: Boolean = false): Long {
         val id = ++seq
         if (job != null) jobs[id] = job
         TaskCenterHolder.state.update { list ->
             (listOf(
-                TaskItem(id = id, title = title, kind = kind, startedAt = System.currentTimeMillis())
+                TaskItem(id = id, title = title, kind = kind, startedAt = System.currentTimeMillis(), pausable = pausable)
             ) + list).take(100)
         }
         return id
@@ -48,6 +48,8 @@ object TaskCenter {
     }
 
     fun cancel(id: Long) {
+        // 阻塞式拷贝靠闸门中止，光取消协程不够
+        TransferGate.requestCancel()
         jobs.remove(id)?.cancel()
         TaskCenterHolder.state.update { list ->
             list.map {

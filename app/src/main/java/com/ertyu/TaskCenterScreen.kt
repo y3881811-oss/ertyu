@@ -25,6 +25,8 @@ import java.util.Locale
 @Composable
 fun TaskCenterScreen(vm: MainViewModel) {
     val tasks by TaskCenterHolder.state.collectAsState()
+    val paused by TaskCenterHolder.paused.collectAsState()
+    val hasPausable = tasks.any { it.status == TaskStatus.RUNNING && it.pausable }
     val fmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     BackHandler { vm.closeTaskCenter() }
@@ -39,6 +41,11 @@ fun TaskCenterScreen(vm: MainViewModel) {
                     }
                 },
                 actions = {
+                    if (hasPausable) {
+                        TextButton(onClick = { vm.toggleTransferPause() }) {
+                            Text(if (paused) "继续" else "暂停")
+                        }
+                    }
                     if (tasks.any { it.status != TaskStatus.RUNNING }) {
                         TextButton(onClick = { vm.dismissFinishedTasks() }) { Text("清空已完成") }
                     }
