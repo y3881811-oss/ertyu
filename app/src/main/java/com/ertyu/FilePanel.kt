@@ -9,7 +9,12 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
@@ -30,6 +35,7 @@ private val AUDIO_EXTS = setOf("mp3", "wav", "flac", "ogg", "m4a", "aac", "wma")
 private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
 private val SPLIT_APK_EXTS = setOf("apks", "xapk", "apkm")
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilePanel(
     isLeft: Boolean,
@@ -55,6 +61,11 @@ fun FilePanel(
     val coroutineScope = rememberCoroutineScope()
 
     var showSelectionSheet by remember { mutableStateOf(false) }
+    var pullRefreshing by remember { mutableStateOf(false) }
+    // 面板重新加载完成后收起下拉刷新指示器
+    LaunchedEffect(state.isLoading) {
+        if (!state.isLoading) pullRefreshing = false
+    }
 
     // 👇 文件夹真实大小：订阅全局结果，并随目录变化重新扫描
     val folderSizes by ItemSizeHolder.sizes.collectAsState()
@@ -79,7 +90,35 @@ fun FilePanel(
             }
     }
 
-    Column(modifier = modifier.fillMaxHeight()) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            // 双指左右滑动切换面板（单面板模式下很顺手）
+            .pointerInput(onSwitchPanel) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var twoFingers = false
+                    var dx = 0f
+                    var lastX = 0f
+                    var first = true
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.isEmpty()) break
+                        if (pressed.size >= 2) twoFingers = true
+                        val x = pressed.first().position.x
+                        if (first) {
+                            lastX = x
+                            first = false
+                        } else {
+                            dx += x - lastX
+                            lastX = x
+                        }
+                    }
+                    if (twoFingers && kotlin.math.abs(dx) > 90f) onSwitchPanel?.invoke()
+                }
+            }
+    ) {
         
         // 顶部路径栏
         FileToolbar(
@@ -97,7 +136,14 @@ fun FilePanel(
         )
         HorizontalDivider()
 
-        Box(modifier = Modifier.weight(1f)) {
+        PullToRefreshBox(
+            isRefreshing = pullRefreshing,
+            onRefresh = {
+                pullRefreshing = true
+                vm.refresh(isLeft)
+            },
+            modifier = Modifier.weight(1f)
+        ) {
             when {
                 state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("错误: ${state.error}") }
