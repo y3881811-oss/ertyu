@@ -130,7 +130,7 @@ fun DrawerContent(
             }
             DrawerItem("连接 WebDAV", Icons.Default.Cloud) {
                 onDismiss()
-                vm.openWebDav()
+                vm.openWebDavClient()
             }
             DrawerItem("局域网设备发现", Icons.Default.Wifi) {
                 onDismiss()

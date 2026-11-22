@@ -1,7 +1,7 @@
 package com.ertyu
 
 import com.ertyu.model.ManifestHolder
-import com.ertyu.model.WebDavHolder
+import com.ertyu.model.WebDavClientHolder
 import com.ertyu.model.TaskCenterHolder
 import android.content.Intent
 import android.net.Uri
@@ -72,6 +72,7 @@ fun AppRoot(vm: MainViewModel) {
     val lanScanState by LanScanHolder.state.collectAsState()
     val taskCenterVisible by TaskCenterHolder.visible.collectAsState()
     val manifestState by ManifestHolder.state.collectAsState()
+    val webDavClientState by WebDavClientHolder.state.collectAsState()
     val webDavState by WebDavHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
@@ -173,6 +174,10 @@ fun AppRoot(vm: MainViewModel) {
         }
         audioPlayerState.visible -> {
             AudioPlayerScreen(vm)
+        }
+        webDavClientState.visible -> {
+            BackHandler { vm.closeWebDavClient() }
+            WebDavClientScreen(vm)
         }
         webDavState.isRunning || webDavState.sharePath.isNotEmpty() -> {
             BackHandler {
