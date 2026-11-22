@@ -18,7 +18,7 @@ private object ItemSizeJobs {
 
 /**
  * 扫描当前目录里所有子文件夹的真实大小。
- * 结果写进 ItemSizeHolder，列表行自己订阅显示。
+ * 结果写进 ItemSizeHolder（key = 绝对路径），列表行自己订阅显示。
  */
 fun MainViewModel.startVisibleFolderSizeScan(items: List<FileItem>) {
     ItemSizeJobs.job?.cancel()
@@ -35,23 +35,24 @@ fun MainViewModel.startVisibleFolderSizeScan(items: List<FileItem>) {
         for (item in dirs) {
             launch {
                 semaphore.withPermit {
-                    val hit = ItemSizeEngine.cached(item.path)
+                    val key = item.path
+                    val hit = ItemSizeEngine.cached(key)
                     if (hit != null) {
-                        ItemSizeHolder.sizes.update { it + (item.uriString to hit.bytes) }
-                        if (hit.truncated) ItemSizeHolder.truncated.update { it + item.uriString }
+                        ItemSizeHolder.sizes.update { it + (key to hit.bytes) }
+                        if (hit.truncated) ItemSizeHolder.truncated.update { it + key }
                         return@withPermit
                     }
-                    ItemSizeHolder.computing.update { it + item.uriString }
+                    ItemSizeHolder.computing.update { it + key }
                     try {
-                        val r = ItemSizeEngine.calculate(File(item.path))
-                        ItemSizeHolder.sizes.update { it + (item.uriString to r.bytes) }
-                        if (r.truncated) ItemSizeHolder.truncated.update { it + item.uriString }
+                        val r = ItemSizeEngine.calculate(File(key))
+                        ItemSizeHolder.sizes.update { it + (key to r.bytes) }
+                        if (r.truncated) ItemSizeHolder.truncated.update { it + key }
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        AppLogger.d("ItemSize", "计算失败 ${item.path}: ${e.message}")
+                        AppLogger.d("ItemSize", "计算失败 $key: ${e.message}")
                     } finally {
-                        ItemSizeHolder.computing.update { it - item.uriString }
+                        ItemSizeHolder.computing.update { it - key }
                     }
                 }
             }
@@ -63,4 +64,16 @@ fun MainViewModel.cancelFolderSizeScan() {
     ItemSizeJobs.job?.cancel()
     ItemSizeJobs.job = null
     ItemSizeHolder.computing.value = emptySet()
+}
+
+/**
+ * 某个路径内容发生变化（删除/移动/复制/重命名/解压…）后调用：
+ * 让缓存和界面上与它相关的条目（自身、子目录、祖先目录）全部失效。
+ */
+fun MainViewModel.invalidateSizeFor(path: String) {
+    if (path.isBlank()) return
+    ItemSizeEngine.invalidateUnder(path)
+    ItemSizeHolder.sizes.update { m -> m.filterKeys { !ItemSizeEngine.related(it, path) } }
+    ItemSizeHolder.truncated.update { s -> s.filterNot { ItemSizeEngine.related(it, path) }.toSet() }
+    ItemSizeHolder.computing.update { s -> s.filterNot { ItemSizeEngine.related(it, path) }.toSet() }
 }

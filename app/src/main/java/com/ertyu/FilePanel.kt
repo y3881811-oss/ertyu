@@ -138,7 +138,7 @@ fun FilePanel(
                                 isSelected = { state.selectedUris.contains(item.uriString) },
                                 isSelectionMode = state.isSelectionMode,
                                 folderSizeText = if (folderSizeEnabled && item.isDirectory) {
-                                    folderSizes[item.uriString]?.let { ItemSizeEngine.format(it) }
+                                    folderSizes[item.path]?.let { ItemSizeEngine.format(it) }
                                 } else null,
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {

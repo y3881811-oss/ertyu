@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.AppLogger
 import com.ertyu.engine.ItemSizeEngine
+import com.ertyu.engine.RecycleBinManager
 import com.ertyu.engine.SpaceAnalyzerEngine
 import com.ertyu.model.BigFileEntry
 import com.ertyu.model.FolderUsage
@@ -30,7 +31,7 @@ fun MainViewModel.closeSpaceAnalyzer() {
 }
 
 fun MainViewModel.setSpaceAnalyzerRoot(path: String) {
-    SpaceAnalyzerHolder.state.update { it.copy(root = path) }
+    SpaceAnalyzerHolder.state.update { it.copy(root = path, selectedPaths = emptySet()) }
 }
 
 fun MainViewModel.startSpaceScan(minSizeMb: Int = SpaceAnalyzerHolder.state.value.minSizeMb) {
@@ -50,7 +51,8 @@ fun MainViewModel.startSpaceScan(minSizeMb: Int = SpaceAnalyzerHolder.state.valu
             scannedFiles = 0,
             totalBytes = 0L,
             bigFiles = emptyList(),
-            topFolders = emptyList()
+            topFolders = emptyList(),
+            selectedPaths = emptySet()
         )
     }
     val minBytes = minSizeMb.toLong() * 1024L * 1024L
@@ -97,4 +99,74 @@ fun MainViewModel.revealAmongFiles(path: String) {
     closeSpaceAnalyzer()
     openDirectory(true, Uri.fromFile(parent))
     showToast("已定位到 ${parent.name}")
+}
+
+// ==================== 大文件多选 / 批量删除 ====================
+
+fun MainViewModel.toggleBigFileSelection(path: String) {
+    SpaceAnalyzerHolder.state.update {
+        val set = it.selectedPaths.toMutableSet()
+        if (!set.add(path)) set.remove(path)
+        it.copy(selectedPaths = set)
+    }
+}
+
+fun MainViewModel.selectAllBigFiles() {
+    SpaceAnalyzerHolder.state.update { it.copy(selectedPaths = it.bigFiles.map { f -> f.path }.toSet()) }
+}
+
+fun MainViewModel.clearBigFileSelection() {
+    SpaceAnalyzerHolder.state.update { it.copy(selectedPaths = emptySet()) }
+}
+
+/**
+ * 批量删除选中的大文件。
+ * 设置里开了回收站就移入回收站（可恢复），否则直接删除。
+ */
+fun MainViewModel.deleteSelectedBigFiles() {
+    val snap = SpaceAnalyzerHolder.state.value
+    val paths = snap.selectedPaths.toList()
+    if (paths.isEmpty() || snap.deleting) return
+    val useTrash = _settingsState.value.useRecycleBin
+
+    viewModelScope.launch {
+        SpaceAnalyzerHolder.state.update { it.copy(deleting = true) }
+        var okCount = 0
+        var trashCount = 0
+        var freed = 0L
+        for (p in paths) {
+            val f = File(p)
+            if (!f.exists()) continue
+            val size = try { f.length() } catch (_: Exception) { 0L }
+            val success = try {
+                if (useTrash) RecycleBinManager.moveToTrash(getApplication(), f, false, size) else f.delete()
+            } catch (e: Exception) {
+                AppLogger.e("SpaceAnalyzer", "删除失败 $p", e)
+                false
+            }
+            if (success) {
+                okCount++
+                freed += size
+                if (useTrash) trashCount++
+            }
+            // 单个文件变化：让相关目录大小缓存失效
+            invalidateSizeFor(f.parent ?: p)
+        }
+
+        val removed = paths.toSet()
+        SpaceAnalyzerHolder.state.update {
+            it.copy(
+                deleting = false,
+                selectedPaths = emptySet(),
+                bigFiles = it.bigFiles.filterNot { b -> b.path in removed },
+                totalBytes = (it.totalBytes - freed).coerceAtLeast(0L)
+            )
+        }
+        val sizeText = ItemSizeEngine.format(freed)
+        showToast(
+            if (useTrash) "已移入回收站 $trashCount 项，释放 $sizeText"
+            else "已彻底删除 $okCount 项，释放 $sizeText"
+        )
+        AppLogger.i("SpaceAnalyzer", "批量删除 $okCount 项，释放 $sizeText（回收站=$useTrash）")
+    }
 }

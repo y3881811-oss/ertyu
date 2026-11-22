@@ -1,7 +1,10 @@
 package com.ertyu
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +28,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -35,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -57,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import com.ertyu.engine.ItemSizeEngine
 import com.ertyu.engine.ItemSizePrefs
 import com.ertyu.model.ItemSizeHolder
+import com.ertyu.model.BigFileEntry
 import com.ertyu.model.SpaceAnalyzerHolder
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -246,65 +253,175 @@ fun SpaceAnalyzerScreen(vm: MainViewModel) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BigFileList(vm: MainViewModel) {
     val state by SpaceAnalyzerHolder.state.collectAsState()
+    val settings by vm.settingsState.collectAsState()
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    val selecting = state.selectedPaths.isNotEmpty()
 
-    if (state.bigFiles.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = if (state.isScanning) "正在扫描…" else "没有大于 ${state.minSizeMb}MB 的文件",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        return
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 4.dp)
-    ) {
-        items(state.bigFiles, key = { it.path }) { entry ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { vm.revealAmongFiles(entry.path) }
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.FolderOpen,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f)) {
+            if (state.bigFiles.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        entry.name,
+                        text = if (state.isScanning) "正在扫描…" else "没有大于 ${state.minSizeMb}MB 的文件",
                         style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        entry.path.substringBeforeLast('/'),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    ItemSizeEngine.format(entry.size),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(vertical = 4.dp)
+                ) {
+                    items(state.bigFiles, key = { it.path }) { entry ->
+                        BigFileRow(
+                            entry = entry,
+                            selected = entry.path in state.selectedPaths,
+                            selecting = selecting,
+                            onClick = {
+                                if (selecting) vm.toggleBigFileSelection(entry.path) else vm.revealAmongFiles(entry.path)
+                            },
+                            onLongClick = { vm.toggleBigFileSelection(entry.path) }
+                        )
+                        HorizontalDivider()
+                    }
+                }
             }
-            HorizontalDivider()
+
+            if (state.deleting) {
+                Box(
+                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
         }
+
+        // ================= 多选操作条 =================
+        if (selecting) {
+            Surface(tonalElevation = 6.dp, shadowElevation = 8.dp) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "已选 ${state.selectedPaths.size} 项 · ${ItemSizeEngine.format(state.selectedBytes)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { vm.clearBigFileSelection() }) { Text("取消") }
+                    TextButton(
+                        onClick = { showDeleteConfirm = true },
+                        enabled = !state.deleting
+                    ) {
+                        Text(
+                            if (settings.useRecycleBin) "移入回收站" else "删除",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text(if (settings.useRecycleBin) "移入回收站" else "彻底删除") },
+            text = {
+                Column {
+                    Text("共 ${state.selectedPaths.size} 项，合计 ${ItemSizeEngine.format(state.selectedBytes)}")
+                    Spacer(Modifier.height(8.dp))
+                    if (settings.useRecycleBin) {
+                        Text(
+                            "文件会移动到回收站，之后可在「回收站」里恢复。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Text(
+                            "警告：文件将被彻底删除，此操作不可撤销！",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    vm.deleteSelectedBigFiles()
+                }) {
+                    Text(
+                        if (settings.useRecycleBin) "移入回收站" else "确认删除",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BigFileRow(
+    entry: BigFileEntry,
+    selected: Boolean,
+    selecting: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+            )
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (selecting) {
+            Checkbox(checked = selected, onCheckedChange = { onClick() })
+            Spacer(Modifier.width(4.dp))
+        }
+        Icon(
+            Icons.Default.FolderOpen,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                entry.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                entry.path.substringBeforeLast('/'),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            ItemSizeEngine.format(entry.size),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 

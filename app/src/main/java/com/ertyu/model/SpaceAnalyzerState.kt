@@ -24,8 +24,13 @@ data class SpaceAnalyzerState(
     val totalBytes: Long = 0L,
     val bigFiles: List<BigFileEntry> = emptyList(),
     val topFolders: List<FolderUsage> = emptyList(),
+    val selectedPaths: Set<String> = emptySet(),
+    val deleting: Boolean = false,
     val error: String? = null
-)
+) {
+    val selectedBytes: Long
+        get() = bigFiles.filter { it.path in selectedPaths }.sumOf { it.size }
+}
 
 object SpaceAnalyzerHolder {
     val state = MutableStateFlow(SpaceAnalyzerState())
