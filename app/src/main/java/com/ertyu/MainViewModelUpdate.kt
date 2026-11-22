@@ -36,6 +36,9 @@ fun MainViewModel.startUpdateDownload(url: String) {
     val dest = File(dir, fileName)
     val sumsUrl = url.substringBefore('?').substringBeforeLast('/') + "/SHA256SUMS.txt"
 
+    // 顺手清掉上几次留下的旧包/半包，只保留本次要下的文件
+    com.ertyu.engine.UpdateCacheCleaner.clean(app, keep = dest)
+
     AppLogger.i("Update", "开始下载更新: $url")
     UpdateDownloadHolder.state.value = UpdateDownloadState(visible = true, phase = "连接中…")
 
