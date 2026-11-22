@@ -2,83 +2,84 @@ name: Scheduled Release
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 3 * * *'   # UTC 03:00 = 北京时间 11:00
   workflow_dispatch:
 
 permissions:
   contents: write
 
-# 👇 你只需要修改这里的名字，下面全部会自动生效！
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false   # 发布不中途取消，新的排队
+
 env:
-  APP_NAME: "EYU文件管理器" 
+  APP_NAME: "EYU文件管理器"
+  TZ: Asia/Shanghai
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up JDK 17
-        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Accept Android SDK licenses
-        run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-
-      - name: Restore keystore cache
-        id: keystore-cache
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+      # 只为兼容旧流程：优先用 secret，secret 没有时才回退到这里已有的缓存
+      - name: Restore keystore cache (fallback)
+        uses: actions/cache@v4
         with:
           path: keystore/mtfm.jks
           key: mtfm-keystore-v1
 
-      - name: Generate keystore (首次运行)
-        if: steps.keystore-cache.outputs.cache-hit != 'true'
+      - name: Prepare keystore
         env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          set -euo pipefail
           mkdir -p keystore
-          keytool -genkeypair \
-            -keystore keystore/mtfm.jks \
-            -alias "$KEY_ALIAS" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -keypass "$KEY_PASSWORD" \
-            -dname "CN=MTFM, OU=Dev, O=MTFM, L=City, S=State, C=CN"
-          echo "✅ 已生成新 keystore"
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > keystore/mtfm.jks
+            echo "✅ 使用 secrets.KEYSTORE_BASE64"
+          elif [ -f keystore/mtfm.jks ]; then
+            echo "::warning::未配置 secrets.KEYSTORE_BASE64，本次暂用缓存中的 keystore，请尽快配置，避免缓存被清理后无法发版"
+          else
+            echo "::error::没有可用签名证书。请执行 base64 -w0 keystore/mtfm.jks 并把结果存进 secrets.KEYSTORE_BASE64（注意：不能换新证书，否则老用户无法覆盖安装）"
+            exit 1
+          fi
+          if [ -z "${KEYSTORE_PASSWORD:-}" ]; then
+            echo "::error::缺少 secrets.KEYSTORE_PASSWORD"
+            exit 1
+          fi
+          keytool -list -keystore keystore/mtfm.jks -storepass "$KEYSTORE_PASSWORD" > /dev/null
+          echo "✅ keystore 可用"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@8379f6a1328ee0e06e2bb424dadb7b159856a326
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.4.1'
+        continue-on-error: true   # 缓存服务故障时不要让整条发布流程挂掉
 
       - name: Generate version
         id: version
         run: |
-          DATE=$(date -u +'%Y.%m.%d')
-          TIME=$(date -u +'%H%M')
+          DATE=$(date +'%Y.%m.%d')
+          TIME=$(date +'%H%M')
           TAG="v${DATE}-${TIME}"
-          V_NAME="${DATE}.${TIME}"
-          V_CODE=${{ github.run_number }}
-          
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "date=${DATE}" >> $GITHUB_OUTPUT
-          echo "v_name=${V_NAME}" >> $GITHUB_OUTPUT
-          echo "v_code=${V_CODE}" >> $GITHUB_OUTPUT
-          
-          echo "Git Tag: ${TAG}"
-          echo "APK 内部版本: ${V_NAME} (Code: ${V_CODE})"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "date=${DATE}" >> "$GITHUB_OUTPUT"
+          echo "v_name=${DATE}.${TIME}" >> "$GITHUB_OUTPUT"
+          echo "v_code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "Tag: ${TAG}"
 
       - name: Build Release APK
         env:
@@ -86,45 +87,72 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          gradle assembleRelease --no-daemon --build-cache \
+          gradle assembleRelease --build-cache --stacktrace \
             -PappVersionCode=${{ steps.version.outputs.v_code }} \
             -PappVersionName="${{ steps.version.outputs.v_name }}"
 
-      - name: Rename APK
+      # 产物定位 + 签名校验：签名不对就不允许发布
+      - name: Verify APK
         run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/*-release.apk 2>/dev/null | head -n 1)
+          if [ -z "$APK" ]; then
+            echo "::error::没找到 release APK"
+            ls -R app/build/outputs/apk || true
+            exit 1
+          fi
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)
+          "$APKSIGNER" verify --print-certs "$APK"
+
+      - name: Package artifacts
+        run: |
+          set -euo pipefail
           mkdir -p release
-          SRC=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          # 👇 这里决定了下载下来的文件名，现在会变成：极客文件-v2026.11.07-1234.apk
-          cp "$SRC" "release/${{ env.APP_NAME }}-${{ steps.version.outputs.tag }}.apk"
+          cp "$APK_PATH" "release/${APP_NAME}-${{ steps.version.outputs.tag }}.apk"
+          ( cd release && sha256sum ./*.apk > SHA256SUMS.txt )
           ls -lh release/
 
+      - name: Changelog
+        id: changelog
+        run: |
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          if [ -n "$PREV" ]; then
+            LOG=$(git log --pretty=format:'- %s' "$PREV"..HEAD | head -25 || true)
+          else
+            LOG=$(git log --pretty=format:'- %s' -10)
+          fi
+          { echo 'log<<EOF'; echo "$LOG"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
+
       - name: Create Release
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          # 👇 这里决定了 GitHub Release 页面的标题
           name: "${{ env.APP_NAME }} ${{ steps.version.outputs.tag }}"
           body: |
             ## ${{ env.APP_NAME }} 自动构建版本
 
-            - **构建时间**：${{ steps.version.outputs.date }}
+            - **构建时间**：${{ steps.version.outputs.date }} (UTC+8)
             - **内部版本**：${{ steps.version.outputs.v_name }} (Code: ${{ steps.version.outputs.v_code }})
             - **提交**：${{ github.sha }}
-            - **类型**：Release APK（R8 优化）
+
+            ### 本次变更
+            ${{ steps.changelog.outputs.log }}
 
             ### 安装说明
             1. 下载下方 APK 文件
             2. 允许「未知来源」安装
             3. 可直接覆盖安装旧版本
-          files: release/*.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            ### 校验
+            文件旁边附带 `SHA256SUMS.txt`，可用 App 内的「批量校验哈希」核对完整性。
+          files: |
+            release/*.apk
+            release/SHA256SUMS.txt
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@v4
         with:
-          # 👇 这里决定了在 Actions 页面下载的 zip 压缩包的名字
-          name: ${{ env.APP_NAME }}-apk
-          path: release/*.apk
+          name: EYU-filemanager-${{ steps.version.outputs.v_name }}
+          path: release/*
+          retention-days: 14

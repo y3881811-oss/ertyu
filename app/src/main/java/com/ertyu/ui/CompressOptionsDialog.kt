@@ -2,17 +2,19 @@ package com.ertyu.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.ertyu.MainViewModel
 import com.ertyu.model.ArchiveFormat
 import com.ertyu.model.ArchiveOptionsHolder
-// 👇 补上跨包导入
 import com.ertyu.cancelCompressOptions
 import com.ertyu.executeAdvancedCompress
 
@@ -28,6 +30,8 @@ fun CompressOptionsDialog(vm: MainViewModel) {
     var separate by remember { mutableStateOf(state.separateFolders) }
     var deleteSource by remember { mutableStateOf(state.deleteSource) }
     var toOtherPanel by remember { mutableStateOf(state.toOtherPanel) }
+    var password by remember { mutableStateOf(state.password) }
+    var password2 by remember { mutableStateOf(state.password) }
 
     var showFormatMenu by remember { mutableStateOf(false) }
     var showLevelMenu by remember { mutableStateOf(false) }
@@ -36,6 +40,9 @@ fun CompressOptionsDialog(vm: MainViewModel) {
         ArchiveFormat.ZIP, ArchiveFormat.TAR, ArchiveFormat.TAR_GZ,
         ArchiveFormat.TAR_BZ2, ArchiveFormat.TAR_XZ, ArchiveFormat.TAR_ZST, ArchiveFormat.SEVEN_Z
     )
+    val supportsEncryption = format == ArchiveFormat.ZIP
+    val passwordMismatch = supportsEncryption && password.isNotEmpty() && password != password2
+    val canConfirm = fileName.isNotBlank() && !passwordMismatch
 
     AlertDialog(
         onDismissRequest = { vm.cancelCompressOptions() },
@@ -49,7 +56,7 @@ fun CompressOptionsDialog(vm: MainViewModel) {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                
+
                 Spacer(Modifier.height(12.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -64,9 +71,9 @@ fun CompressOptionsDialog(vm: MainViewModel) {
                         }
                         DropdownMenu(expanded = showFormatMenu, onDismissRequest = { showFormatMenu = false }) {
                             formats.forEach { f ->
-                                DropdownMenuItem(text = { Text(f.label) }, onClick = { 
-                                    format = f; showFormatMenu = false 
-                                    // 自动更新文件名后缀
+                                DropdownMenuItem(text = { Text(f.label) }, onClick = {
+                                    format = f
+                                    showFormatMenu = false
                                     fileName = fileName.substringBeforeLast(".") + "." + f.label.lowercase().replace("tar.gz", "tar.gz")
                                 })
                             }
@@ -78,15 +85,59 @@ fun CompressOptionsDialog(vm: MainViewModel) {
                         Column(modifier = Modifier.clickable { showLevelMenu = true }) {
                             Text("压缩级别", style = MaterialTheme.typography.labelMedium)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(if(level == 5) "标准压缩" else "最高压缩")
+                                Text(if (level == 5) "标准压缩" else "最高压缩")
                                 Icon(Icons.Default.ArrowDropDown, null)
                             }
                         }
                         DropdownMenu(expanded = showLevelMenu, onDismissRequest = { showLevelMenu = false }) {
                             DropdownMenuItem(text = { Text("标准压缩") }, onClick = { level = 5; showLevelMenu = false })
-                            DropdownMenuItem(text = { Text("最高压缩") }, onClick = { level = 9; showLevelMenu = false })
+                            DropdownMenuItem(text = { Text("最高压缩 (更慢)") }, onClick = { level = 9; showLevelMenu = false })
                         }
                     }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // ================= 加密 =================
+                if (supportsEncryption) {
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("密码（留空则不加密）") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (password.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = password2,
+                            onValueChange = { password2 = it },
+                            label = { Text("确认密码") },
+                            singleLine = true,
+                            isError = passwordMismatch,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = if (passwordMismatch) "两次输入的密码不一致" else
+                                if (format == ArchiveFormat.ZIP) "将使用 AES-256 加密，解压时需要密码" else "将使用 AES-256 加密（7z）",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (passwordMismatch) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Text(
+                        text = if (format == ArchiveFormat.SEVEN_Z)
+                            "7z 暂不支持加密写入，需要加密请选 ZIP（AES-256）"
+                        else "当前格式（${format.label}）不支持加密，密码设置已忽略",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -103,12 +154,30 @@ fun CompressOptionsDialog(vm: MainViewModel) {
                     Text("压缩到另一窗口路径", modifier = Modifier.weight(1f))
                     Switch(checked = toOtherPanel, onCheckedChange = { toOtherPanel = it })
                 }
+                if (deleteSource) {
+                    Text(
+                        text = "注意：源文件会被删除，且无法从回收站恢复（压缩完成后直接删除）。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                vm.executeAdvancedCompress(fileName, format, level, separate, deleteSource, toOtherPanel)
-            }) { Text("确定") }
+            TextButton(
+                enabled = canConfirm,
+                onClick = {
+                    vm.executeAdvancedCompress(
+                        fileName = fileName.trim(),
+                        format = format,
+                        level = level,
+                        separate = separate,
+                        deleteSource = deleteSource,
+                        toOtherPanel = toOtherPanel,
+                        password = password.ifEmpty { null }
+                    )
+                }
+            ) { Text("确定") }
         },
         dismissButton = {
             TextButton(onClick = { vm.cancelCompressOptions() }) { Text("取消") }

@@ -2,6 +2,7 @@ package com.ertyu
 
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
+import com.ertyu.engine.AppLogger
 import com.ertyu.engine.ArchiveEngine
 import com.ertyu.model.*
 import kotlinx.coroutines.flow.update // 👈 补上这个关键导包
@@ -79,7 +80,13 @@ fun MainViewModel.cancelCompressOptions() {
 }
 
 fun MainViewModel.executeAdvancedCompress(
-    fileName: String, format: ArchiveFormat, level: Int, separate: Boolean, deleteSource: Boolean, toOtherPanel: Boolean
+    fileName: String,
+    format: ArchiveFormat,
+    level: Int,
+    separate: Boolean,
+    deleteSource: Boolean,
+    toOtherPanel: Boolean,
+    password: String? = null
 ) {
     val state = ArchiveOptionsHolder.compressState.value
     val targets = state.targets
@@ -105,25 +112,63 @@ fun MainViewModel.executeAdvancedCompress(
                 else -> ".zip"
             }
 
+            var okCount = 0
+            var failCount = 0
+            val successSources = mutableListOf<File>()
+
             if (separate && targets.size > 1) {
                 // 多文件分别压缩
                 for ((index, item) in targets.withIndex()) {
                     val src = File(item.uri.path ?: continue)
                     val dest = File(parentDir, "${src.nameWithoutExtension}$ext")
                     _fileTransferState.update { it.copy(currentFile = src.name, copiedBytes = index.toLong()) }
-                    ArchiveEngine.compress(listOf(src), dest, format)
+                    val result = ArchiveEngine.compress(
+                        sources = listOf(src),
+                        targetFile = dest,
+                        format = format,
+                        password = password,
+                        compressionLevel = level
+                    )
+                    if (result.isSuccess) {
+                        okCount++
+                        successSources.add(src)
+                    } else {
+                        failCount++
+                        AppLogger.e("Compress", "压缩失败：${src.absolutePath}", result.exceptionOrNull())
+                    }
                 }
             } else {
                 // 合并压缩
                 val sources = targets.mapNotNull { it.uri.path?.let(::File) }
                 val dest = File(parentDir, fileName)
-                ArchiveEngine.compress(sources, dest, format)
+                val result = ArchiveEngine.compress(
+                    sources = sources,
+                    targetFile = dest,
+                    format = format,
+                    password = password,
+                    compressionLevel = level
+                )
+                if (result.isSuccess) {
+                    okCount = 1
+                    successSources.addAll(sources)
+                } else {
+                    failCount = 1
+                    AppLogger.e("Compress", "压缩失败：${dest.absolutePath}", result.exceptionOrNull())
+                }
             }
 
-            _toast.value = "压缩完成"
-            if (deleteSource) {
-                targets.forEach { engine.delete(it.uri) }
-                _toast.value = "压缩完成并删除了源文件"
+            _toast.value = when {
+                failCount == 0 -> "压缩完成"
+                okCount == 0 -> "压缩失败：${if (password != null) "密码或存储空间可能有问题" else "请检查存储空间或文件名"}"
+                else -> "压缩完成：成功 $okCount 个，失败 $failCount 个"
+            }
+
+            if (deleteSource && successSources.isNotEmpty()) {
+                // 只删除压缩成功的源文件，失败的保留
+                successSources.forEach { f ->
+                    targets.firstOrNull { it.path == f.absolutePath }?.let { engine.delete(it.uri) }
+                }
+                _toast.value = (_toast.value ?: "") + "（已删除 ${successSources.size} 个源文件）"
             }
             refresh(targetIsLeft)
             if (state.sourceIsLeft != targetIsLeft) refresh(state.sourceIsLeft)

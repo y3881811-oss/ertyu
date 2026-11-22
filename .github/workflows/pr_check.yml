@@ -6,12 +6,8 @@ on:
   pull_request:
     branches: [ "main" ]
 
-# 👇 核心改动：并发控制
 concurrency:
-  # 同一个 PR 或分支的构建任务归为一组
-  # 如果是 PR，group 就是 pr-123；如果是 push，group 就是 refs/heads/main
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # 当有新任务进入队列时，立即取消正在运行的旧任务
   cancel-in-progress: true
 
 jobs:
@@ -28,25 +24,15 @@ jobs:
         distribution: temurin
         java-version: '17'
 
+    # setup-gradle 自带依赖与构建缓存；v4 对缓存服务故障更宽容（此前 v3 在 403 时直接失败）
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+      uses: gradle/actions/setup-gradle@v4
       with:
         gradle-version: '9.4.1'
+      continue-on-error: true
 
-    - name: Cache Android Build Cache
-      uses: actions/cache@v4
-      with:
-        path: ~/.android/build-cache
-        key: ${{ runner.os }}-android-build-cache-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+    - name: Verify Gradle
+      run: gradle --version
 
-    - name: Cache Gradle Build Cache
-      uses: actions/cache@v4
-      with:
-        path: ~/.gradle/caches/build-cache-1
-        key: ${{ runner.os }}-gradle-build-cache-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-
-    # 编译 Debug 包
     - name: Build Debug APK
-      run: |
-        # 加上 --no-daemon 配合 cancel 信号，可以实现瞬间强杀，防止进程残留
-        gradle assembleDebug --no-daemon --build-cache
+      run: gradle assembleDebug --no-daemon --build-cache

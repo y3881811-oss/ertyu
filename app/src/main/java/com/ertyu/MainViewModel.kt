@@ -199,7 +199,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refresh(isLeft: Boolean) {
-        flowOf(isLeft).value.currentUri?.let { openDirectory(isLeft, it) }
+        flowOf(isLeft).value.currentUri?.let { uri ->
+            // 目录内容变了：让该目录、子目录、祖先目录的大小缓存一起失效
+            uri.path?.let { path -> invalidateSizeFor(path) }
+            openDirectory(isLeft, uri)
+        }
     }
 
     fun goUp(isLeft: Boolean) {

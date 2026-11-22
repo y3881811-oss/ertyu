@@ -2,19 +2,11 @@ package com.ertyu
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -23,31 +15,25 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.FileItem
+import com.ertyu.model.FileKindFilter
+import com.ertyu.model.SearchFilter
 
 private val IconFolderSearch: ImageVector = Icons.Default.Folder
 private val IconFileSearch: ImageVector = Icons.AutoMirrored.Filled.InsertDriveFile
@@ -58,9 +44,7 @@ fun SearchScreen(vm: MainViewModel) {
     val state by vm.searchState.collectAsState()
     val focusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     Scaffold(
         topBar = {
@@ -71,9 +55,7 @@ fun SearchScreen(vm: MainViewModel) {
                         onValueChange = { vm.updateSearchQuery(it) },
                         placeholder = { Text("搜索文件名") },
                         singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { vm.startSearch() })
                     )
@@ -97,34 +79,30 @@ fun SearchScreen(vm: MainViewModel) {
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // 状态栏
-            StatusBar(state.isSearching, state.scannedDirs, state.scannedFiles, state.results.size, state.truncated)
-
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            StatusBar(
+                searching = state.isSearching,
+                dirs = state.scannedDirs,
+                files = state.scannedFiles,
+                resultCount = state.results.size,
+                truncated = state.truncated,
+                elapsedMs = state.elapsedMs
+            )
+            SearchFilterBar(vm, state.filter)
             HorizontalDivider()
 
             when {
-                state.error != null -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("错误: ${state.error}")
                 }
-                state.query.isBlank() -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                state.query.isBlank() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("输入关键词开始搜索", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                state.results.isEmpty() && !state.isSearching -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("未找到匹配的文件", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                state.results.isEmpty() && !state.isSearching -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = if (state.filter.isDefault) "未找到匹配的文件" else "没有符合过滤条件的结果",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -137,10 +115,87 @@ fun SearchScreen(vm: MainViewModel) {
                     ) { item ->
                         SearchResultRow(
                             item = item,
+                            query = state.query,
                             onClick = { vm.handleSearchResultClick(item) },
                             onLongClick = { vm.revealInPanel(item) }
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchFilterBar(vm: MainViewModel, filter: SearchFilter) {
+    var showSizeMenu by remember { mutableStateOf(false) }
+    var showTimeMenu by remember { mutableStateOf(false) }
+    val highlightColor = MaterialTheme.colorScheme.primary
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FileKindFilter.values().forEach { kind ->
+                FilterChip(
+                    selected = filter.kind == kind,
+                    onClick = { vm.setSearchFilter(filter.copy(kind = kind)) },
+                    label = { Text(kind.label) }
+                )
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box {
+                AssistChip(
+                    onClick = { showSizeMenu = true },
+                    label = { Text(if (filter.minSizeMb == 0) "大小不限" else ">${filter.minSizeMb}MB") }
+                )
+                DropdownMenu(expanded = showSizeMenu, onDismissRequest = { showSizeMenu = false }) {
+                    listOf(0, 1, 10, 100, 1024).forEach { mb ->
+                        DropdownMenuItem(
+                            text = { Text(if (mb == 0) "不限" else if (mb >= 1024) ">1GB" else ">${mb}MB") },
+                            onClick = {
+                                showSizeMenu = false
+                                vm.setSearchFilter(filter.copy(minSizeMb = mb))
+                            }
+                        )
+                    }
+                }
+            }
+            Box {
+                AssistChip(
+                    onClick = { showTimeMenu = true },
+                    label = { Text(if (filter.modifiedWithinDays == 0) "时间不限" else "近 ${filter.modifiedWithinDays} 天") }
+                )
+                DropdownMenu(expanded = showTimeMenu, onDismissRequest = { showTimeMenu = false }) {
+                    listOf(0, 1, 7, 30, 365).forEach { days ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    when (days) {
+                                        0 -> "不限"
+                                        1 -> "今天"
+                                        365 -> "近 1 年"
+                                        else -> "近 $days 天"
+                                    }
+                                )
+                            },
+                            onClick = {
+                                showTimeMenu = false
+                                vm.setSearchFilter(filter.copy(modifiedWithinDays = days))
+                            }
+                        )
+                    }
+                }
+            }
+            if (!filter.isDefault) {
+                TextButton(onClick = { vm.setSearchFilter(SearchFilter()) }) {
+                    Text("重置", color = highlightColor)
                 }
             }
         }
@@ -153,19 +208,15 @@ private fun StatusBar(
     dirs: Int,
     files: Int,
     resultCount: Int,
-    truncated: Boolean
+    truncated: Boolean,
+    elapsedMs: Long
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (searching) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(14.dp),
-                strokeWidth = 2.dp
-            )
+            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
             Spacer(Modifier.width(8.dp))
         }
         val text = buildString {
@@ -173,6 +224,11 @@ private fun StatusBar(
             append(" · 结果 ")
             append(resultCount)
             if (truncated) append("（已达上限）")
+            if (!searching && elapsedMs > 0) {
+                append(" · 耗时 ")
+                append(String.format(java.util.Locale.ROOT, "%.1f", elapsedMs / 1000.0))
+                append("s")
+            }
         }
         Text(
             text = text,
@@ -186,6 +242,7 @@ private fun StatusBar(
 @Composable
 private fun SearchResultRow(
     item: FileItem,
+    query: String,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -204,7 +261,7 @@ private fun SearchResultRow(
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = item.name,
+                text = highlight(item.name, query),
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -218,5 +275,28 @@ private fun SearchResultRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+/** 把关键词标黄加粗 */
+private fun highlight(text: String, query: String) = buildAnnotatedString {
+    if (query.isBlank()) {
+        append(text)
+        return@buildAnnotatedString
+    }
+    val lowerText = text.lowercase()
+    val lowerQuery = query.lowercase()
+    var index = 0
+    while (true) {
+        val hit = lowerText.indexOf(lowerQuery, index)
+        if (hit < 0) {
+            append(text.substring(index))
+            break
+        }
+        append(text.substring(index, hit))
+        withStyle(SpanStyle(background = Color(0xFFFFE082), fontWeight = FontWeight.Bold, color = Color(0xFF3E2723))) {
+            append(text.substring(hit, hit + query.length))
+        }
+        index = hit + query.length
     }
 }

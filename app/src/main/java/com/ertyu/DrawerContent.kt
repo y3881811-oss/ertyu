@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
@@ -24,11 +25,13 @@ import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -120,6 +123,14 @@ fun DrawerContent(
                 onDismiss()
                 vm.openSmbDialog()
             }
+            DrawerItem("连接 SFTP 服务器", Icons.Default.Cloud) {
+                onDismiss()
+                vm.openSftp()
+            }
+            DrawerItem("局域网设备发现", Icons.Default.Wifi) {
+                onDismiss()
+                vm.openLanScan()
+            }
             DrawerItem("终端模拟器", Icons.Default.Terminal) {
                 onDismiss()
                 vm.openTerminal()
@@ -143,6 +154,14 @@ fun DrawerContent(
                 vm.startDuplicateScan(File("/storage/emulated/0"))
             }
 
+            DrawerItem("目录对比与同步", Icons.Default.CompareArrows) {
+                onDismiss()
+                vm.openDirCompare()
+            }
+            DrawerItem("空间分析", Icons.Default.PieChart) {
+                onDismiss()
+                vm.openSpaceAnalyzer()
+            }
             DrawerItem("回收站", Icons.Default.DeleteForever) {
                 onDismiss()
                 vm.openRecycleBin()

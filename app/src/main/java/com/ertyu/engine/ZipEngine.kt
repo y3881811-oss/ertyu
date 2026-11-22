@@ -6,6 +6,9 @@ import kotlinx.coroutines.withContext
 import net.lingala.zip4j.ZipFile
 import net.lingala.zip4j.exception.ZipException
 import net.lingala.zip4j.model.ZipParameters
+import net.lingala.zip4j.model.enums.AesKeyStrength
+import net.lingala.zip4j.model.enums.CompressionLevel
+import net.lingala.zip4j.model.enums.EncryptionMethod
 import java.io.File
 import java.nio.charset.Charset
 
@@ -74,12 +77,16 @@ object ZipEngine {
     suspend fun compress(
         sources: List<File>,
         targetZip: File,
+        password: String? = null,
+        compressionLevel: Int = 5,
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             if (targetZip.exists()) targetZip.delete()
 
             val zip = ZipFile(targetZip)
+            // zip4j 2.x 的密码设置在 ZipFile 上，而不是 ZipParameters
+            if (!password.isNullOrEmpty()) zip.setPassword(password.toCharArray())
             val entries = mutableListOf<Pair<File, String>>()
             sources.forEach { src -> collect(src, src.name, entries) }
             val total = entries.size
@@ -90,6 +97,18 @@ object ZipEngine {
                 val params = ZipParameters().apply {
                     // 如果是目录，确保路径带斜杠（通常 zip4j 会自动处理，但显式加上更保险）
                     fileNameInZip = if (file.isDirectory && !entryName.endsWith("/")) "$entryName/" else entryName
+                    setCompressionLevel(
+                        when {
+                            compressionLevel >= 8 -> CompressionLevel.MAXIMUM
+                            compressionLevel <= 3 -> CompressionLevel.FASTEST
+                            else -> CompressionLevel.NORMAL
+                        }
+                    )
+                    if (!password.isNullOrEmpty()) {
+                        setEncryptFiles(true)
+                        setEncryptionMethod(EncryptionMethod.AES)
+                        setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256)
+                    }
                 }
                 
                 if (file.isDirectory) {

@@ -10,7 +10,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import com.ertyu.model.BatchChecksumHolder
+import com.ertyu.model.BatchInstallHolder
+import com.ertyu.model.DirCompareHolder
+import com.ertyu.model.LanScanHolder
 import com.ertyu.model.LogStateHolder
+import com.ertyu.model.SftpHolder
+import com.ertyu.model.SpaceAnalyzerHolder
 
 @Composable
 fun AppRoot(vm: MainViewModel) {
@@ -46,6 +52,12 @@ fun AppRoot(vm: MainViewModel) {
     val networkState by NetworkShareStateHolder.state.collectAsState()
     val fontState by FontPreviewStateHolder.state.collectAsState()
     val recycleBinState by RecycleBinStateHolder.state.collectAsState()
+    val spaceAnalyzerState by SpaceAnalyzerHolder.state.collectAsState()
+    val dirCompareState by DirCompareHolder.state.collectAsState()
+    val batchChecksumState by BatchChecksumHolder.state.collectAsState()
+    val sftpState by SftpHolder.state.collectAsState()
+    val batchInstallState by BatchInstallHolder.state.collectAsState()
+    val lanScanState by LanScanHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
@@ -182,6 +194,30 @@ fun AppRoot(vm: MainViewModel) {
             LogViewerScreen(vm)
         }
         
+        lanScanState.visible -> {
+            BackHandler { vm.closeLanScan() }
+            LanScanScreen(vm)
+        }
+        batchInstallState.visible -> {
+            BackHandler { vm.closeBatchInstall() }
+            BatchInstallScreen(vm)
+        }
+        sftpState.visible -> {
+            BackHandler { vm.closeSftp() }
+            SftpScreen(vm)
+        }
+        batchChecksumState.visible -> {
+            BackHandler { vm.closeBatchChecksum() }
+            BatchChecksumScreen(vm)
+        }
+        dirCompareState.visible -> {
+            BackHandler { vm.closeDirCompare() }
+            DirCompareScreen(vm)
+        }
+        spaceAnalyzerState.visible -> {
+            BackHandler { vm.closeSpaceAnalyzer() }
+            SpaceAnalyzerScreen(vm)
+        }
         recycleBinState.visible -> {
             BackHandler { vm.closeRecycleBin() }
             RecycleBinScreen(vm)

@@ -47,7 +47,9 @@ fun SelectionActionSheet(
     onBatchRename: () -> Unit,
     onInstallApk: ((FileItem) -> Unit)? = null,
     onBrowseApk: ((FileItem) -> Unit)? = null,
-    onExtractArchive: ((List<FileItem>) -> Unit)? = null // 👈 改成传 List
+    onExtractArchive: ((List<FileItem>) -> Unit)? = null, // 👈 改成传 List
+    onBatchChecksum: ((List<FileItem>) -> Unit)? = null,
+    onBatchInstall: ((List<FileItem>) -> Unit)? = null
 ) {
     if (!visible) return
 
@@ -118,6 +120,16 @@ fun SelectionActionSheet(
                 } else {
                     SheetItem("批量重命名") { onBatchRename(); onDismiss() }
                     SheetItem("打包压缩") { onCompress(selectedItems); onDismiss() }
+                }
+                onBatchChecksum?.let { cb ->
+                    SheetItem("校验哈希 (SHA-256)") { cb(selectedItems); onDismiss() }
+                }
+                if (selectedItems.size > 1 && selectedItems.all { it.name.endsWith(".apk", ignoreCase = true) }) {
+                    onBatchInstall?.let { cb ->
+                        SheetItem("批量安装 (${selectedItems.size})", isPrimary = true) {
+                            cb(selectedItems); onDismiss()
+                        }
+                    }
                 }
             }
 

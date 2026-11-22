@@ -108,6 +108,7 @@ dependencies {
     // 网络与服务器
     implementation(libs.ftpserver.core)
     implementation(libs.smbj)
+    implementation(libs.jsch)
 
     // 权限管理
     implementation(libs.shizuku.api)

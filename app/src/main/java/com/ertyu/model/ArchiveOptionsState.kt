@@ -22,7 +22,8 @@ data class CompressOptionsState(
     val compressionLevel: Int = 5, // 1-9, 默认5
     val separateFolders: Boolean = false, // 单独压缩每个文件
     val deleteSource: Boolean = false,
-    val toOtherPanel: Boolean = false
+    val toOtherPanel: Boolean = false,
+    val password: String = ""   // ZIP/7z 加密密码，空 = 不加密
 )
 
 object ArchiveOptionsHolder {

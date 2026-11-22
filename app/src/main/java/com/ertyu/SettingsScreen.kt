@@ -98,6 +98,11 @@ fun SettingsScreen(vm: MainViewModel) {
 
             Spacer(Modifier.height(16.dp)); HorizontalDivider()
 
+            Spacer(Modifier.height(16.dp)); SectionTitle("备份与恢复")
+            SettingsBackupSection(vm)
+
+            Spacer(Modifier.height(16.dp)); HorizontalDivider()
+
             Spacer(Modifier.height(16.dp)); SectionTitle("日志")
             Row(modifier = Modifier.fillMaxWidth().clickable { vm.openLogViewer() }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.BugReport, contentDescription = null)
