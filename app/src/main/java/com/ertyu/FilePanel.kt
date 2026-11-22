@@ -1,9 +1,5 @@
 package com.ertyu
 
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
-import androidx.compose.ui.draganddrop.DragAndDropEvent
-import androidx.compose.ui.draganddrop.DragAndDropTarget
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -94,29 +90,9 @@ fun FilePanel(
             }
     }
 
-    // 接收从其他应用拖进来的文件：拖到哪个面板就复制到哪个面板的当前目录
-    val dropTarget = remember(isLeft) {
-        object : DragAndDropTarget {
-            override fun onDrop(event: DragAndDropEvent): Boolean {
-                val clip = event.dragEvent.clipData
-                val uris = ArrayList<Uri>()
-                for (i in 0 until clip.itemCount) {
-                    clip.getItemAt(i)?.uri?.let { uris.add(it) }
-                }
-                if (uris.isEmpty()) return false
-                vm.importDroppedUris(uris, isLeft)
-                return true
-            }
-        }
-    }
-
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .dragAndDropTarget(
-                shouldStartDragAndDrop = { event -> event.dragEvent.clipData.itemCount > 0 },
-                target = dropTarget
-            )
             // 双指左右滑动切换面板（单面板模式下很顺手）
             .pointerInput(onSwitchPanel) {
                 awaitEachGesture {

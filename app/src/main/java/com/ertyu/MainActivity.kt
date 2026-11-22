@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
         }
         vm.loadSettings()
         requestStorageThenLoad()
+        collectSharedFiles(intent)
 
         // ===== 通知权限请求：移到 onCreate 内部 =====
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -86,6 +87,31 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        collectSharedFiles(intent)
+    }
+
+    /** 处理「分享到 EYU文件管理器」/ 打开方式传入的文件 */
+    private fun collectSharedFiles(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action ?: return
+        if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
+
+        val uris = ArrayList<android.net.Uri>()
+        @Suppress("DEPRECATION")
+        val single = intent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+        if (single != null) uris.add(single)
+        @Suppress("DEPRECATION")
+        val multiple = intent.getParcelableArrayListExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+        multiple?.forEach { if (!uris.contains(it)) uris.add(it) }
+        if (uris.isEmpty()) return
+
+        com.ertyu.model.IncomingShareHolder.uris.value = uris
+        vm.showToast("收到 ${uris.size} 个文件，正在导入…")
     }
 
     override fun onDestroy() {

@@ -1,5 +1,6 @@
 package com.ertyu
 
+import com.ertyu.model.IncomingShareHolder
 import com.ertyu.model.ManifestHolder
 import com.ertyu.model.WebDavClientHolder
 import com.ertyu.model.TaskCenterHolder
@@ -24,6 +25,16 @@ import com.ertyu.model.SpaceAnalyzerHolder
 @Composable
 fun AppRoot(vm: MainViewModel) {
     val context = LocalContext.current
+
+    // 从其他应用分享进来的文件：等目录加载完再导入
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1500)
+        val pending = IncomingShareHolder.uris.value
+        if (pending.isNotEmpty()) {
+            IncomingShareHolder.uris.value = emptyList()
+            vm.importDroppedUris(pending, targetIsLeft = true)
+        }
+    }
 
     // 上次触发的安装是否真的装上了：没装上就提示一次（安装包还在缓存里）
     LaunchedEffect(Unit) {
