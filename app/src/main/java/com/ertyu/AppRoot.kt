@@ -73,7 +73,6 @@ fun AppRoot(vm: MainViewModel) {
     val taskCenterVisible by TaskCenterHolder.visible.collectAsState()
     val manifestState by ManifestHolder.state.collectAsState()
     val webDavClientState by WebDavClientHolder.state.collectAsState()
-    val webDavState by WebDavHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
@@ -220,10 +219,6 @@ fun AppRoot(vm: MainViewModel) {
         manifestState.visible -> {
             BackHandler { vm.closeManifestViewer() }
             ManifestViewerScreen(vm)
-        }
-        webDavState.visible -> {
-            BackHandler { vm.closeWebDav() }
-            WebDavScreen(vm)
         }
         taskCenterVisible -> {
             BackHandler { vm.closeTaskCenter() }
