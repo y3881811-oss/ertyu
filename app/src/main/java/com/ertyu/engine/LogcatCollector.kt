@@ -13,14 +13,17 @@ import java.io.InputStreamReader
 /**
  * 采集本应用自己的 logcat。
  *
- * 优先流式（logcat -v threadtime --pid=<pid> *:W）；
- * 部分 ROM 会立刻 EOF，此时自动降级为「每 8 秒一次 logcat -d 快照」。
- * 两种方式都只保留本进程 pid 的行，绝不把整机日志写进文件。
+ * 优先流式（logcat -v threadtime --pid=<pid> *:W）。
+ * 部分 ROM 的流式通道会立刻 EOF，此时降级为「每 8 秒一次快照」。
+ *
+ * 判定规则很重要：能不能读到输出，看的是「快照有没有读到任何一行」，
+ * 而不是「有没有本应用的行」——后者只能说明应用这段时间没打 W/E 日志。
  */
 object LogcatCollector {
     private const val OWN_TAG = "EYU_Log"
     private const val DUMP_INTERVAL_MS = 8000L
     private const val MAX_SEEN = 3000
+    private const val TAIL_LINES = 400
 
     private var collectJob: Job? = null
     private var process: java.lang.Process? = null
@@ -41,7 +44,8 @@ object LogcatCollector {
         "ioctl c0044901"
     )
 
-    private data class RunResult(val captured: Int, val exit: Int, val ranMs: Long)
+    private data class StreamResult(val captured: Int, val exit: Int, val ranMs: Long)
+    private data class DumpResult(val total: Int, val own: Int, val exit: Int, val usedTail: Boolean)
 
     fun start() {
         if (collectJob != null) return
@@ -52,36 +56,42 @@ object LogcatCollector {
             val streaming = stream(listOf("/system/bin/logcat", "-v", "threadtime", "--pid=$pid", "*:W"), pid)
             AppLogger.sysLog(
                 "I",
-                "logcat 流式结果：捕获 ${streaming.captured} 行，exit=${streaming.exit}，持续 ${streaming.ranMs}ms"
+                "logcat 流式结果：本应用 ${streaming.captured} 行，exit=${streaming.exit}，持续 ${streaming.ranMs}ms"
             )
 
-            if (streaming.captured == 0 && streaming.ranMs < 5000) {
-                AppLogger.sysLog("W", "流式不可用，切换为 -d 轮询快照（每 ${DUMP_INTERVAL_MS / 1000}s 一次）")
-                var emptyRounds = 0
-                var total = 0
-                while (collectJob?.isActive == true && emptyRounds < 3) {
-                    delay(DUMP_INTERVAL_MS)
-                    val n = dumpOnce(pid)
-                    total += n
-                    emptyRounds = if (n == 0) emptyRounds + 1 else 0
-                }
-                if (emptyRounds >= 3) {
-                    AppLogger.sysLog(
-                        "E",
-                        "本机禁止读取 logcat：流式与 -d 都没有本应用输出（可能是 vivo 的系统策略）。" +
-                            "需要系统日志时请用 Shizuku 引擎或 ADB"
-                    )
-                } else {
-                    AppLogger.sysLog("W", "logcat -d 轮询结束，本次共捕获 $total 行")
-                }
-            } else {
-                AppLogger.sysLog("W", "logcat 监听结束 exit=${streaming.exit}，捕获 ${streaming.captured} 行")
+            if (streaming.captured > 0 || streaming.ranMs >= 5000) {
+                AppLogger.sysLog("W", "logcat 监听结束 exit=${streaming.exit}，本应用 ${streaming.captured} 行")
+                collectJob = null
+                return@launch
             }
+
+            // ---- 流式不可用，改快照轮询 ----
+            val first = dumpOnce(pid)
+            if (first.total == 0) {
+                AppLogger.sysLog(
+                    "E",
+                    "本机禁止读取 logcat：快照也读不到任何输出（exit=${first.exit}）。需要系统日志请用 Shizuku 引擎或 ADB"
+                )
+                collectJob = null
+                return@launch
+            }
+
+            AppLogger.sysLog(
+                "I",
+                "快照模式可用（本次读到 ${first.total} 行，其中本应用 ${first.own} 行，tail=${first.usedTail}），开始每 ${DUMP_INTERVAL_MS / 1000}s 轮询"
+            )
+            var totalOwn = first.own
+            while (collectJob?.isActive == true) {
+                delay(DUMP_INTERVAL_MS)
+                val r = dumpOnce(pid)
+                totalOwn += r.own
+            }
+            AppLogger.sysLog("W", "logcat 快照轮询结束，本次共捕获本应用 $totalOwn 行")
             collectJob = null
         }
     }
 
-    private suspend fun stream(cmd: List<String>, selfPid: Int): RunResult {
+    private suspend fun stream(cmd: List<String>, selfPid: Int): StreamResult {
         val startedAt = System.currentTimeMillis()
         var captured = 0
         try {
@@ -107,36 +117,52 @@ object LogcatCollector {
             if (err.isNotEmpty() && captured == 0) {
                 AppLogger.sysLog("E", "logcat 错误输出: ${err.take(300)}")
             }
-            return RunResult(captured, exit, System.currentTimeMillis() - startedAt)
+            return StreamResult(captured, exit, System.currentTimeMillis() - startedAt)
         } catch (t: Throwable) {
             AppLogger.sysLog("E", "logcat 无法启动: ${t.javaClass.simpleName} ${t.message}")
-            return RunResult(captured, -1, System.currentTimeMillis() - startedAt)
+            return StreamResult(captured, -1, System.currentTimeMillis() - startedAt)
         } finally {
             try { process?.destroy() } catch (_: Exception) { }
             process = null
         }
     }
 
-    /** 一次性快照：logcat -d，返回新增记录行数 */
-    private suspend fun dumpOnce(selfPid: Int): Int {
-        var captured = 0
+    /**
+     * 一次快照。先用 -t 取尾部（避免整缓冲），命令报错再退回纯 -d。
+     * 关键：能否读到日志看的是「命令正常执行 / 读到行」，而不是「有没有本应用的行」。
+     */
+    private suspend fun dumpOnce(selfPid: Int): DumpResult {
+        val tail = runDump(
+            arrayOf("/system/bin/logcat", "-v", "threadtime", "-t", TAIL_LINES.toString(), "*:W"),
+            selfPid
+        )
+        // exit == 0 表示命令执行成功（哪怕这段时间没有任何 W/E 日志）
+        if (tail.first > 0 || tail.third == 0) {
+            return DumpResult(tail.first, tail.second, tail.third, true)
+        }
+        val full = runDump(arrayOf("/system/bin/logcat", "-d", "-v", "threadtime", "*:W"), selfPid)
+        return DumpResult(full.first, full.second, full.third, false)
+    }
+
+    private suspend fun runDump(cmd: Array<String>, selfPid: Int): Triple<Int, Int, Int> {
+        var total = 0
+        var own = 0
+        var exit = -1
         try {
-            // 不传 --pid：若该 ROM 对 --pid 解析有问题，这里仍能拿到输出，再由 pid 过滤
-            val proc = Runtime.getRuntime().exec(
-                arrayOf("/system/bin/logcat", "-d", "-v", "threadtime", "*:W")
-            )
+            val proc = Runtime.getRuntime().exec(cmd)
             BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
                 var line = reader.readLine()
                 while (line != null) {
-                    if (handleLine(line, selfPid)) captured++
+                    total++
+                    if (handleLine(line, selfPid)) own++
                     line = reader.readLine()
                 }
             }
-            try { proc.waitFor() } catch (_: Exception) { }
+            exit = try { proc.waitFor() } catch (_: Exception) { -1 }
         } catch (t: Throwable) {
-            AppLogger.sysLog("E", "logcat -d 失败: ${t.javaClass.simpleName} ${t.message}")
+            AppLogger.sysLog("E", "logcat 快照失败: ${t.javaClass.simpleName} ${t.message}")
         }
-        return captured
+        return Triple(total, own, exit)
     }
 
     /** 返回 true 表示这一行被记录（只记录本应用 pid 的行，并按内容去重） */
@@ -169,7 +195,6 @@ object LogcatCollector {
         return false
     }
 
-    /** -d 轮询会重复吐出同样的行，这里做去重 */
     private fun rememberLine(key: String): Boolean {
         if (seenLines.size > MAX_SEEN) seenLines.clear()
         return seenLines.add(key)
