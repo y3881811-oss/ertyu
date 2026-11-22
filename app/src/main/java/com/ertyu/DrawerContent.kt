@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -125,6 +126,10 @@ fun DrawerContent(
             DrawerItem("连接 SFTP 服务器", Icons.Default.Cloud) {
                 onDismiss()
                 vm.openSftp()
+            }
+            DrawerItem("局域网设备发现", Icons.Default.Wifi) {
+                onDismiss()
+                vm.openLanScan()
             }
             DrawerItem("终端模拟器", Icons.Default.Terminal) {
                 onDismiss()
