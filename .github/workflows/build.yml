@@ -135,6 +135,7 @@ jobs:
             - **构建时间**：${{ steps.version.outputs.date }} (UTC+8)
             - **内部版本**：${{ steps.version.outputs.v_name }} (Code: ${{ steps.version.outputs.v_code }})
             - **提交**：${{ github.sha }}
+            - **类型**：Release APK（R8 混淆 + 资源压缩，proguard 带 `-dontoptimize`）
 
             ### 本次变更
             ${{ steps.changelog.outputs.log }}
