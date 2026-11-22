@@ -10,5 +10,7 @@ data class SearchState(
     val scannedFiles: Int = 0,
     val results: List<FileItem> = emptyList(),
     val error: String? = null,
-    val truncated: Boolean = false   // 结果超出上限
+    val truncated: Boolean = false,   // 结果超出上限
+    val filter: SearchFilter = SearchFilter(),
+    val elapsedMs: Long = 0L
 )

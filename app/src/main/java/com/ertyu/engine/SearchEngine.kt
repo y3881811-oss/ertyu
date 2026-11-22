@@ -2,6 +2,7 @@ package com.ertyu.engine
 
 import android.net.Uri
 import com.ertyu.model.FileItem
+import com.ertyu.model.SearchFilter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -31,6 +32,7 @@ object SearchEngine {
     suspend fun search(
         root: File,
         query: String,
+        filter: SearchFilter = SearchFilter(),
         onProgress: (dirs: Int, files: Int, results: List<FileItem>) -> Unit
     ): Pair<List<FileItem>, Boolean> =
         withContext(Dispatchers.IO.limitedParallelism(CONCURRENCY)) {
@@ -58,7 +60,7 @@ object SearchEngine {
                 val subDirs = ArrayList<File>(children.size)
                 for (child in children) {
                     val name = child.name
-                    if (name.contains(query, ignoreCase = true)) {
+                    if (name.contains(query, ignoreCase = true) && filter.matches(child)) {
                         mutex.withLock {
                             if (results.size < MAX_RESULTS) {
                                 results.add(toFileItem(child))

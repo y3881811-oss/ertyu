@@ -8,6 +8,7 @@ import com.ertyu.model.Bookmark
 import com.ertyu.model.BookmarkPanelState
 import com.ertyu.model.FileItem
 import com.ertyu.model.RecentItem
+import com.ertyu.model.SearchFilter
 import com.ertyu.model.SearchState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.update
@@ -35,6 +36,13 @@ fun MainViewModel.updateSearchQuery(q: String) {
     _searchState.update { it.copy(query = q) }
 }
 
+/** 改过滤条件：已有结果就自动重搜，不用再点一次 */
+fun MainViewModel.setSearchFilter(filter: SearchFilter) {
+    _searchState.update { it.copy(filter = filter) }
+    val s = _searchState.value
+    if (s.query.isNotBlank() && !s.isSearching) startSearch()
+}
+
 fun MainViewModel.startSearch() {
     val state = _searchState.value
     if (state.query.isBlank()) return
@@ -50,11 +58,12 @@ fun MainViewModel.startSearch() {
         )
     }
 
+    val startedAt = System.currentTimeMillis()
     searchJob = viewModelScope.launch {
         try {
             val root = File(state.rootPath)
             val (results, truncated) = SearchEngine.search(
-                root, state.query
+                root, state.query, state.filter
             ) { dirs, files, list ->
                 _searchState.update {
                     it.copy(
@@ -68,7 +77,8 @@ fun MainViewModel.startSearch() {
                 it.copy(
                     isSearching = false,
                     results = results,
-                    truncated = truncated
+                    truncated = truncated,
+                    elapsedMs = System.currentTimeMillis() - startedAt
                 )
             }
         } catch (e: CancellationException) {
