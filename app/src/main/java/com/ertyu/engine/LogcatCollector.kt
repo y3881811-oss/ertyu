@@ -121,8 +121,9 @@ object LogcatCollector {
     private suspend fun dumpOnce(selfPid: Int): Int {
         var captured = 0
         try {
+            // 不传 --pid：若该 ROM 对 --pid 解析有问题，这里仍能拿到输出，再由 pid 过滤
             val proc = Runtime.getRuntime().exec(
-                arrayOf("/system/bin/logcat", "-d", "-v", "threadtime", "--pid=$selfPid", "*:W")
+                arrayOf("/system/bin/logcat", "-d", "-v", "threadtime", "*:W")
             )
             BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
                 var line = reader.readLine()
