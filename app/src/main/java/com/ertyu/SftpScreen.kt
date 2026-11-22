@@ -41,7 +41,7 @@ fun SftpScreen(vm: MainViewModel) {
     var showDisconnectConfirm by remember { mutableStateOf(false) }
 
     val selectedUploadCount = panel.items.count {
-        panel.selectedUris.contains(it.uriString) && !it.isDir
+        panel.selectedUris.contains(it.uriString) && !it.isDirectory
     }
 
     fun requestClose() {
