@@ -1,5 +1,7 @@
 package com.ertyu
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -65,8 +67,18 @@ class MainActivity : ComponentActivity() {
         PackageChangeMonitor.start(this)
 
         setContent {
-            val dark = isSystemInDarkTheme()
-            MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
+            val settings by vm.settingsState.collectAsState()
+            val systemDark = isSystemInDarkTheme()
+            val dark = when (settings.themeMode) {
+                1 -> false
+                2 -> true
+                else -> systemDark
+            }
+            val accent = com.ertyu.ui.AccentPalette.colorOf(settings.accentColor)
+            MaterialTheme(
+                colorScheme = if (dark) darkColorScheme(primary = accent)
+                else lightColorScheme(primary = accent)
+            ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppRoot(vm)
                 }

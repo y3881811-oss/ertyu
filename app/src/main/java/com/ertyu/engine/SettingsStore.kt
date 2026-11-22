@@ -20,6 +20,8 @@ object SettingsStore {
     private const val KEY_WEBDAV_USER = "webdav_user"
     private const val KEY_WEBDAV_PASS = "webdav_pass"
     private const val KEY_CUSTOM_PATHS = "custom_paths"
+    private const val KEY_THEME_MODE = "theme_mode"
+    private const val KEY_ACCENT_COLOR = "accent_color"
 
     fun load(context: Context): AppSettings {
         val sp = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
@@ -48,7 +50,9 @@ object SettingsStore {
             webDavPort = sp.getInt(KEY_WEBDAV_PORT, 7326),
             webDavUsername = sp.getString(KEY_WEBDAV_USER, "mtfm") ?: "mtfm",
             webDavPassword = sp.getString(KEY_WEBDAV_PASS, "mtfm123") ?: "mtfm123",
-            customPaths = customPaths
+            customPaths = customPaths,
+            themeMode = sp.getInt(KEY_THEME_MODE, 0),
+            accentColor = sp.getInt(KEY_ACCENT_COLOR, 0)
         )
     }
 
@@ -69,6 +73,8 @@ object SettingsStore {
             .putString(KEY_WEBDAV_USER, s.webDavUsername)
             .putString(KEY_WEBDAV_PASS, s.webDavPassword)
             .putString(KEY_CUSTOM_PATHS, arr.toString())
+            .putInt(KEY_THEME_MODE, s.themeMode)
+            .putInt(KEY_ACCENT_COLOR, s.accentColor)
             .apply()
     }
 }
