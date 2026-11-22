@@ -39,7 +39,7 @@ fun VideoPlayerScreen(vm: MainViewModel) {
     // 1. 创建 ExoPlayer 实例
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(state.videoPath))
+            setMediaItem(buildVideoMediaItem(state.videoPath))
             prepare()
             playWhenReady = true
         }
@@ -105,4 +105,35 @@ fun VideoPlayerScreen(vm: MainViewModel) {
             )
         }
     }
+}
+
+/**
+ * 自动加载同名字幕：video.mp4 旁边的 video.srt / .vtt / .ass 会被挂上。
+ */
+private fun buildVideoMediaItem(path: String): MediaItem {
+    val file = java.io.File(path)
+    val base = file.name.substringBeforeLast('.')
+    val dir = file.parentFile
+    val candidates = listOf(
+        "srt" to androidx.media3.common.MimeTypes.APPLICATION_SUBRIP,
+        "vtt" to androidx.media3.common.MimeTypes.TEXT_VTT,
+        "ass" to androidx.media3.common.MimeTypes.TEXT_SSA,
+        "ssa" to androidx.media3.common.MimeTypes.TEXT_SSA
+    )
+    val subs = ArrayList<MediaItem.SubtitleConfiguration>()
+    candidates.forEach { (ext, mime) ->
+        val f = java.io.File(dir, "$base.$ext")
+        if (f.isFile && f.length() > 0) {
+            subs.add(
+                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.fromFile(f))
+                    .setMimeType(mime)
+                    .setLanguage("zh")
+                    .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
+                    .build()
+            )
+        }
+    }
+    val builder = MediaItem.Builder().setUri(android.net.Uri.fromFile(file))
+    if (subs.isNotEmpty()) builder.setSubtitleConfigurations(subs)
+    return builder.build()
 }
