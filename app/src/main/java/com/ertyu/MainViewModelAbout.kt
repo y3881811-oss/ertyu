@@ -81,9 +81,9 @@ fun MainViewModel.checkForUpdates(currentVersionName: String) {
             }
 
             val (latestTag, htmlUrl, apkDownloadUrl) = result
-            val cleanLatest = latestTag.replace("v", "").replace("-", ".")
-            
-            if (cleanLatest != currentVersionName) {
+            val newer = compareVersions(latestTag, currentVersionName) > 0
+
+            if (newer) {
                 AppLogger.i("Update", "发现新版本: $latestTag")
                 _updateState.value = UpdateState(
                     isChecking = false,
@@ -120,4 +120,25 @@ fun MainViewModel.startDownload(url: String) {
         AppLogger.e("Update", "无法打开浏览器下载", e)
         _toast.value = "无法打开浏览器"
     }
+}
+
+/**
+ * 把 "v2026.11.22-1257" / "2026.11.21.1302" 拆成数字段逐段比较。
+ * 返回 1 表示 latest 更新，0 相同，-1 latest 更旧（避免字符串比较把回滚也当更新）。
+ */
+private fun versionSegments(tag: String): List<Long> =
+    tag.lowercase().removePrefix("v")
+        .split('.', '-', '_', '+')
+        .mapNotNull { it.trim().toLongOrNull() }
+
+private fun compareVersions(latestTag: String, current: String): Int {
+    val a = versionSegments(latestTag)
+    val b = versionSegments(current)
+    if (a.isEmpty() || b.isEmpty()) return if (latestTag == current) 0 else 1
+    for (i in 0 until maxOf(a.size, b.size)) {
+        val x = a.getOrElse(i) { 0L }
+        val y = b.getOrElse(i) { 0L }
+        if (x != y) return if (x > y) 1 else -1
+    }
+    return 0
 }
