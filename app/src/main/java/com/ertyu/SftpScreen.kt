@@ -41,7 +41,7 @@ fun SftpScreen(vm: MainViewModel) {
     var showDisconnectConfirm by remember { mutableStateOf(false) }
 
     val selectedUploadCount = panel.items.count {
-        panel.selectedUris.contains(it.uriString) && !it.isDirectory
+        panel.selectedUris.contains(it.uriString) && !it.isDir
     }
 
     fun requestClose() {
@@ -167,7 +167,7 @@ fun SftpScreen(vm: MainViewModel) {
                                 RemoteRow(
                                     entry = entry,
                                     onClick = {
-                                        if (entry.isDirectory) vm.sftpOpen(entry.path)
+                                        if (entry.isDir) vm.sftpOpen(entry.path)
                                         else pendingDownload = entry
                                     }
                                 )
@@ -266,16 +266,16 @@ private fun RemoteRow(entry: RemoteEntry, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            if (entry.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
+            if (entry.isDir) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
             contentDescription = null,
-            tint = if (entry.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            tint = if (entry.isDir) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(entry.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 text = buildString {
-                    if (!entry.isDirectory) append(ItemSizeEngine.format(entry.size)).append(" · ")
+                    if (!entry.isDir) append(ItemSizeEngine.format(entry.size)).append(" · ")
                     if (entry.modified > 0) append(dateFormat.format(Date(entry.modified)))
                 },
                 style = MaterialTheme.typography.labelSmall,
