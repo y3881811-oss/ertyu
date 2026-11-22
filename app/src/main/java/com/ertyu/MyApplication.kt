@@ -4,6 +4,7 @@ import android.app.Application
 import com.ertyu.engine.AppLogger
 import com.ertyu.engine.CrashHandler
 import com.ertyu.engine.ItemSizePrefs
+import com.ertyu.engine.ThumbnailDiskCache
 import com.ertyu.engine.UpdateCacheCleaner
 import com.ertyu.engine.LogcatCollector
 
@@ -22,6 +23,7 @@ class MyApplication : Application() {
         // 3. 👇 启动底层 Logcat 监听器，将系统报错混写进 app_xxx.log
         // 清理过期的更新包缓存（保留 24 小时内）
         UpdateCacheCleaner.clean(this)
+        ThumbnailDiskCache.init(this)
 
         LogcatCollector.start()
     }

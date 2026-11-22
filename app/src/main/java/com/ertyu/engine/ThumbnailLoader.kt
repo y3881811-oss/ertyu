@@ -22,11 +22,18 @@ object ThumbnailLoader {
         if (path.isEmpty()) return null
         mutex.withLock { cache.get(path) }?.let { return it }
 
+        // 二级缓存：磁盘（冷启动不用重新解码）
+        ThumbnailDiskCache.get(path)?.let { bmp ->
+            mutex.withLock { cache.put(path, bmp) }
+            return bmp
+        }
+
         val bmp = withContext(Dispatchers.IO.limitedParallelism(4)) {
             if (isVideo) decodeVideo(path) else decodeImage(path)
         } ?: return null
 
         mutex.withLock { cache.put(path, bmp) }
+        withContext(Dispatchers.IO) { ThumbnailDiskCache.put(path, bmp) }
         return bmp
     }
 
@@ -53,7 +60,17 @@ object ThumbnailLoader {
             retriever.setDataSource(path)
             val frame = retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
             retriever.release()
-            frame
+            frame?.let { scale(it) }
         } catch (e: Exception) { null }
+    }
+
+    /** 视频帧通常很大，压到缩略图尺寸再缓存 */
+    private fun scale(src: Bitmap): Bitmap {
+        val maxSide = maxOf(src.width, src.height)
+        if (maxSide <= THUMB_PX * 2) return src
+        val ratio = (THUMB_PX * 2).toFloat() / maxSide.toFloat()
+        val w = (src.width * ratio).toInt().coerceAtLeast(1)
+        val h = (src.height * ratio).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(src, w, h, true)
     }
 }
