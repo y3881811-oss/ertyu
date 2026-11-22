@@ -1,5 +1,6 @@
 package com.ertyu
 
+import com.ertyu.model.ManifestHolder
 import com.ertyu.model.TaskCenterHolder
 import android.content.Intent
 import android.net.Uri
@@ -69,6 +70,7 @@ fun AppRoot(vm: MainViewModel) {
     val batchInstallState by BatchInstallHolder.state.collectAsState()
     val lanScanState by LanScanHolder.state.collectAsState()
     val taskCenterVisible by TaskCenterHolder.visible.collectAsState()
+    val manifestState by ManifestHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
@@ -207,6 +209,10 @@ fun AppRoot(vm: MainViewModel) {
             LogViewerScreen(vm)
         }
         
+        manifestState.visible -> {
+            BackHandler { vm.closeManifestViewer() }
+            ManifestViewerScreen(vm)
+        }
         taskCenterVisible -> {
             BackHandler { vm.closeTaskCenter() }
             TaskCenterScreen(vm)

@@ -49,7 +49,8 @@ fun SelectionActionSheet(
     onBrowseApk: ((FileItem) -> Unit)? = null,
     onExtractArchive: ((List<FileItem>) -> Unit)? = null, // 👈 改成传 List
     onBatchChecksum: ((List<FileItem>) -> Unit)? = null,
-    onBatchInstall: ((List<FileItem>) -> Unit)? = null
+    onBatchInstall: ((List<FileItem>) -> Unit)? = null,
+    onViewManifest: ((FileItem) -> Unit)? = null
 ) {
     if (!visible) return
 
@@ -83,6 +84,9 @@ fun SelectionActionSheet(
                 }
                 onBrowseApk?.let {
                     SheetItem("浏览内部", isPrimary = true) { it(singleItem!!); onDismiss() }
+                }
+                onViewManifest?.let {
+                    SheetItem("查看 Manifest / 权限") { it(singleItem!!); onDismiss() }
                 }
                 Spacer(Modifier.height(8.dp))
             } else if (hasArchive) {
