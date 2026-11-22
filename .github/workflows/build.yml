@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 3 * * *'   # UTC 03:00 = 北京时间 11:00
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "构建完成后是否发布 Release（取消勾选只构建，用于测速）"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -126,6 +131,7 @@ jobs:
           { echo 'log<<EOF'; echo "$LOG"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
+        if: github.event_name != 'workflow_dispatch' || inputs.publish
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
