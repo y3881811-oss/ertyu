@@ -122,6 +122,10 @@ fun DrawerContent(
                 onDismiss()
                 vm.openSmbDialog()
             }
+            DrawerItem("连接 SFTP 服务器", Icons.Default.Cloud) {
+                onDismiss()
+                vm.openSftp()
+            }
             DrawerItem("终端模拟器", Icons.Default.Terminal) {
                 onDismiss()
                 vm.openTerminal()

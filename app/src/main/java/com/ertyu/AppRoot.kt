@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.ertyu.model.BatchChecksumHolder
 import com.ertyu.model.DirCompareHolder
 import com.ertyu.model.LogStateHolder
+import com.ertyu.model.SftpHolder
 import com.ertyu.model.SpaceAnalyzerHolder
 
 @Composable
@@ -52,6 +53,7 @@ fun AppRoot(vm: MainViewModel) {
     val spaceAnalyzerState by SpaceAnalyzerHolder.state.collectAsState()
     val dirCompareState by DirCompareHolder.state.collectAsState()
     val batchChecksumState by BatchChecksumHolder.state.collectAsState()
+    val sftpState by SftpHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
@@ -188,6 +190,10 @@ fun AppRoot(vm: MainViewModel) {
             LogViewerScreen(vm)
         }
         
+        sftpState.visible -> {
+            BackHandler { vm.closeSftp() }
+            SftpScreen(vm)
+        }
         batchChecksumState.visible -> {
             BackHandler { vm.closeBatchChecksum() }
             BatchChecksumScreen(vm)
