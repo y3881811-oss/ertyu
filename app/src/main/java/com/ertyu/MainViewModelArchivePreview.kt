@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.AppLogger
 import com.ertyu.engine.ArchiveBrowser
 import com.ertyu.model.ArchiveEntry
-import com.ertyu.model.ArchiveViewerStateHolder
 import com.ertyu.model.ImageViewerState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,13 +31,12 @@ fun MainViewModel.previewArchiveEntry(entry: ArchiveEntry) {
     }
     val dir = File(getApplication<Application>().cacheDir, "archive_preview").apply { mkdirs() }
     val safeName = entry.name.replace('/', '_').ifBlank { "preview_${entry.path.hashCode()}" }
-    val out = File(dir, safeName)
 
     viewModelScope.launch {
         val result = withContext(Dispatchers.IO) {
-            ArchiveBrowser.extractEntry(archiveFile, entry.path, out)
+            ArchiveBrowser.extractEntry(archiveFile, entry.path, safeName, dir)
         }
-        result.onSuccess {
+        result.onSuccess { out ->
             AppLogger.i("ArchiveViewer", "预览图片: ${entry.path}")
             _imageViewer.value = ImageViewerState(
                 isOpen = true,
