@@ -123,22 +123,24 @@ fun AudioPlayerScreen(vm: MainViewModel) {
                     }
                 },
                 actions = {
-                    var speedIndex by androidx.compose.runtime.remember {
+                    val speedState = androidx.compose.runtime.remember {
                         androidx.compose.runtime.mutableIntStateOf(
                             com.ertyu.engine.audio.AudioSpeedPrefs.indexOf(
                                 com.ertyu.engine.audio.AudioSpeedPrefs.get(appContext)
                             )
                         )
                     }
-                    TextButton(onClick = {
+                    androidx.compose.material3.TextButton(onClick = {
                         val speeds = com.ertyu.engine.audio.AudioSpeedPrefs.speeds
-                        speedIndex = (speedIndex + 1) % speeds.size
-                        val target = speeds[speedIndex]
+                        speedState.intValue = (speedState.intValue + 1) % speeds.size
+                        val target = speeds[speedState.intValue]
                         runCatching { exoPlayer.setPlaybackSpeed(target) }
                         com.ertyu.engine.audio.AudioSpeedPrefs.set(appContext, target)
                         vm.showToast("倍速 ${target}x")
                     }) {
-                        Text("${com.ertyu.engine.audio.AudioSpeedPrefs.speeds[speedIndex]}x")
+                        androidx.compose.material3.Text(
+                            "${com.ertyu.engine.audio.AudioSpeedPrefs.speeds[speedState.intValue]}x"
+                        )
                     }
                 }
             )
