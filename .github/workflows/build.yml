@@ -9,6 +9,10 @@ on:
         description: "构建完成后是否发布 Release（取消勾选只构建，用于测速）"
         type: boolean
         default: true
+      fast:
+        description: "快速构建（关闭 R8 混淆/资源压缩，约快 70~80s，APK 更大）"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -92,7 +96,10 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          gradle assembleRelease --build-cache --stacktrace \
+          FAST_FLAG=""
+          if [ "${{ inputs.fast }}" = "true" ]; then FAST_FLAG="-PfastRelease=true"; fi
+          echo "构建参数: $FAST_FLAG"
+          gradle assembleRelease --build-cache --stacktrace $FAST_FLAG \
             -PappVersionCode=${{ steps.version.outputs.v_code }} \
             -PappVersionName="${{ steps.version.outputs.v_name }}"
 
