@@ -23,7 +23,7 @@ object LogcatCollector {
     private const val OWN_TAG = "EYU_Log"
     private const val DUMP_INTERVAL_MS = 8000L
     private const val MAX_SEEN = 3000
-    private const val TAIL_LINES = 400
+    private const val TAIL_LINES = 800
 
     private var collectJob: Job? = null
     private var process: java.lang.Process? = null
@@ -132,14 +132,26 @@ object LogcatCollector {
      * 关键：能否读到日志看的是「命令正常执行 / 读到行」，而不是「有没有本应用的行」。
      */
     private suspend fun dumpOnce(selfPid: Int): DumpResult {
+        // 1) 尾部 + --pid：只取本进程最后 N 行，避免被系统日志挤出窗口
+        val pidTail = runDump(
+            arrayOf(
+                "/system/bin/logcat", "-v", "threadtime",
+                "-t", TAIL_LINES.toString(), "--pid=$selfPid", "*:W"
+            ),
+            selfPid
+        )
+        if (pidTail.first > 0 || pidTail.third == 0) {
+            return DumpResult(pidTail.first, pidTail.second, pidTail.third, true)
+        }
+        // 2) 尾部（不带 --pid），再按 pid 过滤
         val tail = runDump(
             arrayOf("/system/bin/logcat", "-v", "threadtime", "-t", TAIL_LINES.toString(), "*:W"),
             selfPid
         )
-        // exit == 0 表示命令执行成功（哪怕这段时间没有任何 W/E 日志）
         if (tail.first > 0 || tail.third == 0) {
             return DumpResult(tail.first, tail.second, tail.third, true)
         }
+        // 3) 纯 -d 兜底
         val full = runDump(arrayOf("/system/bin/logcat", "-d", "-v", "threadtime", "*:W"), selfPid)
         return DumpResult(full.first, full.second, full.third, false)
     }
