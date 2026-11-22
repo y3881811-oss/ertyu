@@ -105,6 +105,14 @@ fun AudioPlayerScreen(vm: MainViewModel) {
 
     BackHandler { vm.closeAudioPlayer() }
 
+    // 恢复上次的倍速
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        runCatching {
+            exoPlayer.setPlaybackSpeed(com.ertyu.engine.audio.AudioSpeedPrefs.get(appContext))
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -112,6 +120,25 @@ fun AudioPlayerScreen(vm: MainViewModel) {
                 navigationIcon = {
                     IconButton(onClick = { vm.closeAudioPlayer() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    var speedIndex by androidx.compose.runtime.remember {
+                        androidx.compose.runtime.mutableIntStateOf(
+                            com.ertyu.engine.audio.AudioSpeedPrefs.indexOf(
+                                com.ertyu.engine.audio.AudioSpeedPrefs.get(appContext)
+                            )
+                        )
+                    }
+                    TextButton(onClick = {
+                        val speeds = com.ertyu.engine.audio.AudioSpeedPrefs.speeds
+                        speedIndex = (speedIndex + 1) % speeds.size
+                        val target = speeds[speedIndex]
+                        runCatching { exoPlayer.setPlaybackSpeed(target) }
+                        com.ertyu.engine.audio.AudioSpeedPrefs.set(appContext, target)
+                        vm.showToast("倍速 ${target}x")
+                    }) {
+                        Text("${com.ertyu.engine.audio.AudioSpeedPrefs.speeds[speedIndex]}x")
                     }
                 }
             )
