@@ -3,9 +3,19 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val storePass: String = System.getenv("KEYSTORE_PASSWORD") ?: "mtfm123456"
-val aliasName: String = System.getenv("KEY_ALIAS") ?: "mtfm"
-val keyPass: String = System.getenv("KEY_PASSWORD") ?: "mtfm123456"
+// 签名参数：本地缺省时用默认值图方便；CI 里构建 Release 时缺失直接报错，避免静默用错密码
+fun signingEnv(name: String, fallback: String): String {
+    System.getenv(name)?.takeIf { it.isNotBlank() }?.let { return it }
+    val buildingRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+    if (System.getenv("CI") == "true" && buildingRelease) {
+        error("CI 构建 Release 缺少环境变量 $name（请在仓库 Secrets 里配置）")
+    }
+    return fallback
+}
+
+val storePass: String = signingEnv("KEYSTORE_PASSWORD", "mtfm123456")
+val aliasName: String = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "mtfm"
+val keyPass: String = signingEnv("KEY_PASSWORD", "mtfm123456")
 
 android {
     namespace = "com.ertyu"

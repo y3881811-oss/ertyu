@@ -26,6 +26,12 @@
 -dontwarn com.github.junrar.**
 -dontwarn org.slf4j.**
 
+# ========== SFTP (jsch) ==========
+# jsch 会按类名反射加载 com.jcraft.jsch.jce.* 等加密实现，必须整包保留
+-keep class com.jcraft.jsch.** { *; }
+-dontwarn com.jcraft.jsch.**
+-dontwarn org.bouncycastle.**
+
 # ========== zip4j ==========
 -keep class net.lingala.zip4j.** { *; }
 -keep class net.lingala.zip4j.model.** { *; }
