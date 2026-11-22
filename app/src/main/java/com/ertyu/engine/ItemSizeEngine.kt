@@ -58,6 +58,30 @@ object ItemSizeEngine {
         if (path == null) cache.clear() else cache.remove(path)
     }
 
+    /**
+     * 让某路径相关（自身 / 子目录 / 祖先目录）的缓存失效。
+     * 删除、移动、解压之后调用，保证下次读到新的大小。
+     */
+    fun invalidateUnder(path: String) {
+        if (path.isBlank()) return
+        val key = path.trimEnd('/')
+        val iterator = cache.keys.iterator()
+        while (iterator.hasNext()) {
+            val k = iterator.next()
+            if (k == key || k.startsWith("$key/") || key.startsWith("$k/")) {
+                cache.remove(k)
+            }
+        }
+    }
+
+    /** 两个路径是否相关（相等、或互为父子目录） */
+    fun related(a: String, b: String): Boolean {
+        if (a.isBlank() || b.isBlank()) return false
+        val x = a.trimEnd('/')
+        val y = b.trimEnd('/')
+        return x == y || x.startsWith("$y/") || y.startsWith("$x/")
+    }
+
     suspend fun calculate(root: File): Result =
         withContext(Dispatchers.IO.limitedParallelism(CONCURRENCY)) {
             val mutex = Mutex()
