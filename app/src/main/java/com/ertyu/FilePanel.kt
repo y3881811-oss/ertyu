@@ -16,7 +16,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.ertyu.engine.ItemSizeEngine
 import com.ertyu.model.ArchiveFormat
+import com.ertyu.model.ItemSizeHolder
 import com.ertyu.ui.CompressOptionsDialog
 import com.ertyu.ui.ExtractOptionsDialog
 import com.ertyu.ui.FileConflictDialog
@@ -53,6 +55,13 @@ fun FilePanel(
     val coroutineScope = rememberCoroutineScope()
 
     var showSelectionSheet by remember { mutableStateOf(false) }
+
+    // 👇 文件夹真实大小：订阅全局结果，并随目录变化重新扫描
+    val folderSizes by ItemSizeHolder.sizes.collectAsState()
+    val folderSizeEnabled by ItemSizeHolder.enabled.collectAsState()
+    LaunchedEffect(state.items, currentUriStr, folderSizeEnabled) {
+        vm.startVisibleFolderSizeScan(state.items)
+    }
 
     // 返回键拦截：优先关闭底部弹窗 -> 其次退出多选
     BackHandler(enabled = showSelectionSheet || state.isSelectionMode) {
@@ -128,6 +137,9 @@ fun FilePanel(
                                 item = item,
                                 isSelected = { state.selectedUris.contains(item.uriString) },
                                 isSelectionMode = state.isSelectionMode,
+                                folderSizeText = if (folderSizeEnabled && item.isDirectory) {
+                                    folderSizes[item.uriString]?.let { ItemSizeEngine.format(it) }
+                                } else null,
                                 onClick = { handleItemClick(isLeft, item, state, vm) },
                                 onLongClick = {
                                     if (!state.isSelectionMode) {

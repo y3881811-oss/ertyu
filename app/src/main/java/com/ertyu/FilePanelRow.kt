@@ -87,6 +87,7 @@ fun FileRow(
     item: FileItem,
     isSelected: () -> Boolean, // 👈 保留 Lambda，不卡顿
     isSelectionMode: Boolean,
+    folderSizeText: String? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onMoreClick: () -> Unit
@@ -94,12 +95,17 @@ fun FileRow(
     val selected = isSelected()
     val bg = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
 
-    val subtitle = remember(item.uriString, item.sizeText, item.typeText, item.lastModifiedText) {
+    val subtitle = remember(item.uriString, item.sizeText, item.typeText, item.lastModifiedText, folderSizeText) {
         buildString {
             append(item.typeText)
             if (!item.isDirectory && item.sizeText.isNotEmpty()) {
                 if (isNotEmpty()) append(" · ")
                 append(item.sizeText)
+            }
+            if (item.isDirectory && !folderSizeText.isNullOrBlank()) {
+                if (isNotEmpty()) append(" · ")
+                append("已用 ")
+                append(folderSizeText)
             }
             if (item.lastModifiedText.isNotEmpty()) {
                 if (isNotEmpty()) append(" · ")

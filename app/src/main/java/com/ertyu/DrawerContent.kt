@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -143,6 +144,10 @@ fun DrawerContent(
                 vm.startDuplicateScan(File("/storage/emulated/0"))
             }
 
+            DrawerItem("空间分析", Icons.Default.PieChart) {
+                onDismiss()
+                vm.openSpaceAnalyzer()
+            }
             DrawerItem("回收站", Icons.Default.DeleteForever) {
                 onDismiss()
                 vm.openRecycleBin()
