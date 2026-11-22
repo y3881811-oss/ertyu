@@ -28,6 +28,7 @@
     <!-- 👇 application 节点开始 -->
     <application
         android:name=".MyApplication"
+        android:usesCleartextTraffic="true"
         android:allowBackup="true"
         android:label="EYU文件管理器"
         android:supportsRtl="true"

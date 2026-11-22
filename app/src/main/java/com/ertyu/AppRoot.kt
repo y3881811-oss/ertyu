@@ -1,6 +1,7 @@
 package com.ertyu
 
 import com.ertyu.model.ManifestHolder
+import com.ertyu.model.WebDavHolder
 import com.ertyu.model.TaskCenterHolder
 import android.content.Intent
 import android.net.Uri
@@ -71,6 +72,7 @@ fun AppRoot(vm: MainViewModel) {
     val lanScanState by LanScanHolder.state.collectAsState()
     val taskCenterVisible by TaskCenterHolder.visible.collectAsState()
     val manifestState by ManifestHolder.state.collectAsState()
+    val webDavState by WebDavHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
@@ -213,6 +215,10 @@ fun AppRoot(vm: MainViewModel) {
         manifestState.visible -> {
             BackHandler { vm.closeManifestViewer() }
             ManifestViewerScreen(vm)
+        }
+        webDavState.visible -> {
+            BackHandler { vm.closeWebDav() }
+            WebDavScreen(vm)
         }
         taskCenterVisible -> {
             BackHandler { vm.closeTaskCenter() }
