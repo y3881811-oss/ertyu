@@ -1,6 +1,7 @@
 package com.ertyu.engine
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -74,6 +75,7 @@ object UpdateDownloader {
                     FileOutputStream(part, resumed).use { out ->
                         val buf = ByteArray(64 * 1024)
                         while (true) {
+                            while (UpdatePause.paused) delay(150)
                             val n = input.read(buf)
                             if (n < 0) break
                             out.write(buf, 0, n)
@@ -102,4 +104,10 @@ object UpdateDownloader {
             }
         }
     }
+}
+
+/** 下载暂停开关（由界面上「暂停/继续」控制） */
+object UpdatePause {
+    @Volatile
+    var paused: Boolean = false
 }

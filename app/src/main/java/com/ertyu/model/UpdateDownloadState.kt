@@ -9,7 +9,8 @@ data class UpdateDownloadState(
     val total: Long = 0L,
     val percent: Int = 0,
     val error: String? = null,
-    val done: Boolean = false
+    val done: Boolean = false,
+    val paused: Boolean = false
 )
 
 object UpdateDownloadHolder {

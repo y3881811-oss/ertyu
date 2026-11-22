@@ -1,5 +1,6 @@
 package com.ertyu
 
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -66,7 +67,12 @@ fun UpdateDownloadDialog(vm: MainViewModel) {
             if (finished) {
                 TextButton(onClick = { vm.dismissUpdateDownload() }) { Text("关闭") }
             } else {
-                TextButton(onClick = { vm.cancelUpdateDownload() }) { Text("取消下载") }
+                Row {
+                    TextButton(onClick = { vm.toggleUpdatePause() }) {
+                        Text(if (state.paused) "继续" else "暂停")
+                    }
+                    TextButton(onClick = { vm.cancelUpdateDownload() }) { Text("取消下载") }
+                }
             }
         },
         dismissButton = null

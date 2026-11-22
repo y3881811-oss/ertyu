@@ -41,6 +41,7 @@ fun MainViewModel.startUpdateDownload(url: String) {
     com.ertyu.engine.UpdateCacheCleaner.clean(app, keep = dest)
 
     AppLogger.i("Update", "开始下载更新: $url")
+    com.ertyu.engine.UpdatePause.paused = false
     UpdateDownloadHolder.state.value = UpdateDownloadState(visible = true, phase = "连接中…")
     val taskId = TaskCenter.start("更新 ${fileName}", "更新", null)
 
@@ -133,6 +134,17 @@ fun MainViewModel.cancelUpdateDownload() {
     UpdateJobs.job?.cancel()
     UpdateJobs.job = null
     UpdateDownloadHolder.state.update { it.copy(phase = "已取消", done = true) }
+}
+
+fun MainViewModel.toggleUpdatePause() {
+    val state = UpdateDownloadHolder.state.value
+    if (!state.visible || state.done || state.error != null) return
+    val next = !state.paused
+    com.ertyu.engine.UpdatePause.paused = next
+    UpdateDownloadHolder.state.update {
+        it.copy(paused = next, phase = if (next) "已暂停" else "下载中…")
+    }
+    AppLogger.i("Update", if (next) "用户暂停下载" else "用户继续下载")
 }
 
 fun MainViewModel.dismissUpdateDownload() {
