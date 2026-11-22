@@ -41,6 +41,19 @@ fun SettingsAppearance(vm: MainViewModel) {
     }
 
     Spacer(Modifier.height(12.dp))
+    Text("列表密度", style = MaterialTheme.typography.titleSmall)
+    listOf(0 to "紧凑", 1 to "标准", 2 to "宽松").forEach { (value, label) ->
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { vm.setListDensity(value) }.padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = settings.listDensity == value, onClick = { vm.setListDensity(value) })
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+
+    Spacer(Modifier.height(12.dp))
     Text("强调色", style = MaterialTheme.typography.titleSmall)
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         AccentPalette.names.indices.forEach { index ->

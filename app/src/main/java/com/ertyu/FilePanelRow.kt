@@ -117,7 +117,13 @@ fun FileRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(
+                when (com.ertyu.ui.LocalListDensity.current) {
+                    0 -> 44.dp
+                    2 -> 66.dp
+                    else -> 56.dp
+                }
+            )
             .background(bg)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = 12.dp, end = 0.dp),

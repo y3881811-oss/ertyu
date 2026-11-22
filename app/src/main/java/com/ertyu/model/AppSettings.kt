@@ -19,7 +19,8 @@ data class AppSettings(
     val webDavPassword: String = "mtfm123",
     val customPaths: List<String> = emptyList(),
     val themeMode: Int = 0,   // 0 跟随系统 / 1 浅色 / 2 深色
-    val accentColor: Int = 0  // 强调色索引
+    val accentColor: Int = 0, // 强调色索引
+    val listDensity: Int = 1  // 0 紧凑 / 1 标准 / 2 宽松
 ) {
     val isSinglePanel: Boolean get() = panelMode == PanelMode.SINGLE
     val isDualPanel: Boolean get() = panelMode == PanelMode.DUAL

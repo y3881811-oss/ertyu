@@ -1,5 +1,18 @@
 package com.ertyu
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.focus.focusable
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import android.Manifest
@@ -75,12 +88,40 @@ class MainActivity : ComponentActivity() {
                 else -> systemDark
             }
             val accent = com.ertyu.ui.AccentPalette.colorOf(settings.accentColor)
+            // 硬件键盘快捷键（平板/外接键盘）：F5 刷新、Ctrl+H 隐藏文件、Ctrl+G 网格
+            val keyFocus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { runCatching { keyFocus.requestFocus() } }
+            fun handleShortcut(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
+                if (event.type != KeyEventType.KeyDown) return false
+                if (event.isCtrlPressed) {
+                    return when (event.key) {
+                        Key.H -> { vm.setShowHiddenDefault(!settings.showHiddenByDefault); true }
+                        Key.G -> { vm.toggleGridMode(); true }
+                        else -> false
+                    }
+                }
+                return when (event.key) {
+                    Key.F5 -> { vm.refresh(true); vm.refresh(false); true }
+                    else -> false
+                }
+            }
+
             MaterialTheme(
                 colorScheme = if (dark) darkColorScheme(primary = accent)
                 else lightColorScheme(primary = accent)
             ) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AppRoot(vm)
+                CompositionLocalProvider(com.ertyu.ui.LocalListDensity provides settings.listDensity) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .focusRequester(keyFocus)
+                                .focusable()
+                                .onPreviewKeyEvent { handleShortcut(it) }
+                        ) {
+                            AppRoot(vm)
+                        }
+                    }
                 }
             }
         }
