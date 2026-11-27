@@ -174,11 +174,7 @@ fun SftpScreen(vm: MainViewModel) {
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "说明：密码/私钥口令只用于本次连接，不会保存；
-" +
-                            "私钥请用绝对路径（如 Download/id_ed25519）；
-" +
-                            "首次连接不做主机指纹校验，请仅在信任的网络使用。",
+                        text = "说明：密码/私钥口令只用于本次连接，不会保存；私钥请用绝对路径（如 Download/id_ed25519）；首次连接不做主机指纹校验，请仅在信任的网络使用。",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
