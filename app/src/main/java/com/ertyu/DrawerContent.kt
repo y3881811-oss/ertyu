@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Search
@@ -54,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.ertyu.engine.StorageScanner
+import com.ertyu.model.HiddenExtHolder
 import java.io.File
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -166,6 +168,10 @@ fun DrawerContent(
             DrawerItem("任务中心", Icons.Default.CheckCircle) {
                 onDismiss()
                 vm.openTaskCenter()
+            }
+            DrawerItem("隐藏的文件类型", Icons.Default.VisibilityOff) {
+                onDismiss()
+                HiddenExtHolder.visible.value = true
             }
             DrawerItem("空间分析", Icons.Default.PieChart) {
                 onDismiss()

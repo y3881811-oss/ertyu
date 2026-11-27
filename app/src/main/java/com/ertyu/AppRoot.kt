@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.ertyu.model.BatchChecksumHolder
 import com.ertyu.model.BatchInstallHolder
 import com.ertyu.model.DirCompareHolder
+import com.ertyu.model.HiddenExtHolder
 import com.ertyu.model.LanScanHolder
 import com.ertyu.model.LogStateHolder
 import com.ertyu.model.SftpHolder
@@ -76,6 +77,7 @@ fun AppRoot(vm: MainViewModel) {
     val fontState by FontPreviewStateHolder.state.collectAsState()
     val recycleBinState by RecycleBinStateHolder.state.collectAsState()
     val spaceAnalyzerState by SpaceAnalyzerHolder.state.collectAsState()
+    val hiddenExtVisible by HiddenExtHolder.visible.collectAsState()
     val dirCompareState by DirCompareHolder.state.collectAsState()
     val batchChecksumState by BatchChecksumHolder.state.collectAsState()
     val sftpState by SftpHolder.state.collectAsState()
@@ -254,6 +256,9 @@ fun AppRoot(vm: MainViewModel) {
         dirCompareState.visible -> {
             BackHandler { vm.closeDirCompare() }
             DirCompareScreen(vm)
+        }
+        hiddenExtVisible -> {
+            HiddenExtScreen(vm)
         }
         spaceAnalyzerState.visible -> {
             BackHandler { vm.closeSpaceAnalyzer() }

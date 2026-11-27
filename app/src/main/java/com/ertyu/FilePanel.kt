@@ -22,8 +22,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import com.ertyu.engine.ItemSizeEngine
 import com.ertyu.model.ArchiveFormat
+import com.ertyu.model.HiddenExtHolder
 import com.ertyu.model.ItemSizeHolder
 import com.ertyu.ui.CompressOptionsDialog
 import com.ertyu.ui.ExtractOptionsDialog
@@ -71,6 +73,14 @@ fun FilePanel(
     // 👇 文件夹真实大小：订阅全局结果，并随目录变化重新扫描
     val folderSizes by ItemSizeHolder.sizes.collectAsState()
     val folderSizeEnabled by ItemSizeHolder.enabled.collectAsState()
+
+    // 👇 隐藏指定扩展名
+    val hiddenExts by HiddenExtHolder.exts.collectAsState()
+    val hiddenExtEnabled by HiddenExtHolder.enabled.collectAsState()
+    val shownItems = remember(state.items, hiddenExts, hiddenExtEnabled) {
+        state.items.filter { it.isDirectory || !HiddenExtHolder.isHidden(it.name) }
+    }
+    val hiddenCount = state.items.size - shownItems.size
     LaunchedEffect(state.items, currentUriStr, folderSizeEnabled) {
         vm.startVisibleFolderSizeScan(state.items)
     }
@@ -137,6 +147,22 @@ fun FilePanel(
         )
         HorizontalDivider()
 
+        if (hiddenCount > 0) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { HiddenExtHolder.visible.value = true }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "已隐藏 $hiddenCount 项（点此管理类型）",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
         PullToRefreshBox(
             isRefreshing = pullRefreshing,
             onRefresh = {
@@ -148,7 +174,7 @@ fun FilePanel(
             when {
                 state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("错误: ${state.error}") }
-                state.items.isEmpty() -> Box(
+                shownItems.isEmpty() -> Box(
                     Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
@@ -168,7 +194,7 @@ fun FilePanel(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp, start = 4.dp, end = 4.dp)
                     ) {
-                        gridItems(items = state.items, key = { it.uriString }, contentType = { "file_grid" }) { item ->
+                        gridItems(items = shownItems, key = { it.uriString }, contentType = { "file_grid" }) { item ->
                             FileGridItem(
                                 item = item,
                                 isSelected = { state.selectedUris.contains(item.uriString) },
@@ -192,7 +218,7 @@ fun FilePanel(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
                     ) {
-                        items(items = state.items, key = { it.uriString }, contentType = { "file_list" }) { item ->
+                        items(items = shownItems, key = { it.uriString }, contentType = { "file_list" }) { item ->
                             FileRow(
                                 item = item,
                                 isSelected = { state.selectedUris.contains(item.uriString) },
