@@ -171,13 +171,22 @@ fun AudioPlayerScreen(vm: MainViewModel) {
                 )
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(24.dp))
 
             Text(
                 state.audioName,
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // 同名 .lrc 歌词（没有就不显示）
+            LyricsBar(
+                audioPath = state.audioPath,
+                positionMs = currentPos.toLong(),
+                onSeek = { ms -> exoPlayer.seekTo(ms) }
             )
 
             Spacer(Modifier.weight(1f))
