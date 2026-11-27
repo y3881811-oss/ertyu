@@ -126,6 +126,7 @@ fun AppRoot(vm: MainViewModel) {
     // 启动后检查是否连续崩溃过；健康运行 20 秒即视为正常启动
     LaunchedEffect(Unit) {
         vm.checkSafeModeOnLaunch()
+        vm.runRecycleAutoPurge()
         delay(20_000)
         com.ertyu.engine.CrashGuard.markHealthy(context.applicationContext)
     }

@@ -175,13 +175,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 目录的真实大小（来自 ItemSizeHolder，未算出时给 -1 让它排最后） */
+    private fun sizeOfDir(item: FileItem): Long =
+        com.ertyu.model.ItemSizeHolder.sizes.value[item.path] ?: -1L
+
     private fun process(raw: List<FileItem>, sort: SortMode, showHidden: Boolean): List<FileItem> {
         val filtered = if (showHidden) raw else raw.filter { !it.name.startsWith(".") }
         val cmp: Comparator<FileItem> = when (sort) {
             SortMode.NAME_ASC -> compareBy<FileItem> { !it.isDirectory }.thenBy { it.name.lowercase() }
             SortMode.NAME_DESC -> compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.name.lowercase() }
-            SortMode.SIZE_ASC -> compareBy<FileItem> { !it.isDirectory }.thenBy { it.size }
-            SortMode.SIZE_DESC -> compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.size }
+            // 目录用已算出的真实大小排序（没算出来的排最后）
+            SortMode.SIZE_ASC -> compareBy<FileItem> { !it.isDirectory }
+                .thenBy { if (it.isDirectory) sizeOfDir(it) else it.size }
+            SortMode.SIZE_DESC -> compareBy<FileItem> { !it.isDirectory }
+                .thenByDescending { if (it.isDirectory) sizeOfDir(it) else it.size }
             SortMode.TIME_ASC -> compareBy<FileItem> { !it.isDirectory }.thenBy { it.lastModified }
             SortMode.TIME_DESC -> compareBy<FileItem> { !it.isDirectory }.thenByDescending { it.lastModified }
             SortMode.TYPE_ASC -> compareBy<FileItem> { !it.isDirectory }.thenBy { it.name.substringAfterLast('.', "").lowercase() }

@@ -1,5 +1,7 @@
 package com.ertyu.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.ArchiveFormat
@@ -55,6 +58,16 @@ fun SelectionActionSheet(
     onMerge: ((FileItem) -> Unit)? = null
 ) {
     if (!visible) return
+
+    val context = LocalContext.current
+
+    fun copyText(label: String, text: String) {
+        try {
+            val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText(label, text))
+        } catch (_: Exception) {
+        }
+    }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var useTrash by remember(defaultUseTrash) { mutableStateOf(defaultUseTrash) }
@@ -113,6 +126,14 @@ fun SelectionActionSheet(
             SheetItem("直接复制到对侧") { onCopyToOther(); onDismiss() }
             SheetItem("直接移动到对侧") { onMoveToOther(); onDismiss() }
             
+            SheetItem("复制路径") {
+                copyText("路径", selectedItems.joinToString("\n") { it.path })
+                onDismiss()
+            }
+            SheetItem("复制文件名") {
+                copyText("文件名", selectedItems.joinToString("\n") { it.name })
+                onDismiss()
+            }
             SheetItem("删除", isDanger = true) {
                 useTrash = defaultUseTrash
                 showDeleteConfirm = true

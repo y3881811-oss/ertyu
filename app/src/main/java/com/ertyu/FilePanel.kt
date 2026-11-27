@@ -86,6 +86,15 @@ fun FilePanel(
         state.items.filter { it.isDirectory || !HiddenExtHolder.isHidden(it.name) }
     }
     val hiddenCount = state.items.size - shownItems.size
+
+    // 按大小排序时，目录大小是异步算出来的：算完重新排一次
+    LaunchedEffect(folderSizes.size) {
+        if (state.sortMode == com.ertyu.model.SortMode.SIZE_ASC ||
+            state.sortMode == com.ertyu.model.SortMode.SIZE_DESC
+        ) {
+            vm.setSortMode(isLeft, state.sortMode)
+        }
+    }
     LaunchedEffect(state.items, currentUriStr, folderSizeEnabled) {
         vm.startVisibleFolderSizeScan(state.items)
     }

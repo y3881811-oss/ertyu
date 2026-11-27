@@ -36,6 +36,8 @@ fun RecycleBinScreen(vm: MainViewModel) {
     var confirmPurge by remember { mutableStateOf<Int?>(null) }   // days
     var confirmDeleteSelected by remember { mutableStateOf(false) }
     var confirmRestoreSelected by remember { mutableStateOf(false) }
+    var showAutoPurge by remember { mutableStateOf(false) }
+    var autoDays by remember { mutableStateOf(com.ertyu.engine.RecyclePrefs.autoPurgeDays(vm.getApplication())) }
 
     BackHandler {
         if (state.selected.isNotEmpty()) vm.clearRecycleSelection() else vm.closeRecycleBin()
@@ -62,6 +64,10 @@ fun RecycleBinScreen(vm: MainViewModel) {
                                 Icon(Icons.Default.MoreVert, contentDescription = "更多")
                             }
                             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(if (autoDays > 0) "自动清理：已开（$autoDays 天）" else "自动清理：关闭") },
+                                    onClick = { showMenu = false; showAutoPurge = true }
+                                )
                                 DropdownMenuItem(
                                     text = { Text("清理 7 天前的条目") },
                                     onClick = { showMenu = false; confirmPurge = 7 }
@@ -248,6 +254,39 @@ fun RecycleBinScreen(vm: MainViewModel) {
                 ) { Text("清理", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { confirmPurge = null }) { Text("取消") } }
+        )
+    }
+
+    if (showAutoPurge) {
+        AlertDialog(
+            onDismissRequest = { showAutoPurge = false },
+            title = { Text("自动清理回收站") },
+            text = {
+                Column {
+                    Text("每次启动 App 时，自动永久删除超过指定天数的条目。")
+                    Spacer(Modifier.height(8.dp))
+                    listOf(0, 7, 30, 90).forEach { d ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                vm.setRecycleAutoPurge(d)
+                                autoDays = d
+                                showAutoPurge = false
+                            }.padding(vertical = 6.dp)
+                        ) {
+                            RadioButton(selected = autoDays == d, onClick = {
+                                vm.setRecycleAutoPurge(d)
+                                autoDays = d
+                                showAutoPurge = false
+                            })
+                            Text(if (d == 0) "关闭" else "保留 $d 天")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAutoPurge = false }) { Text("关闭") }
+            }
         )
     }
 
