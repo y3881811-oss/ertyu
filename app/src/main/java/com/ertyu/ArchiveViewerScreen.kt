@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -32,6 +33,14 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
     
     // 👇 新增：控制“全部解压”弹窗的状态
     var showExtractDialog by remember { mutableStateOf(false) }
+
+    // 包内编辑：重命名 / 删除 / 添加
+    var renameTarget by remember { mutableStateOf<ArchiveEntry?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<ArchiveEntry?>(null) }
+    val addFilesLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris -> vm.archiveAddFiles(uris) }
 
     Scaffold(
         topBar = {
@@ -57,6 +66,9 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = { addFilesLauncher.launch(arrayOf("*/*")) }) {
+                        Icon(Icons.Default.Add, contentDescription = "往包里添加文件")
+                    }
                     IconButton(onClick = { showExtractDialog = true }) { // 👈 点击弹出解压选项
                         Icon(Icons.Default.FolderOpen, contentDescription = "全部解压")
                     }
@@ -145,6 +157,19 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
                             actionTarget = null
                         }) { Text("预览图片") }
                     }
+                    androidx.compose.foundation.layout.Row {
+                        TextButton(onClick = {
+                            renameText = entry.name
+                            renameTarget = entry
+                            actionTarget = null
+                        }) { Text("重命名") }
+                        TextButton(onClick = {
+                            deleteTarget = entry
+                            actionTarget = null
+                        }) {
+                            Text("从包内删除", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -155,6 +180,59 @@ fun ArchiveViewerScreen(vm: MainViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { actionTarget = null }) { Text("取消") }
+            }
+        )
+    }
+
+    renameTarget?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { renameTarget = null },
+            title = { Text("重命名（包内）") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    label = { Text("新名字") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val t = entry
+                    renameTarget = null
+                    vm.archiveRenameEntry(t, renameText)
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameTarget = null }) { Text("取消") }
+            }
+        )
+    }
+
+    deleteTarget?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("从压缩包删除") },
+            text = {
+                Column {
+                    Text("将把「${entry.name}」从压缩包里移除。")
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "会先写临时文件再替换原包，失败不会破坏原压缩包。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val t = entry
+                    deleteTarget = null
+                    vm.archiveDeleteEntry(t)
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text("取消") }
             }
         )
     }
