@@ -283,6 +283,7 @@ fun FilePanel(
 
         // ================== 挂载新弹窗 ==================
         FileConflictDialog(state = conflictState, onDismiss = { vm.clearConflictState() })
+        BatchMkdirDialog(vm)
         ExtractOptionsDialog(vm)
         CompressOptionsDialog(vm)
     }

@@ -46,6 +46,8 @@ fun MainViewModel.setSearchFilter(filter: SearchFilter) {
 fun MainViewModel.startSearch() {
     val state = _searchState.value
     if (state.query.isBlank()) return
+    // 记一条搜索历史（去重，最多 20 条）
+    com.ertyu.engine.SearchHistoryStore.add(getApplication(), state.query)
     searchJob?.cancel()
     _searchState.update {
         it.copy(

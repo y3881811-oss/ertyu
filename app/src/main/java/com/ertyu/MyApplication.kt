@@ -4,6 +4,7 @@ import android.app.Application
 import com.ertyu.engine.AppLogger
 import com.ertyu.engine.CrashHandler
 import com.ertyu.engine.HiddenExtPrefs
+import com.ertyu.engine.SearchHistoryStore
 import com.ertyu.engine.ItemSizePrefs
 import com.ertyu.engine.ThumbnailDiskCache
 import com.ertyu.engine.UpdateCacheCleaner
@@ -19,6 +20,8 @@ class MyApplication : Application() {
         ItemSizePrefs.init(this)
         // 隐藏文件类型设置
         HiddenExtPrefs.init(this)
+        // 搜索历史
+        SearchHistoryStore.init(this)
         
         // 2. 初始化全局崩溃捕获（写入崩溃日志）
         CrashHandler.init(this)

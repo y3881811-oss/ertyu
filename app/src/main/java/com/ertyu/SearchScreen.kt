@@ -1,6 +1,7 @@
 package com.ertyu
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -20,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -31,9 +33,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.ertyu.engine.SearchHistoryStore
 import com.ertyu.model.FileItem
 import com.ertyu.model.FileKindFilter
 import com.ertyu.model.SearchFilter
+import com.ertyu.model.SearchHistoryHolder
 
 private val IconFolderSearch: ImageVector = Icons.Default.Folder
 private val IconFileSearch: ImageVector = Icons.AutoMirrored.Filled.InsertDriveFile
@@ -95,9 +99,7 @@ fun SearchScreen(vm: MainViewModel) {
                 state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("错误: ${state.error}")
                 }
-                state.query.isBlank() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("输入关键词开始搜索", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                state.query.isBlank() -> SearchHistoryBlock(vm)
                 state.results.isEmpty() && !state.isSearching -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = if (state.filter.isDefault) "未找到匹配的文件" else "没有符合过滤条件的结果",
@@ -298,5 +300,69 @@ private fun highlight(text: String, query: String) = buildAnnotatedString {
             append(text.substring(hit, hit + query.length))
         }
         index = hit + query.length
+    }
+}
+
+
+@Composable
+private fun SearchHistoryBlock(vm: MainViewModel) {
+    val context = LocalContext.current
+    val items by SearchHistoryHolder.items.collectAsState()
+
+    if (items.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                "输入关键词开始搜索",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "最近搜索",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = { SearchHistoryStore.clear(context) }) { Text("清空") }
+        }
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(items) { q ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            vm.updateSearchQuery(q)
+                            vm.startSearch()
+                        }
+                        .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        q,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { SearchHistoryStore.remove(context, q) }) {
+                        Icon(Icons.Default.Close, contentDescription = "删除这条历史")
+                    }
+                }
+                HorizontalDivider()
+            }
+        }
     }
 }
