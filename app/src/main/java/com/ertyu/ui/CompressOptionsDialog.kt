@@ -133,12 +133,14 @@ fun CompressOptionsDialog(vm: MainViewModel) {
                 } else {
                     Text(
                         text = if (format == ArchiveFormat.SEVEN_Z)
-                            "7z 暂不支持加密写入，需要加密请改用 ZIP（AES-256）"
+                            if (com.ertyu.engine.SevenZipCli.isAvailable())
+                                "7z 将使用密码加密（需要 7z 客户端输入密码才能解压）"
+                            else "当前安装包未内置 7zz 组件，7z 加密不可用；可改用 ZIP（AES-256）"
                         else "当前格式（${format.label}）不支持加密，密码设置已忽略",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (format == ArchiveFormat.SEVEN_Z) {
+                    if (format == ArchiveFormat.SEVEN_Z && !com.ertyu.engine.SevenZipCli.isAvailable()) {
                         TextButton(onClick = {
                             format = ArchiveFormat.ZIP
                             fileName = if (fileName.contains('.'))

@@ -86,9 +86,11 @@ object ArchiveEngine {
                 ArchiveFormat.TAR_ZST -> compressTar(entries, targetFile, "zst", onProgress)
                 ArchiveFormat.SEVEN_Z -> {
                     if (!password.isNullOrEmpty()) {
-                        throw UnsupportedOperationException("7z 暂不支持加密写入，请改用 ZIP 格式并设置密码")
+                        // 加密 7z 走内置 7zz 组件
+                        SevenZipCli.compress(sources, targetFile, password, compressionLevel).getOrThrow()
+                    } else {
+                        compress7z(entries, targetFile, onProgress)
                     }
-                    compress7z(entries, targetFile, onProgress)
                 }
                 else -> throw IllegalArgumentException("不支持压缩为 ${format.label}")
             }

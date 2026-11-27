@@ -23,6 +23,8 @@ class MyApplication : Application() {
         HiddenExtPrefs.init(this)
         // 列表分组显示
         com.ertyu.engine.GroupPrefs.init(this)
+        // 加密 7z 需要的 7zz 组件（没有就降级提示）
+        com.ertyu.engine.SevenZipCli.init(this)
         // 搜索历史
         SearchHistoryStore.init(this)
         
