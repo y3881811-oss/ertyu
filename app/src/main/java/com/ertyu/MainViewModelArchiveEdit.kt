@@ -6,7 +6,6 @@ import com.ertyu.engine.ArchiveBrowser
 import com.ertyu.engine.ArchiveEditor
 import com.ertyu.model.ArchiveEntry
 import com.ertyu.model.ArchiveViewerState
-import com.ertyu.model.ArchiveViewerStateHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
