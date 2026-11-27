@@ -44,6 +44,10 @@ data class DirCompareState(
     /** 目标侧已存在、会被覆盖的项数 */
     fun overwriteCount(toRight: Boolean): Int = targets(toRight).count { it.kind == DiffKind.DIFFERENT }
 
+    /** 目标侧独有的项（镜像模式下要删除的） */
+    fun extras(toRight: Boolean): List<DirDiffEntry> =
+        entries.filter { if (toRight) it.kind == DiffKind.RIGHT_ONLY else it.kind == DiffKind.LEFT_ONLY }
+
     /** 同步来源总大小 */
     fun sourceBytes(toRight: Boolean): Long =
         targets(toRight).sumOf { if (toRight) it.leftSize else it.rightSize }
