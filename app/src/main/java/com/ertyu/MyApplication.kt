@@ -21,6 +21,8 @@ class MyApplication : Application() {
         ItemSizePrefs.init(this)
         // 隐藏文件类型设置
         HiddenExtPrefs.init(this)
+        // 列表分组显示
+        com.ertyu.engine.GroupPrefs.init(this)
         // 搜索历史
         SearchHistoryStore.init(this)
         

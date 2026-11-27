@@ -80,6 +80,7 @@ fun FilePanel(
     val folderSizeEnabled by ItemSizeHolder.enabled.collectAsState()
 
     // 👇 隐藏指定扩展名
+    val groupEnabled by com.ertyu.engine.GroupPrefs.enabled.collectAsState()
     val hiddenExts by HiddenExtHolder.exts.collectAsState()
     val hiddenExtEnabled by HiddenExtHolder.enabled.collectAsState()
     val shownItems = remember(state.items, hiddenExts, hiddenExtEnabled) {
@@ -236,6 +237,28 @@ fun FilePanel(
                             )
                         }
                     }
+                }
+                groupEnabled -> {
+                    GroupedFileList(
+                        state = state,
+                        items = shownItems,
+                        folderSizeOf = { item ->
+                            if (folderSizeEnabled && item.isDirectory) {
+                                folderSizes[item.path]?.let { ItemSizeEngine.format(it) }
+                            } else null
+                        },
+                        onClick = { handleItemClick(isLeft, it, state, vm) },
+                        onLongClick = { item ->
+                            if (!state.isSelectionMode) {
+                                vm.enterSelection(isLeft, item.uriString)
+                            } else if (item.uriString in state.selectedUris) {
+                                showSelectionSheet = true
+                            } else {
+                                vm.toggleSelection(isLeft, item.uriString)
+                            }
+                        },
+                        onMoreClick = { vm.openActionDialog(isLeft, it) }
+                    )
                 }
                 else -> {
                     LazyColumn(

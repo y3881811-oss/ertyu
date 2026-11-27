@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.AddToHomeScreen
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.CompareArrows
@@ -69,6 +70,7 @@ fun DrawerContent(
     // 👇 修复：使用 collectAsState 而不是直接读取 .value
     val settings by vm.settingsState.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val groupOn by com.ertyu.engine.GroupPrefs.enabled.collectAsState()
     val volumes = remember { StorageScanner.scanAll() }
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -171,6 +173,14 @@ fun DrawerContent(
             DrawerItem("任务中心", Icons.Default.CheckCircle) {
                 onDismiss()
                 vm.openTaskCenter()
+            }
+            DrawerItem(
+                if (groupOn) "按类型分组：开" else "按类型分组：关",
+                Icons.Default.Category
+            ) {
+                val next = !com.ertyu.engine.GroupPrefs.enabled.value
+                com.ertyu.engine.GroupPrefs.setEnabled(context, next)
+                vm.showToast(if (next) "已按类型分组显示" else "已恢复默认排序")
             }
             DrawerItem("当前目录放到桌面", Icons.Default.AddToHomeScreen) {
                 val cur = vm.leftPanel.value.currentUri?.path ?: "/storage/emulated/0"
