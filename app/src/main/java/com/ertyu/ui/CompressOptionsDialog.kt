@@ -124,7 +124,7 @@ fun CompressOptionsDialog(vm: MainViewModel) {
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = if (passwordMismatch) "两次输入的密码不一致" else
-                                if (format == ArchiveFormat.ZIP) "将使用 AES-256 加密，解压时需要密码" else "将使用 AES-256 加密（7z）",
+                                "ZIP 将使用 AES-256 加密，解压时需要密码",
                             style = MaterialTheme.typography.labelSmall,
                             color = if (passwordMismatch) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant
@@ -133,11 +133,18 @@ fun CompressOptionsDialog(vm: MainViewModel) {
                 } else {
                     Text(
                         text = if (format == ArchiveFormat.SEVEN_Z)
-                            "7z 暂不支持加密写入，需要加密请选 ZIP（AES-256）"
+                            "7z 暂不支持加密写入，需要加密请改用 ZIP（AES-256）"
                         else "当前格式（${format.label}）不支持加密，密码设置已忽略",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (format == ArchiveFormat.SEVEN_Z) {
+                        TextButton(onClick = {
+                            format = ArchiveFormat.ZIP
+                            fileName = if (fileName.contains('.'))
+                                fileName.substringBeforeLast('.') + ".zip" else "$fileName.zip"
+                        }) { Text("改用 ZIP（AES-256）") }
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))

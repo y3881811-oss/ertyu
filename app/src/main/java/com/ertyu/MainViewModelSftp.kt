@@ -105,7 +105,7 @@ fun MainViewModel.sftpDownload(entry: RemoteEntry) {
     val finalName = generateUniqueFileName(entry.name, existing)
     val target = File(localDir, finalName)
     SftpHolder.state.update { it.copy(busyText = "正在下载 ${entry.name}") }
-    val taskId = TaskCenter.start("下载 ${entry.name}", "SFTP", null)
+    val taskId = TaskCenter.start("下载 ${entry.name}", "SFTP", null, retry = { sftpDownload(entry) })
     viewModelScope.launch {
         SftpEngine.download(session, entry.path, target) { done ->
             val total = entry.size.coerceAtLeast(1)
@@ -137,7 +137,7 @@ fun MainViewModel.sftpUploadSelected() {
         return
     }
     val remoteDir = snap.path
-    val taskId = TaskCenter.start("上传 ${items.size} 个文件", "SFTP", null)
+    val taskId = TaskCenter.start("上传 ${items.size} 个文件", "SFTP", null, retry = { sftpUploadSelected() })
     viewModelScope.launch {
         var ok = 0
         var fail = 0

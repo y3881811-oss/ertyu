@@ -16,6 +16,10 @@ fun MainViewModel.cancelTask(id: Long) {
     showToast("已请求取消该任务")
 }
 
+fun MainViewModel.retryTask(id: Long) {
+    if (!TaskCenter.retry(id)) showToast("这条任务不支持重试")
+}
+
 fun MainViewModel.dismissFinishedTasks() {
     TaskCenter.dismissFinished()
 }

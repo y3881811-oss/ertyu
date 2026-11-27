@@ -10,6 +10,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -21,6 +22,7 @@ import com.ertyu.model.HiddenExtHolder
 import com.ertyu.model.LanScanHolder
 import com.ertyu.model.LogStateHolder
 import com.ertyu.model.SftpHolder
+import com.ertyu.model.SafeModeHolder
 import com.ertyu.model.SpaceAnalyzerHolder
 
 @Composable
@@ -62,6 +64,7 @@ fun AppRoot(vm: MainViewModel) {
     val aboutVisible by _aboutVisible.collectAsState()
     // 新增的日志界面状态
     val logState by LogStateHolder.state.collectAsState()
+    val safeModeState by SafeModeHolder.state.collectAsState()
 
     // 各种 Holder 状态
     val signerState by ApkToolsState.signerState.collectAsState()
@@ -120,8 +123,16 @@ fun AppRoot(vm: MainViewModel) {
         }
     }
 
+    // 启动后检查是否连续崩溃过；健康运行 20 秒即视为正常启动
+    LaunchedEffect(Unit) {
+        vm.checkSafeModeOnLaunch()
+        delay(20_000)
+        com.ertyu.engine.CrashGuard.markHealthy(context.applicationContext)
+    }
+
     // ================== 全局弹窗 ==================
     AppDialogs(vm)
+    SafeModeDialog(vm)
     CryptoDialog(vm)
     UpdateDownloadDialog(vm)
     SplitDialog(vm)

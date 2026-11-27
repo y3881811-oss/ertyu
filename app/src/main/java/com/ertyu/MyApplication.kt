@@ -2,6 +2,7 @@ package com.ertyu
 
 import android.app.Application
 import com.ertyu.engine.AppLogger
+import com.ertyu.engine.CrashGuard
 import com.ertyu.engine.CrashHandler
 import com.ertyu.engine.HiddenExtPrefs
 import com.ertyu.engine.SearchHistoryStore
@@ -32,5 +33,7 @@ class MyApplication : Application() {
         ThumbnailDiskCache.init(this)
 
         LogcatCollector.start()
+        // 崩溃循环保护：记录本次启动（连续崩溃会提示安全模式）
+        CrashGuard.onAppStart(this)
     }
 }

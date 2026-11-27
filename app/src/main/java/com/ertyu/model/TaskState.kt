@@ -18,7 +18,8 @@ data class TaskItem(
     val progress: Float? = null,
     val detail: String = "",
     val finishedAt: Long = 0L,
-    val pausable: Boolean = false
+    val pausable: Boolean = false,
+    val retryable: Boolean = false
 )
 
 object TaskCenterHolder {

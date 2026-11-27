@@ -116,7 +116,7 @@ fun MainViewModel.webDavDownload(entry: WebDavClient.Entry) {
         showToast("已存在同名文件：${target.name}")
         return
     }
-    val taskId = TaskCenter.start("下载 ${entry.name}", "WebDAV", null)
+    val taskId = TaskCenter.start("下载 ${entry.name}", "WebDAV", null, retry = { webDavDownload(entry) })
     WebDavClientHolder.state.update { it.copy(busyText = "下载 ${entry.name}…") }
     viewModelScope.launch {
         val r = WebDavClient.download(base, entry, target, s.user, s.pass) { p ->
@@ -143,7 +143,7 @@ fun MainViewModel.webDavUpload(uris: List<Uri>) {
     val base = WebDavClient.normalizeBase(s.url)
     val app = getApplication<Application>()
     val cacheDir = File(app.cacheDir, "webdav_upload").apply { mkdirs() }
-    val taskId = TaskCenter.start("上传 ${uris.size} 个文件", "WebDAV", null)
+    val taskId = TaskCenter.start("上传 ${uris.size} 个文件", "WebDAV", null, retry = { webDavUpload(uris) })
 
     viewModelScope.launch {
         var ok = 0

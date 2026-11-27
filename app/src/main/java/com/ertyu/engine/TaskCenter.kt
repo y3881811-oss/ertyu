@@ -14,13 +14,28 @@ object TaskCenter {
 
     private var seq = 0L
     private val jobs = HashMap<Long, Job>()
+    private val retries = HashMap<Long, () -> Unit>()
 
-    fun start(title: String, kind: String, job: Job? = null, pausable: Boolean = false): Long {
+    fun start(
+        title: String,
+        kind: String,
+        job: Job? = null,
+        pausable: Boolean = false,
+        retry: (() -> Unit)? = null
+    ): Long {
         val id = ++seq
         if (job != null) jobs[id] = job
+        if (retry != null) retries[id] = retry
         TaskCenterHolder.state.update { list ->
             (listOf(
-                TaskItem(id = id, title = title, kind = kind, startedAt = System.currentTimeMillis(), pausable = pausable)
+                TaskItem(
+                    id = id,
+                    title = title,
+                    kind = kind,
+                    startedAt = System.currentTimeMillis(),
+                    pausable = pausable,
+                    retryable = retry != null
+                )
             ) + list).take(100)
         }
         return id
@@ -45,6 +60,17 @@ object TaskCenter {
                 )
             }
         }
+    }
+
+    /** 重新执行一条失败任务；返回 false 表示这条任务没有可重试的动作 */
+    fun retry(id: Long): Boolean {
+        val action = retries[id] ?: return false
+        retries.remove(id)
+        TaskCenterHolder.state.update { list ->
+            list.map { if (it.id == id) it.copy(retryable = false, detail = it.detail + "（已重试）") else it }
+        }
+        action()
+        return true
     }
 
     fun cancel(id: Long) {

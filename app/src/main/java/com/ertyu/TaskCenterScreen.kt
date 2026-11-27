@@ -127,7 +127,8 @@ fun TaskCenterScreen(vm: MainViewModel) {
                             t = t,
                             fmt = fmt,
                             onCancel = { vm.cancelTask(t.id) },
-                            onCopyError = { copyTaskError(context, t) }
+                            onCopyError = { copyTaskError(context, t) },
+                            onRetry = { vm.retryTask(t.id) }
                         )
                         HorizontalDivider()
                     }
@@ -172,7 +173,8 @@ private fun TaskRow(
     t: TaskItem,
     fmt: SimpleDateFormat,
     onCancel: () -> Unit,
-    onCopyError: () -> Unit
+    onCopyError: () -> Unit,
+    onRetry: () -> Unit
 ) {
     val color = when (t.status) {
         TaskStatus.RUNNING -> MaterialTheme.colorScheme.primary
@@ -198,6 +200,9 @@ private fun TaskRow(
                 TextButton(onClick = onCancel) { Text("取消") }
             } else if (t.status == TaskStatus.FAILED) {
                 TextButton(onClick = onCopyError) { Text("复制错误") }
+                if (t.retryable) {
+                    TextButton(onClick = onRetry) { Text("重试") }
+                }
             }
         }
         Spacer(Modifier.height(4.dp))
