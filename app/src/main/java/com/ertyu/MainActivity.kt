@@ -67,6 +67,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleOpenDirIntent(intent)
+    }
+
+    /** 桌面快捷方式：带目录路径进来就直接打开 */
+    private fun handleOpenDirIntent(intent: Intent?) {
+        val dir = intent?.getStringExtra(com.ertyu.engine.ShortcutHelper.EXTRA_OPEN_DIR) ?: return
+        if (dir.isBlank()) return
+        window.decorView.postDelayed({
+            runCatching {
+                vm.openDirectory(true, android.net.Uri.fromFile(java.io.File(dir)))
+            }
+        }, 400L)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -78,6 +94,7 @@ class MainActivity : ComponentActivity() {
         }
 
         PackageChangeMonitor.start(this)
+        handleOpenDirIntent(intent)
 
         setContent {
             val settings by vm.settingsState.collectAsState()

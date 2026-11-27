@@ -35,7 +35,12 @@ object AudioPlayerManager {
     }
 
     /** 设置播放队列并开始播放 */
-    fun play(context: Context, tracks: List<AudioTrack>, startIndex: Int = 0) {
+    fun play(
+        context: Context,
+        tracks: List<AudioTrack>,
+        startIndex: Int = 0,
+        startPositionMs: Long = 0L
+    ) {
         if (tracks.isEmpty()) return
         connect(context) {
             controller?.let { c ->
@@ -51,7 +56,11 @@ object AudioPlayerManager {
                         .build()
                 }
                 // 必须在主线程
-                c.setMediaItems(mediaItems, startIndex.coerceIn(0, tracks.lastIndex), 0L)
+                c.setMediaItems(
+                    mediaItems,
+                    startIndex.coerceIn(0, tracks.lastIndex),
+                    startPositionMs.coerceAtLeast(0L)
+                )
                 c.prepare()
                 c.play()
             }
@@ -64,6 +73,18 @@ object AudioPlayerManager {
 
     fun pause() {
         controller?.pause()
+    }
+
+    fun positionMs(): Long = try {
+        controller?.currentPosition ?: 0L
+    } catch (_: Exception) {
+        0L
+    }
+
+    fun durationMs(): Long = try {
+        controller?.duration ?: 0L
+    } catch (_: Exception) {
+        0L
     }
 
     fun release() {

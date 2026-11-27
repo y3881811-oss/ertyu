@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.AddToHomeScreen
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.CompareArrows
@@ -67,6 +68,7 @@ fun DrawerContent(
 ) {
     // 👇 修复：使用 collectAsState 而不是直接读取 .value
     val settings by vm.settingsState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val volumes = remember { StorageScanner.scanAll() }
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -169,6 +171,16 @@ fun DrawerContent(
             DrawerItem("任务中心", Icons.Default.CheckCircle) {
                 onDismiss()
                 vm.openTaskCenter()
+            }
+            DrawerItem("当前目录放到桌面", Icons.Default.AddToHomeScreen) {
+                val cur = vm.leftPanel.value.currentUri?.path ?: "/storage/emulated/0"
+                onDismiss()
+                val label = java.io.File(cur).name.ifBlank { "EYU" }
+                if (com.ertyu.engine.ShortcutHelper.createFolderShortcut(context, cur, label)) {
+                    vm.showToast("已创建桌面快捷方式：$label")
+                } else {
+                    vm.showToast("创建失败：桌面可能已满或不支持")
+                }
             }
             DrawerItem("批量新建文件夹", Icons.Default.CreateNewFolder) {
                 onDismiss()
