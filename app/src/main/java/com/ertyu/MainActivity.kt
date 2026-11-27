@@ -67,11 +67,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleOpenDirIntent(intent)
-    }
-
     /** 桌面快捷方式：带目录路径进来就直接打开 */
     private fun handleOpenDirIntent(intent: Intent?) {
         val dir = intent?.getStringExtra(com.ertyu.engine.ShortcutHelper.EXTRA_OPEN_DIR) ?: return
@@ -163,6 +158,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         collectSharedFiles(intent)
+        handleOpenDirIntent(intent)
     }
 
     /** 处理「分享到 EYU文件管理器」/ 打开方式传入的文件 */
