@@ -32,7 +32,14 @@ fun MainViewModel.closeSftp() {
     SftpHolder.state.value = SftpState()
 }
 
-fun MainViewModel.sftpConnect(host: String, port: Int, user: String, password: String) {
+fun MainViewModel.sftpConnect(
+    host: String,
+    port: Int,
+    user: String,
+    password: String,
+    privateKeyPath: String? = null,
+    keyPassphrase: String? = null
+) {
     val snap = SftpHolder.state.value
     if (snap.connecting) return
     if (host.isBlank() || user.isBlank()) {
@@ -48,7 +55,7 @@ fun MainViewModel.sftpConnect(host: String, port: Int, user: String, password: S
         )
     }
     viewModelScope.launch {
-        val result = SftpEngine.connect(host, port, user, password)
+        val result = SftpEngine.connect(host, port, user, password, privateKeyPath, keyPassphrase)
         result.onSuccess { session ->
             SftpRuntime.session = session
             SftpHolder.state.update { it.copy(connecting = false, connected = true) }

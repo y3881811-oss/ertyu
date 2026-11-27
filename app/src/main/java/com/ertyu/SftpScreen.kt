@@ -37,6 +37,9 @@ fun SftpScreen(vm: MainViewModel) {
     var port by remember { mutableStateOf(state.port.toString()) }
     var user by remember { mutableStateOf(state.user) }
     var password by remember { mutableStateOf("") }
+    var useKey by remember { mutableStateOf(false) }
+    var keyPath by remember { mutableStateOf("") }
+    var keyPassphrase by remember { mutableStateOf("") }
     var pendingDownload by remember { mutableStateOf<RemoteEntry?>(null) }
     var showDisconnectConfirm by remember { mutableStateOf(false) }
 
@@ -115,12 +118,52 @@ fun SftpScreen(vm: MainViewModel) {
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("使用私钥登录")
+                            Text(
+                                "支持 OpenSSH / PEM 私钥；开启后优先用公钥认证，密码仍可作为兜底",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = useKey, onCheckedChange = { useKey = it })
+                    }
+                    if (useKey) {
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = keyPath,
+                            onValueChange = { keyPath = it },
+                            label = { Text("私钥文件路径") },
+                            placeholder = { Text("/storage/emulated/0/Download/id_ed25519") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = keyPassphrase,
+                            onValueChange = { keyPassphrase = it },
+                            label = { Text("私钥口令（没有就留空）") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = {
-                            vm.sftpConnect(host.trim(), port.toIntOrNull() ?: 22, user.trim(), password)
+                            vm.sftpConnect(
+                                host.trim(),
+                                port.toIntOrNull() ?: 22,
+                                user.trim(),
+                                password,
+                                if (useKey) keyPath.trim() else null,
+                                if (useKey) keyPassphrase else null
+                            )
                         },
-                        enabled = !state.connecting && host.isNotBlank() && user.isNotBlank(),
+                        enabled = !state.connecting && host.isNotBlank() && user.isNotBlank() &&
+                            (!useKey || keyPath.isNotBlank()),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(if (state.connecting) "连接中…" else "连接")
@@ -131,7 +174,11 @@ fun SftpScreen(vm: MainViewModel) {
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "说明：密码只用于本次连接，不会保存；首次连接不做主机指纹校验，请仅在信任的网络使用。",
+                        text = "说明：密码/私钥口令只用于本次连接，不会保存；
+" +
+                            "私钥请用绝对路径（如 Download/id_ed25519）；
+" +
+                            "首次连接不做主机指纹校验，请仅在信任的网络使用。",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
