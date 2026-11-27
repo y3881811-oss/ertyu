@@ -22,9 +22,14 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.ertyu.engine.ItemSizeEngine
 import com.ertyu.model.ArchiveFormat
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import com.ertyu.model.DragDropHolder
 import com.ertyu.model.HiddenExtHolder
 import com.ertyu.model.ItemSizeHolder
 import com.ertyu.ui.CompressOptionsDialog
@@ -101,9 +106,20 @@ fun FilePanel(
             }
     }
 
+    val dragState by DragDropHolder.state.collectAsState()
+    val isDropTarget = if (isLeft) dragState.hoverLeft else dragState.hoverRight
+
     Column(
         modifier = modifier
             .fillMaxHeight()
+            .onGloballyPositioned { DragDropHolder.setBounds(isLeft, it.boundsInWindow()) }
+            .background(
+                if (dragState.active && isDropTarget) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                } else {
+                    Color.Transparent
+                }
+            )
             // 双指左右滑动切换面板（单面板模式下很顺手）
             .pointerInput(onSwitchPanel) {
                 awaitEachGesture {
@@ -223,6 +239,7 @@ fun FilePanel(
                                 item = item,
                                 isSelected = { state.selectedUris.contains(item.uriString) },
                                 isSelectionMode = state.isSelectionMode,
+                                dragFromLeft = isLeft,
                                 folderSizeText = if (folderSizeEnabled && item.isDirectory) {
                                     folderSizes[item.path]?.let { ItemSizeEngine.format(it) }
                                 } else null,

@@ -133,6 +133,7 @@ fun AppRoot(vm: MainViewModel) {
     // ================== 全局弹窗 ==================
     AppDialogs(vm)
     SafeModeDialog(vm)
+    DragMoveConfirmDialog(vm)
     CryptoDialog(vm)
     UpdateDownloadDialog(vm)
     SplitDialog(vm)

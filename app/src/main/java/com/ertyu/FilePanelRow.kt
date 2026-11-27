@@ -3,6 +3,7 @@ package com.ertyu
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -16,10 +17,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ertyu.model.DragDropHolder
+import com.ertyu.model.DraggedPayload
 import com.ertyu.model.FileItem
 
 // 👇 补上这个消失的组件
@@ -88,6 +95,7 @@ fun FileRow(
     isSelected: () -> Boolean, // 👈 保留 Lambda，不卡顿
     isSelectionMode: Boolean,
     folderSizeText: String? = null,
+    dragFromLeft: Boolean? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onMoreClick: () -> Unit
@@ -129,7 +137,43 @@ fun FileRow(
             .padding(start = 12.dp, end = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+        var windowPos by remember { mutableStateOf(Offset.Zero) }
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .onGloballyPositioned { windowPos = it.positionInWindow() }
+                .then(
+                    if (dragFromLeft == null) {
+                        Modifier
+                    } else {
+                        Modifier.pointerInput(item.uriString, dragFromLeft) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { offset ->
+                                    DragDropHolder.start(
+                                        DraggedPayload(
+                                            uris = listOf(item.uriString),
+                                            names = listOf(item.name),
+                                            fromLeft = dragFromLeft
+                                        ),
+                                        windowPos.x + offset.x,
+                                        windowPos.y + offset.y
+                                    )
+                                },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    DragDropHolder.moveTo(
+                                        windowPos.x + change.position.x,
+                                        windowPos.y + change.position.y
+                                    )
+                                },
+                                onDragEnd = { DragDropHolder.end() },
+                                onDragCancel = { DragDropHolder.cancel() }
+                            )
+                        }
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
             FileThumbnail(item = item)
         }
         Spacer(Modifier.width(10.dp))
