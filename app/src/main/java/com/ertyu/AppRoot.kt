@@ -24,6 +24,7 @@ import com.ertyu.model.LogStateHolder
 import com.ertyu.model.SftpHolder
 import com.ertyu.model.SafeModeHolder
 import com.ertyu.model.SpaceAnalyzerHolder
+import com.ertyu.model.VaultHolder
 
 @Composable
 fun AppRoot(vm: MainViewModel) {
@@ -81,6 +82,7 @@ fun AppRoot(vm: MainViewModel) {
     val recycleBinState by RecycleBinStateHolder.state.collectAsState()
     val spaceAnalyzerState by SpaceAnalyzerHolder.state.collectAsState()
     val hiddenExtVisible by HiddenExtHolder.visible.collectAsState()
+    val vaultState by VaultHolder.state.collectAsState()
     val dirCompareState by DirCompareHolder.state.collectAsState()
     val batchChecksumState by BatchChecksumHolder.state.collectAsState()
     val sftpState by SftpHolder.state.collectAsState()
@@ -272,6 +274,10 @@ fun AppRoot(vm: MainViewModel) {
         }
         hiddenExtVisible -> {
             HiddenExtScreen(vm)
+        }
+        vaultState.visible -> {
+            BackHandler { vm.closeVault() }
+            VaultScreen(vm)
         }
         spaceAnalyzerState.visible -> {
             BackHandler { vm.closeSpaceAnalyzer() }

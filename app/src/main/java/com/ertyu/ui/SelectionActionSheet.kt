@@ -52,6 +52,7 @@ fun SelectionActionSheet(
     onBrowseApk: ((FileItem) -> Unit)? = null,
     onExtractArchive: ((List<FileItem>) -> Unit)? = null, // 👈 改成传 List
     onBatchChecksum: ((List<FileItem>) -> Unit)? = null,
+    onImportToVault: ((List<FileItem>) -> Unit)? = null,
     onBatchInstall: ((List<FileItem>) -> Unit)? = null,
     onViewManifest: ((FileItem) -> Unit)? = null,
     onSplit: ((FileItem) -> Unit)? = null,
@@ -150,6 +151,9 @@ fun SelectionActionSheet(
                 }
                 onBatchChecksum?.let { cb ->
                     SheetItem("校验哈希 (SHA-256)") { cb(selectedItems); onDismiss() }
+                }
+                onImportToVault?.let { cb ->
+                    SheetItem("移入隐私空间") { cb(selectedItems); onDismiss() }
                 }
                 if (isSingle && singleItem != null && !singleItem.isDirectory) {
                     val target = singleItem

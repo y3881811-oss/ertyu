@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.AddToHomeScreen
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.DeleteForever
@@ -195,6 +196,10 @@ fun DrawerContent(
             DrawerItem("批量新建文件夹", Icons.Default.CreateNewFolder) {
                 onDismiss()
                 vm.openBatchMkdir(true)
+            }
+            DrawerItem("隐私空间", Icons.Default.Lock) {
+                onDismiss()
+                vm.openVault()
             }
             DrawerItem("隐藏的文件类型", Icons.Default.VisibilityOff) {
                 onDismiss()

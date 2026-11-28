@@ -324,6 +324,7 @@ fun FilePanel(
             onBrowseApk = { item -> vm.openApkBrowser(isLeft, item) },
             onExtractArchive = { items -> vm.openExtractOptions(items, isLeft) }, // 触发解压弹窗
             onBatchChecksum = { items -> vm.openBatchChecksum(items) },
+            onImportToVault = { items -> vm.requestImportToVault(items) },
             onBatchInstall = { items -> vm.openBatchInstall(items) },
             onViewManifest = { item -> vm.openManifestViewer(item) },
             onSplit = { item -> vm.openSplitDialog(item) },
