@@ -77,6 +77,7 @@ class DirectFileEngine : FileEngine {
                                 val buffer = ByteArray(64 * 1024)
                                 var len: Int
                                 while (input.read(buffer).also { len = it } != -1) {
+                                    TransferGate.checkpoint()
                                     output.write(buffer, 0, len)
                                     copiedBytes += len
                                     
@@ -97,6 +98,8 @@ class DirectFileEngine : FileEngine {
                 copyRecursiveWithProgress(src, destFile)
                 onProgress(TransferProgress(totalBytes, totalBytes, src.name, 0L)) // 完成
                 true
+            } catch (e: TransferGate.TransferCancelled) {
+                false
             } catch (e: Exception) {
                 false
             }
@@ -151,12 +154,14 @@ class DirectFileEngine : FileEngine {
     override suspend fun readText(uri: Uri): String? = withContext(Dispatchers.IO) {
         val file = uri.toFileOrNull() ?: return@withContext null
         if (!file.isFile) return@withContext null
-        runCatching { file.readText(Charsets.UTF_8) }.getOrNull()
+        // 自动识别编码：UTF-8 / UTF-16 BOM / GBK
+        runCatching { TextCodec.read(file) }.getOrNull()
     }
 
     override suspend fun writeText(uri: Uri, content: String): Boolean = withContext(Dispatchers.IO) {
         val file = uri.toFileOrNull() ?: return@withContext false
-        runCatching { file.parentFile?.mkdirs(); file.writeText(content, Charsets.UTF_8) }.isSuccess
+        // 沿用打开时的编码写回
+        runCatching { TextCodec.write(file, content) }.getOrDefault(false)
     }
 
     private fun guessType(file: File): String {

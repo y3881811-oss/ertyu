@@ -71,6 +71,10 @@ fun SettingsScreen(vm: MainViewModel) {
 
             Spacer(Modifier.height(16.dp)); HorizontalDivider()
 
+            SettingsAppearance(vm)
+
+            Spacer(Modifier.height(16.dp)); HorizontalDivider()
+
             SettingsAdvanced(vm)
 
             Spacer(Modifier.height(16.dp)); HorizontalDivider()

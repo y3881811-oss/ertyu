@@ -102,6 +102,33 @@ object DirComparator {
         result
     }
 
+    /** 直接删除一组路径（镜像模式用，调用方负责回收站策略）。 */
+    suspend fun deletePaths(
+        paths: List<String>,
+        onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> }
+    ): Pair<Int, Int> = withContext(Dispatchers.IO) {
+        var ok = 0
+        var fail = 0
+        var done = 0
+        for (p in paths) {
+            currentCoroutineContext().ensureActive()
+            val f = File(p)
+            val success = try {
+                when {
+                    !f.exists() -> true
+                    f.isDirectory -> f.deleteRecursively()
+                    else -> f.delete()
+                }
+            } catch (_: Exception) {
+                false
+            }
+            if (success) ok++ else fail++
+            done++
+            onProgress(done, paths.size)
+        }
+        ok to fail
+    }
+
     /**
      * 把选中的差异项复制到另一侧。
      * toRight=true：左 -> 右；false：右 -> 左。返回 (成功数, 失败数)。

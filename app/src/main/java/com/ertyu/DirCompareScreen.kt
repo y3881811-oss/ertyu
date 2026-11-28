@@ -27,7 +27,10 @@ import com.ertyu.model.DirCompareHolder
 @Composable
 fun DirCompareScreen(vm: MainViewModel) {
     val state by DirCompareHolder.state.collectAsState()
+    val settings by vm.settingsState.collectAsState()
     var pendingToRight by remember { mutableStateOf<Boolean?>(null) }
+    var mirrorMode by remember { mutableStateOf(false) }
+    val useTrashHint = settings.useRecycleBin
     var showCloseConfirm by remember { mutableStateOf(false) }
     val busy = state.isScanning || state.isSyncing
 
@@ -172,12 +175,12 @@ fun DirCompareScreen(vm: MainViewModel) {
                         val toLeftCount = state.targets(false).size
                         val toRightCount = state.targets(true).size
                         FilledTonalButton(
-                            onClick = { pendingToRight = false },
+                            onClick = { mirrorMode = false; pendingToRight = false },
                             enabled = !busy && toLeftCount > 0,
                             modifier = Modifier.weight(1f)
                         ) { Text("← 同步到左侧 ($toLeftCount)", maxLines = 1) }
                         FilledTonalButton(
-                            onClick = { pendingToRight = true },
+                            onClick = { mirrorMode = false; pendingToRight = true },
                             enabled = !busy && toRightCount > 0,
                             modifier = Modifier.weight(1f)
                         ) { Text("同步到右侧 → ($toRightCount)", maxLines = 1) }
@@ -223,20 +226,60 @@ fun DirCompareScreen(vm: MainViewModel) {
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "目标侧独有的文件不会被删除，只会新增或覆盖。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    val extras = state.extras(toRight)
+                    if (extras.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        HorizontalDivider()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { mirrorMode = !mirrorMode }
+                        ) {
+                            Checkbox(checked = mirrorMode, onCheckedChange = { mirrorMode = it })
+                            Column(Modifier.weight(1f)) {
+                                Text("镜像模式：删除目标侧独有的 ${extras.size} 项")
+                                Text(
+                                    text = "复制完成后，把目标侧多出来的文件清掉，让两边完全一致。",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "目标侧没有多出来的文件，只做新增/覆盖。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (mirrorMode && extras.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "注意：这 ${extras.size} 项目标侧文件会被删除" +
+                                if (useTrashHint) "（移入回收站，可在回收站恢复）" else "（不可恢复）",
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
                     val dir = toRight
                     pendingToRight = null
-                    vm.syncDirDiffs(dir)
-                }) { Text(if (overwrite > 0) "覆盖并同步" else "开始同步") }
+                    vm.syncDirDiffs(dir, mirrorMode)
+                }) {
+                    Text(
+                        when {
+                            mirrorMode -> "镜像同步"
+                            overwrite > 0 -> "覆盖并同步"
+                            else -> "开始同步"
+                        }
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { pendingToRight = null }) { Text("取消") }

@@ -1,5 +1,7 @@
 package com.ertyu.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ertyu.model.ArchiveFormat
@@ -49,9 +52,24 @@ fun SelectionActionSheet(
     onBrowseApk: ((FileItem) -> Unit)? = null,
     onExtractArchive: ((List<FileItem>) -> Unit)? = null, // 👈 改成传 List
     onBatchChecksum: ((List<FileItem>) -> Unit)? = null,
-    onBatchInstall: ((List<FileItem>) -> Unit)? = null
+    onImportToVault: ((List<FileItem>) -> Unit)? = null,
+    onEditPermission: ((FileItem) -> Unit)? = null,
+    onBatchInstall: ((List<FileItem>) -> Unit)? = null,
+    onViewManifest: ((FileItem) -> Unit)? = null,
+    onSplit: ((FileItem) -> Unit)? = null,
+    onMerge: ((FileItem) -> Unit)? = null
 ) {
     if (!visible) return
+
+    val context = LocalContext.current
+
+    fun copyText(label: String, text: String) {
+        try {
+            val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText(label, text))
+        } catch (_: Exception) {
+        }
+    }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var useTrash by remember(defaultUseTrash) { mutableStateOf(defaultUseTrash) }
@@ -84,6 +102,9 @@ fun SelectionActionSheet(
                 onBrowseApk?.let {
                     SheetItem("浏览内部", isPrimary = true) { it(singleItem!!); onDismiss() }
                 }
+                onViewManifest?.let {
+                    SheetItem("查看 Manifest / 权限") { it(singleItem!!); onDismiss() }
+                }
                 Spacer(Modifier.height(8.dp))
             } else if (hasArchive) {
                 // 👇 只要有压缩包，就显示解压
@@ -107,6 +128,14 @@ fun SelectionActionSheet(
             SheetItem("直接复制到对侧") { onCopyToOther(); onDismiss() }
             SheetItem("直接移动到对侧") { onMoveToOther(); onDismiss() }
             
+            SheetItem("复制路径") {
+                copyText("路径", selectedItems.joinToString("\n") { it.path })
+                onDismiss()
+            }
+            SheetItem("复制文件名") {
+                copyText("文件名", selectedItems.joinToString("\n") { it.name })
+                onDismiss()
+            }
             SheetItem("删除", isDanger = true) {
                 useTrash = defaultUseTrash
                 showDeleteConfirm = true
@@ -123,6 +152,25 @@ fun SelectionActionSheet(
                 }
                 onBatchChecksum?.let { cb ->
                     SheetItem("校验哈希 (SHA-256)") { cb(selectedItems); onDismiss() }
+                }
+                onImportToVault?.let { cb ->
+                    SheetItem("移入隐私空间") { cb(selectedItems); onDismiss() }
+                }
+                if (isSingle && singleItem != null) {
+                    onEditPermission?.let { cb ->
+                        SheetItem("修改权限 (chmod)") { cb(singleItem!!); onDismiss() }
+                    }
+                }
+                if (isSingle && singleItem != null && !singleItem.isDirectory) {
+                    val target = singleItem
+                    onSplit?.let { cb ->
+                        SheetItem("分卷…") { cb(target); onDismiss() }
+                    }
+                    if (com.ertyu.engine.SplitEngine.isPart(target.name)) {
+                        onMerge?.let { cb ->
+                            SheetItem("合并分卷") { cb(target); onDismiss() }
+                        }
+                    }
                 }
                 if (selectedItems.size > 1 && selectedItems.all { it.name.endsWith(".apk", ignoreCase = true) }) {
                     onBatchInstall?.let { cb ->

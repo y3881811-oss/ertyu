@@ -1,5 +1,6 @@
 package com.ertyu
 
+import androidx.compose.material.icons.filled.CheckCircle
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -16,7 +17,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.AddToHomeScreen
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -25,6 +30,7 @@ import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Search
@@ -53,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.ertyu.engine.StorageScanner
+import com.ertyu.model.HiddenExtHolder
 import java.io.File
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -63,6 +70,8 @@ fun DrawerContent(
 ) {
     // 👇 修复：使用 collectAsState 而不是直接读取 .value
     val settings by vm.settingsState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val groupOn by com.ertyu.engine.GroupPrefs.enabled.collectAsState()
     val volumes = remember { StorageScanner.scanAll() }
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -127,6 +136,10 @@ fun DrawerContent(
                 onDismiss()
                 vm.openSftp()
             }
+            DrawerItem("连接 WebDAV", Icons.Default.Cloud) {
+                onDismiss()
+                vm.openWebDavClient()
+            }
             DrawerItem("局域网设备发现", Icons.Default.Wifi) {
                 onDismiss()
                 vm.openLanScan()
@@ -157,6 +170,40 @@ fun DrawerContent(
             DrawerItem("目录对比与同步", Icons.Default.CompareArrows) {
                 onDismiss()
                 vm.openDirCompare()
+            }
+            DrawerItem("任务中心", Icons.Default.CheckCircle) {
+                onDismiss()
+                vm.openTaskCenter()
+            }
+            DrawerItem(
+                if (groupOn) "按类型分组：开" else "按类型分组：关",
+                Icons.Default.Category
+            ) {
+                val next = !com.ertyu.engine.GroupPrefs.enabled.value
+                com.ertyu.engine.GroupPrefs.setEnabled(context, next)
+                vm.showToast(if (next) "已按类型分组显示" else "已恢复默认排序")
+            }
+            DrawerItem("当前目录放到桌面", Icons.Default.AddToHomeScreen) {
+                val cur = vm.leftPanel.value.currentUri?.path ?: "/storage/emulated/0"
+                onDismiss()
+                val label = java.io.File(cur).name.ifBlank { "EYU" }
+                if (com.ertyu.engine.ShortcutHelper.createFolderShortcut(context, cur, label)) {
+                    vm.showToast("已创建桌面快捷方式：$label")
+                } else {
+                    vm.showToast("创建失败：桌面可能已满或不支持")
+                }
+            }
+            DrawerItem("批量新建文件夹", Icons.Default.CreateNewFolder) {
+                onDismiss()
+                vm.openBatchMkdir(true)
+            }
+            DrawerItem("隐私空间", Icons.Default.Lock) {
+                onDismiss()
+                vm.openVault()
+            }
+            DrawerItem("隐藏的文件类型", Icons.Default.VisibilityOff) {
+                onDismiss()
+                HiddenExtHolder.visible.value = true
             }
             DrawerItem("空间分析", Icons.Default.PieChart) {
                 onDismiss()

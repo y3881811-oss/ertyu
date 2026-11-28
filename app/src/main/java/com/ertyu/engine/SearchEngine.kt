@@ -46,6 +46,7 @@ object SearchEngine {
             var truncated = false
 
             suspend fun walk(dir: File) {
+                if (com.ertyu.engine.VaultGuard.isVaultPath(dir.absolutePath)) return
                 val shouldStop = mutex.withLock { truncated }
                 if (shouldStop) return
 

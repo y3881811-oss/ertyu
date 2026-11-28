@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -24,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -105,6 +107,68 @@ fun AudioPlayerScreen(vm: MainViewModel) {
 
     BackHandler { vm.closeAudioPlayer() }
 
+    // 均衡器
+    val eqState by com.ertyu.engine.audio.EqualizerController.state.collectAsState()
+    var showEq by remember { mutableStateOf(false) }
+
+    // 恢复上次的倍速
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        runCatching {
+            exoPlayer.setPlaybackSpeed(com.ertyu.engine.audio.AudioSpeedPrefs.get(appContext))
+        }
+    }
+
+    if (showEq) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showEq = false },
+            title = { Text("均衡器") },
+            text = {
+                androidx.compose.foundation.layout.Column {
+                    if (!eqState.supported) {
+                        Text(
+                            eqState.error ?: "此设备不支持均衡器",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else {
+                        androidx.compose.foundation.layout.Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("启用", modifier = Modifier.weight(1f))
+                            androidx.compose.material3.Switch(
+                                checked = eqState.enabled,
+                                onCheckedChange = {
+                                    com.ertyu.engine.audio.EqualizerController.setEnabled(appContext, it)
+                                }
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        com.ertyu.engine.audio.EqualizerController.presets.forEachIndexed { index, preset ->
+                            androidx.compose.material3.FilterChip(
+                                selected = eqState.presetIndex == index && eqState.enabled,
+                                onClick = {
+                                    com.ertyu.engine.audio.EqualizerController.setPreset(appContext, index)
+                                },
+                                label = { Text(preset.name) },
+                                modifier = Modifier.padding(end = 6.dp, bottom = 6.dp)
+                            )
+                        }
+                        Text(
+                            "均衡器作用于后台播放服务，切换耳机/扬声器会自动重挂。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showEq = false }) { Text("关闭") }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -112,6 +176,35 @@ fun AudioPlayerScreen(vm: MainViewModel) {
                 navigationIcon = {
                     IconButton(onClick = { vm.closeAudioPlayer() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showEq = true }) {
+                        Icon(
+                            Icons.Default.Equalizer,
+                            contentDescription = "均衡器",
+                            tint = if (eqState.enabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    val speedState = androidx.compose.runtime.remember {
+                        androidx.compose.runtime.mutableIntStateOf(
+                            com.ertyu.engine.audio.AudioSpeedPrefs.indexOf(
+                                com.ertyu.engine.audio.AudioSpeedPrefs.get(appContext)
+                            )
+                        )
+                    }
+                    androidx.compose.material3.TextButton(onClick = {
+                        val speeds = com.ertyu.engine.audio.AudioSpeedPrefs.speeds
+                        speedState.intValue = (speedState.intValue + 1) % speeds.size
+                        val target = speeds[speedState.intValue]
+                        runCatching { exoPlayer.setPlaybackSpeed(target) }
+                        com.ertyu.engine.audio.AudioSpeedPrefs.set(appContext, target)
+                        vm.showToast("倍速 ${target}x")
+                    }) {
+                        androidx.compose.material3.Text(
+                            "${com.ertyu.engine.audio.AudioSpeedPrefs.speeds[speedState.intValue]}x"
+                        )
                     }
                 }
             )
@@ -142,13 +235,22 @@ fun AudioPlayerScreen(vm: MainViewModel) {
                 )
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(24.dp))
 
             Text(
                 state.audioName,
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // 同名 .lrc 歌词（没有就不显示）
+            LyricsBar(
+                audioPath = state.audioPath,
+                positionMs = currentPos.toLong(),
+                onSeek = { ms -> exoPlayer.seekTo(ms) }
             )
 
             Spacer(Modifier.weight(1f))

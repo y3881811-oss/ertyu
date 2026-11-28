@@ -40,16 +40,35 @@ object SftpEngine {
 
     private const val TIMEOUT_MS = 15000
 
-    suspend fun connect(host: String, port: Int, user: String, password: String): Result<SftpSession> =
+    suspend fun connect(
+        host: String,
+        port: Int,
+        user: String,
+        password: String,
+        privateKeyPath: String? = null,
+        keyPassphrase: String? = null
+    ): Result<SftpSession> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val jsch = JSch()
+                val keyPath = privateKeyPath?.trim().orEmpty()
+                val useKey = keyPath.isNotEmpty()
+                if (useKey) {
+                    val kf = java.io.File(keyPath)
+                    if (!kf.isFile) throw IllegalArgumentException("私钥文件不存在：$keyPath")
+                    if (keyPassphrase.isNullOrEmpty()) {
+                        jsch.addIdentity(kf.absolutePath)
+                    } else {
+                        jsch.addIdentity(kf.absolutePath, keyPassphrase)
+                    }
+                }
                 val session = jsch.getSession(user, host, port)
-                session.setPassword(password)
+                if (password.isNotEmpty()) session.setPassword(password)
                 val cfg = Properties()
                 // 首次连接不校验主机指纹（与多数手机 SFTP 客户端一致），凭据仍走加密通道
                 cfg["StrictHostKeyChecking"] = "no"
-                cfg["PreferredAuthentications"] = "password,keyboard-interactive"
+                cfg["PreferredAuthentications"] =
+                    if (useKey) "publickey,keyboard-interactive,password" else "password,keyboard-interactive"
                 session.setConfig(cfg)
                 session.connect(TIMEOUT_MS)
 

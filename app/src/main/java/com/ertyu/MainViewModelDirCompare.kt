@@ -4,10 +4,13 @@ import androidx.lifecycle.viewModelScope
 import com.ertyu.engine.AppLogger
 import com.ertyu.engine.DiffKind
 import com.ertyu.engine.DirComparator
+import com.ertyu.engine.RecycleBinManager
 import com.ertyu.engine.ItemSizeEngine
 import com.ertyu.model.DirCompareHolder
 import com.ertyu.model.DirCompareState
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
@@ -129,16 +132,18 @@ fun MainViewModel.cancelDirDiffSync() {
 /**
  * 执行同步。目标由 state.targets() 决定，和确认弹窗里显示的数字一致。
  */
-fun MainViewModel.syncDirDiffs(toRight: Boolean) {
+fun MainViewModel.syncDirDiffs(toRight: Boolean, mirror: Boolean = false) {
     val snap = DirCompareHolder.state.value
     if (snap.isSyncing) return
     val targets = snap.targets(toRight)
-    if (targets.isEmpty()) {
+    val extras = if (mirror) snap.extras(toRight) else emptyList()
+    if (targets.isEmpty() && extras.isEmpty()) {
         showToast("没有可同步的项")
         return
     }
     val leftRoot = snap.leftRoot
     val rightRoot = snap.rightRoot
+    val useTrash = _settingsState.value.useRecycleBin
 
     DirCompareJobs.syncJob = viewModelScope.launch {
         DirCompareHolder.state.update {
@@ -146,11 +151,43 @@ fun MainViewModel.syncDirDiffs(toRight: Boolean) {
         }
         try {
             val (ok, fail) = DirComparator.copyTo(targets, toRight) { done, total ->
-                DirCompareHolder.state.update { it.copy(progressText = "正在同步 $done/$total") }
+                DirCompareHolder.state.update { it.copy(progressText = "正在复制 $done/$total") }
             }
-            AppLogger.i("DirCompare", "同步 ${if (toRight) "左->右" else "右->左"}：成功 $ok 失败 $fail")
+
+            // 镜像模式：删除目标侧独有的项
+            var delOk = 0
+            var delFail = 0
+            if (mirror && extras.isNotEmpty()) {
+                DirCompareHolder.state.update { it.copy(progressText = "正在清理目标侧多余项 0/${extras.size}") }
+                for ((index, e) in extras.withIndex()) {
+                    currentCoroutineContext().ensureActive()
+                    val f = File(if (toRight) e.rightPath else e.leftPath)
+                    if (!f.exists()) continue
+                    val size = if (e.isDirectory) 0L else (try { f.length() } catch (_: Exception) { 0L })
+                    val success = try {
+                        if (useTrash) RecycleBinManager.moveToTrash(getApplication(), f, e.isDirectory, size)
+                        else if (f.isDirectory) f.deleteRecursively() else f.delete()
+                    } catch (ex: Exception) {
+                        AppLogger.e("DirCompare", "删除失败 ${f.absolutePath}", ex)
+                        false
+                    }
+                    if (success) delOk++ else delFail++
+                    DirCompareHolder.state.update {
+                        it.copy(progressText = "正在清理目标侧多余项 ${index + 1}/${extras.size}")
+                    }
+                }
+            }
+
+            AppLogger.i(
+                "DirCompare",
+                "同步 ${if (toRight) "左->右" else "右->左"}：复制成功 $ok 失败 $fail" +
+                    if (mirror) "；删除成功 $delOk 失败 $delFail（回收站=$useTrash）" else ""
+            )
             DirCompareHolder.state.update { it.copy(isSyncing = false, selected = emptySet()) }
-            showToast(if (fail == 0) "同步完成：$ok 项" else "同步完成：成功 $ok 项，失败 $fail 项")
+            val copyText = if (fail == 0) "复制 $ok 项" else "复制成功 $ok 项/失败 $fail 项"
+            val delText = if (mirror) "，${if (useTrash) "移入回收站" else "删除"} $delOk 项" +
+                if (delFail > 0) "（失败 $delFail 项）" else "" else ""
+            showToast("同步完成：$copyText$delText")
 
             invalidateSizeFor(leftRoot)
             invalidateSizeFor(rightRoot)

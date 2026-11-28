@@ -13,6 +13,8 @@ data class SftpState(
     val path: String = "/",
     val entries: List<RemoteEntry> = emptyList(),
     val loading: Boolean = false,
+    val useKey: Boolean = false,
+    val keyPath: String = "",
     val busyText: String = "",
     val error: String? = null
 )

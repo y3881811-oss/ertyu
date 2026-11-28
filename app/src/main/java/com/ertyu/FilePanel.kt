@@ -1,5 +1,6 @@
 package com.ertyu
 
+import androidx.compose.material3.MaterialTheme
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,8 +22,15 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import com.ertyu.engine.ItemSizeEngine
 import com.ertyu.model.ArchiveFormat
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import com.ertyu.model.DragDropHolder
+import com.ertyu.model.HiddenExtHolder
 import com.ertyu.model.ItemSizeHolder
 import com.ertyu.ui.CompressOptionsDialog
 import com.ertyu.ui.ExtractOptionsDialog
@@ -70,6 +78,24 @@ fun FilePanel(
     // 👇 文件夹真实大小：订阅全局结果，并随目录变化重新扫描
     val folderSizes by ItemSizeHolder.sizes.collectAsState()
     val folderSizeEnabled by ItemSizeHolder.enabled.collectAsState()
+
+    // 👇 隐藏指定扩展名
+    val groupEnabled by com.ertyu.engine.GroupPrefs.enabled.collectAsState()
+    val hiddenExts by HiddenExtHolder.exts.collectAsState()
+    val hiddenExtEnabled by HiddenExtHolder.enabled.collectAsState()
+    val shownItems = remember(state.items, hiddenExts, hiddenExtEnabled) {
+        state.items.filter { it.isDirectory || !HiddenExtHolder.isHidden(it.name) }
+    }
+    val hiddenCount = state.items.size - shownItems.size
+
+    // 按大小排序时，目录大小是异步算出来的：算完重新排一次
+    LaunchedEffect(folderSizes.size) {
+        if (state.sortMode == com.ertyu.model.SortMode.SIZE_ASC ||
+            state.sortMode == com.ertyu.model.SortMode.SIZE_DESC
+        ) {
+            vm.setSortMode(isLeft, state.sortMode)
+        }
+    }
     LaunchedEffect(state.items, currentUriStr, folderSizeEnabled) {
         vm.startVisibleFolderSizeScan(state.items)
     }
@@ -90,9 +116,20 @@ fun FilePanel(
             }
     }
 
+    val dragState by DragDropHolder.state.collectAsState()
+    val isDropTarget = if (isLeft) dragState.hoverLeft else dragState.hoverRight
+
     Column(
         modifier = modifier
             .fillMaxHeight()
+            .onGloballyPositioned { DragDropHolder.setBounds(isLeft, it.boundsInWindow()) }
+            .background(
+                if (dragState.active && isDropTarget) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                } else {
+                    Color.Transparent
+                }
+            )
             // 双指左右滑动切换面板（单面板模式下很顺手）
             .pointerInput(onSwitchPanel) {
                 awaitEachGesture {
@@ -136,6 +173,22 @@ fun FilePanel(
         )
         HorizontalDivider()
 
+        if (hiddenCount > 0) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { HiddenExtHolder.visible.value = true }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "已隐藏 $hiddenCount 项（点此管理类型）",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
         PullToRefreshBox(
             isRefreshing = pullRefreshing,
             onRefresh = {
@@ -147,14 +200,27 @@ fun FilePanel(
             when {
                 state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("错误: ${state.error}") }
-                state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("空目录") }
+                shownItems.isEmpty() -> Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("这个文件夹是空的", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "可以从另一个面板复制/移动文件过来，或用左下角按钮新建文件夹",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 settings.isGridMode -> {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 96.dp),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp, start = 4.dp, end = 4.dp)
                     ) {
-                        gridItems(items = state.items, key = { it.uriString }, contentType = { "file_grid" }) { item ->
+                        gridItems(items = shownItems, key = { it.uriString }, contentType = { "file_grid" }) { item ->
                             FileGridItem(
                                 item = item,
                                 isSelected = { state.selectedUris.contains(item.uriString) },
@@ -172,17 +238,40 @@ fun FilePanel(
                         }
                     }
                 }
+                groupEnabled -> {
+                    GroupedFileList(
+                        state = state,
+                        items = shownItems,
+                        folderSizeOf = { item ->
+                            if (folderSizeEnabled && item.isDirectory) {
+                                folderSizes[item.path]?.let { ItemSizeEngine.format(it) }
+                            } else null
+                        },
+                        onClick = { handleItemClick(isLeft, it, state, vm) },
+                        onLongClick = { item ->
+                            if (!state.isSelectionMode) {
+                                vm.enterSelection(isLeft, item.uriString)
+                            } else if (item.uriString in state.selectedUris) {
+                                showSelectionSheet = true
+                            } else {
+                                vm.toggleSelection(isLeft, item.uriString)
+                            }
+                        },
+                        onMoreClick = { vm.openActionDialog(isLeft, it) }
+                    )
+                }
                 else -> {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
                     ) {
-                        items(items = state.items, key = { it.uriString }, contentType = { "file_list" }) { item ->
+                        items(items = shownItems, key = { it.uriString }, contentType = { "file_list" }) { item ->
                             FileRow(
                                 item = item,
                                 isSelected = { state.selectedUris.contains(item.uriString) },
                                 isSelectionMode = state.isSelectionMode,
+                                dragFromLeft = isLeft,
                                 folderSizeText = if (folderSizeEnabled && item.isDirectory) {
                                     folderSizes[item.path]?.let { ItemSizeEngine.format(it) }
                                 } else null,
@@ -235,11 +324,18 @@ fun FilePanel(
             onBrowseApk = { item -> vm.openApkBrowser(isLeft, item) },
             onExtractArchive = { items -> vm.openExtractOptions(items, isLeft) }, // 触发解压弹窗
             onBatchChecksum = { items -> vm.openBatchChecksum(items) },
-            onBatchInstall = { items -> vm.openBatchInstall(items) }
+            onImportToVault = { items -> vm.requestImportToVault(items) },
+            onEditPermission = { item -> vm.openPermissionDialog(item) },
+            onBatchInstall = { items -> vm.openBatchInstall(items) },
+            onViewManifest = { item -> vm.openManifestViewer(item) },
+            onSplit = { item -> vm.openSplitDialog(item) },
+            onMerge = { item -> vm.openMergeDialog(item) }
         )
 
         // ================== 挂载新弹窗 ==================
         FileConflictDialog(state = conflictState, onDismiss = { vm.clearConflictState() })
+        BatchMkdirDialog(vm)
+        PermissionDialog(vm)
         ExtractOptionsDialog(vm)
         CompressOptionsDialog(vm)
     }

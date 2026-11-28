@@ -36,7 +36,8 @@ fun MainViewModel.openAudioPlayer(item: FileItem) {
     val startIndex = audioItems.indexOfFirst { it.uriString == item.uriString }
         .coerceAtLeast(0)
 
-    AudioPlayerManager.play(getApplication(), tracks, startIndex)
+    val savedPos = com.ertyu.engine.PlaybackProgressStore.load(getApplication(), path)
+    AudioPlayerManager.play(getApplication(), tracks, startIndex, savedPos)
 
     AudioPlayerStateHolder.state.value = AudioPlayerState(
         visible = true,
@@ -46,6 +47,15 @@ fun MainViewModel.openAudioPlayer(item: FileItem) {
 }
 
 fun MainViewModel.closeAudioPlayer() {
+    val cur = AudioPlayerStateHolder.state.value
+    if (cur.audioPath.isNotBlank()) {
+        com.ertyu.engine.PlaybackProgressStore.save(
+            getApplication(),
+            cur.audioPath,
+            AudioPlayerManager.positionMs(),
+            AudioPlayerManager.durationMs()
+        )
+    }
     AudioPlayerManager.pause()
     AudioPlayerStateHolder.state.value = AudioPlayerState()
 }

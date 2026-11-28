@@ -27,6 +27,15 @@ class AudioPlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
+        // 均衡器：跟着播放器的 audio session 走
+        EqualizerController.bind(this)
+        EqualizerController.attach(this, player.audioSessionId)
+        player.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                EqualizerController.attach(this@AudioPlaybackService, audioSessionId)
+            }
+        })
+
         mediaSession = MediaSession.Builder(this, player)
             .setSessionActivity(
                 PendingIntent.getActivity(
@@ -52,6 +61,7 @@ class AudioPlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         mediaSession?.run {
+            EqualizerController.release()
             player.release()
             release()
             mediaSession = null

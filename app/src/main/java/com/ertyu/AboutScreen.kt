@@ -80,8 +80,9 @@ fun AboutScreen(vm: MainViewModel) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { vm.dismissUpdateDialog() }) {
-                    Text("取消")
+                Row {
+                    TextButton(onClick = { vm.dismissUpdateDialog() }) { Text("取消") }
+                    TextButton(onClick = { vm.skipThisUpdate() }) { Text("跳过此版本") }
                 }
             }
         )

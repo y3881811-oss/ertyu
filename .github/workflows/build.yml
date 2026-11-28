@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '0 3 * * *'   # UTC 03:00 = 北京时间 11:00
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "构建完成后是否发布 Release（取消勾选只构建，用于测速）"
+        type: boolean
+        default: true
+      fast:
+        description: "快速构建（关闭 R8 混淆/资源压缩，约快 70~80s，APK 更大）"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -33,13 +42,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 只为兼容旧流程：优先用 secret，secret 没有时才回退到这里已有的缓存
-      - name: Restore keystore cache (fallback)
-        uses: actions/cache@v4
-        with:
-          path: keystore/mtfm.jks
-          key: mtfm-keystore-v1
-
       - name: Prepare keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -47,15 +49,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p keystore
-          if [ -n "${KEYSTORE_BASE64:-}" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 -d > keystore/mtfm.jks
-            echo "✅ 使用 secrets.KEYSTORE_BASE64"
-          elif [ -f keystore/mtfm.jks ]; then
-            echo "::warning::未配置 secrets.KEYSTORE_BASE64，本次暂用缓存中的 keystore，请尽快配置，避免缓存被清理后无法发版"
-          else
-            echo "::error::没有可用签名证书。请执行 base64 -w0 keystore/mtfm.jks 并把结果存进 secrets.KEYSTORE_BASE64（注意：不能换新证书，否则老用户无法覆盖安装）"
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::error::缺少 secrets.KEYSTORE_BASE64。请执行 base64 -w0 keystore/mtfm.jks 并把结果存进该 secret（不能换新证书，否则老用户无法覆盖安装）"
             exit 1
           fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > keystore/mtfm.jks
+          echo "✅ 已从 secrets.KEYSTORE_BASE64 还原 keystore"
           if [ -z "${KEYSTORE_PASSWORD:-}" ]; then
             echo "::error::缺少 secrets.KEYSTORE_PASSWORD"
             exit 1
@@ -87,7 +86,10 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          gradle assembleRelease --build-cache --stacktrace \
+          FAST_FLAG=""
+          if [ "${{ inputs.fast }}" = "true" ]; then FAST_FLAG="-PfastRelease=true"; fi
+          echo "构建参数: $FAST_FLAG"
+          gradle assembleRelease --build-cache --stacktrace $FAST_FLAG \
             -PappVersionCode=${{ steps.version.outputs.v_code }} \
             -PappVersionName="${{ steps.version.outputs.v_name }}"
 
@@ -109,7 +111,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          cp "$APK_PATH" "release/${APP_NAME}-${{ steps.version.outputs.tag }}.apk"
+          # 资产名必须纯 ASCII：GitHub 会把非 ASCII 字符替换成 “.”，中文名会变成 EYU.-v2026...
+          cp "$APK_PATH" "release/EYU-FileManager-${{ steps.version.outputs.tag }}.apk"
           ( cd release && sha256sum ./*.apk > SHA256SUMS.txt )
           ls -lh release/
 
@@ -125,6 +128,7 @@ jobs:
           { echo 'log<<EOF'; echo "$LOG"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
+        if: github.event_name != 'workflow_dispatch' || inputs.publish
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}

@@ -1,11 +1,16 @@
 package com.ertyu
 
+import com.ertyu.model.IncomingShareHolder
+import com.ertyu.model.ManifestHolder
+import com.ertyu.model.WebDavClientHolder
+import com.ertyu.model.TaskCenterHolder
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -13,14 +18,36 @@ import androidx.compose.ui.platform.LocalContext
 import com.ertyu.model.BatchChecksumHolder
 import com.ertyu.model.BatchInstallHolder
 import com.ertyu.model.DirCompareHolder
+import com.ertyu.model.HiddenExtHolder
 import com.ertyu.model.LanScanHolder
 import com.ertyu.model.LogStateHolder
 import com.ertyu.model.SftpHolder
+import com.ertyu.model.SafeModeHolder
 import com.ertyu.model.SpaceAnalyzerHolder
+import com.ertyu.model.VaultHolder
 
 @Composable
 fun AppRoot(vm: MainViewModel) {
     val context = LocalContext.current
+
+    // 从其他应用分享进来的文件：等目录加载完再导入
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1500)
+        val pending = IncomingShareHolder.uris.value
+        if (pending.isNotEmpty()) {
+            IncomingShareHolder.uris.value = emptyList()
+            vm.importDroppedUris(pending, targetIsLeft = true)
+        }
+    }
+
+    // 上次触发的安装是否真的装上了：没装上就提示一次（安装包还在缓存里）
+    LaunchedEffect(Unit) {
+        com.ertyu.engine.PendingInstall.takeOutcome(context)?.let { o ->
+            if (!o.success) {
+                vm.showToast("上次更新未完成（可能被取消了），安装包仍在缓存，可重新下载安装")
+            }
+        }
+    }
 
     // ================== 状态收集 ==================
     val editor by vm.editor.collectAsState()
@@ -38,6 +65,7 @@ fun AppRoot(vm: MainViewModel) {
     val aboutVisible by _aboutVisible.collectAsState()
     // 新增的日志界面状态
     val logState by LogStateHolder.state.collectAsState()
+    val safeModeState by SafeModeHolder.state.collectAsState()
 
     // 各种 Holder 状态
     val signerState by ApkToolsState.signerState.collectAsState()
@@ -53,11 +81,16 @@ fun AppRoot(vm: MainViewModel) {
     val fontState by FontPreviewStateHolder.state.collectAsState()
     val recycleBinState by RecycleBinStateHolder.state.collectAsState()
     val spaceAnalyzerState by SpaceAnalyzerHolder.state.collectAsState()
+    val hiddenExtVisible by HiddenExtHolder.visible.collectAsState()
+    val vaultState by VaultHolder.state.collectAsState()
     val dirCompareState by DirCompareHolder.state.collectAsState()
     val batchChecksumState by BatchChecksumHolder.state.collectAsState()
     val sftpState by SftpHolder.state.collectAsState()
     val batchInstallState by BatchInstallHolder.state.collectAsState()
     val lanScanState by LanScanHolder.state.collectAsState()
+    val taskCenterVisible by TaskCenterHolder.visible.collectAsState()
+    val manifestState by ManifestHolder.state.collectAsState()
+    val webDavClientState by WebDavClientHolder.state.collectAsState()
 
     val terminalState by TerminalStateHolder.state.collectAsState()
     val processState by TerminalStateHolder.processState.collectAsState()
@@ -92,9 +125,22 @@ fun AppRoot(vm: MainViewModel) {
         }
     }
 
+    // 启动后检查是否连续崩溃过；健康运行 20 秒即视为正常启动
+    LaunchedEffect(Unit) {
+        vm.checkSafeModeOnLaunch()
+        vm.runRecycleAutoPurge()
+        delay(20_000)
+        com.ertyu.engine.CrashGuard.markHealthy(context.applicationContext)
+    }
+
     // ================== 全局弹窗 ==================
     AppDialogs(vm)
+    SafeModeDialog(vm)
+    DragMoveConfirmDialog(vm)
     CryptoDialog(vm)
+    UpdateDownloadDialog(vm)
+    SplitDialog(vm)
+    CrashPromptDialog(vm)
 
     // ================== 页面路由 ==================
     when {
@@ -156,6 +202,10 @@ fun AppRoot(vm: MainViewModel) {
         audioPlayerState.visible -> {
             AudioPlayerScreen(vm)
         }
+        webDavClientState.visible -> {
+            BackHandler { vm.closeWebDavClient() }
+            WebDavClientScreen(vm)
+        }
         webDavState.isRunning || webDavState.sharePath.isNotEmpty() -> {
             BackHandler {
                 if (webDavState.isRunning) vm.stopWebDav()
@@ -194,6 +244,14 @@ fun AppRoot(vm: MainViewModel) {
             LogViewerScreen(vm)
         }
         
+        manifestState.visible -> {
+            BackHandler { vm.closeManifestViewer() }
+            ManifestViewerScreen(vm)
+        }
+        taskCenterVisible -> {
+            BackHandler { vm.closeTaskCenter() }
+            TaskCenterScreen(vm)
+        }
         lanScanState.visible -> {
             BackHandler { vm.closeLanScan() }
             LanScanScreen(vm)
@@ -213,6 +271,13 @@ fun AppRoot(vm: MainViewModel) {
         dirCompareState.visible -> {
             BackHandler { vm.closeDirCompare() }
             DirCompareScreen(vm)
+        }
+        hiddenExtVisible -> {
+            HiddenExtScreen(vm)
+        }
+        vaultState.visible -> {
+            BackHandler { vm.closeVault() }
+            VaultScreen(vm)
         }
         spaceAnalyzerState.visible -> {
             BackHandler { vm.closeSpaceAnalyzer() }

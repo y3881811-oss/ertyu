@@ -13,6 +13,9 @@ fun signingEnv(name: String, fallback: String): String {
     return fallback
 }
 
+// -PfastRelease=true：跳过 R8 混淆与资源压缩，构建快很多，代价是 APK 变大、无混淆
+val fastRelease: Boolean = (project.findProperty("fastRelease") as String?)?.toBoolean() ?: false
+
 val storePass: String = signingEnv("KEYSTORE_PASSWORD", "mtfm123456")
 val aliasName: String = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "mtfm"
 val keyPass: String = signingEnv("KEY_PASSWORD", "mtfm123456")
@@ -49,8 +52,9 @@ android {
             isMinifyEnabled = false
         }
         getByName("release") {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // 默认走 R8 混淆 + 资源压缩；CI 里可用 -PfastRelease=true 跳过（约省 70~80s，APK 变大）
+            isMinifyEnabled = !fastRelease
+            isShrinkResources = !fastRelease
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -75,7 +79,8 @@ android {
                 "kotlin-tooling-metadata.json"
             )
         }
-        jniLibs { useLegacyPackaging = false }
+        // 需要把 lib7zz.so / libc++_shared.so 解压到 nativeLibraryDir 才能 exec（Android 10+ 只允许从 lib 目录执行）
+        jniLibs { useLegacyPackaging = true }
     }
 
     compileOptions {
