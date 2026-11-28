@@ -48,7 +48,7 @@ fun CompressOptionsDialog(vm: MainViewModel) {
         onDismissRequest = { vm.cancelCompressOptions() },
         title = { Text("创建压缩文件") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     value = fileName,
                     onValueChange = { fileName = it },

@@ -28,7 +28,7 @@ fun ExtractOptionsDialog(vm: MainViewModel) {
         onDismissRequest = { vm.cancelExtractOptions() },
         title = { Text("解压") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { isFolderMode = false }) {
                     RadioButton(selected = !isFolderMode, onClick = { isFolderMode = false })
                     Text("解压到当前目录")
