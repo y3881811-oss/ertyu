@@ -53,6 +53,7 @@ fun SelectionActionSheet(
     onExtractArchive: ((List<FileItem>) -> Unit)? = null, // 👈 改成传 List
     onBatchChecksum: ((List<FileItem>) -> Unit)? = null,
     onImportToVault: ((List<FileItem>) -> Unit)? = null,
+    onEditPermission: ((FileItem) -> Unit)? = null,
     onBatchInstall: ((List<FileItem>) -> Unit)? = null,
     onViewManifest: ((FileItem) -> Unit)? = null,
     onSplit: ((FileItem) -> Unit)? = null,
@@ -154,6 +155,11 @@ fun SelectionActionSheet(
                 }
                 onImportToVault?.let { cb ->
                     SheetItem("移入隐私空间") { cb(selectedItems); onDismiss() }
+                }
+                if (isSingle && singleItem != null) {
+                    onEditPermission?.let { cb ->
+                        SheetItem("修改权限 (chmod)") { cb(singleItem!!); onDismiss() }
+                    }
                 }
                 if (isSingle && singleItem != null && !singleItem.isDirectory) {
                     val target = singleItem

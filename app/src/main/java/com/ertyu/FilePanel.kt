@@ -325,6 +325,7 @@ fun FilePanel(
             onExtractArchive = { items -> vm.openExtractOptions(items, isLeft) }, // 触发解压弹窗
             onBatchChecksum = { items -> vm.openBatchChecksum(items) },
             onImportToVault = { items -> vm.requestImportToVault(items) },
+            onEditPermission = { item -> vm.openPermissionDialog(item) },
             onBatchInstall = { items -> vm.openBatchInstall(items) },
             onViewManifest = { item -> vm.openManifestViewer(item) },
             onSplit = { item -> vm.openSplitDialog(item) },
@@ -334,6 +335,7 @@ fun FilePanel(
         // ================== 挂载新弹窗 ==================
         FileConflictDialog(state = conflictState, onDismiss = { vm.clearConflictState() })
         BatchMkdirDialog(vm)
+        PermissionDialog(vm)
         ExtractOptionsDialog(vm)
         CompressOptionsDialog(vm)
     }
