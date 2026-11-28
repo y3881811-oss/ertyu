@@ -59,11 +59,11 @@ object SftpEngine {
                     if (keyPassphrase.isNullOrEmpty()) {
                         jsch.addIdentity(kf.absolutePath)
                     } else {
-                        jsch.addIdentity(kf.absolutePath, keyPassphrase)
+                        jsch.addIdentity(kf.absolutePath, keyPassphrase.toByteArray(Charsets.UTF_8))
                     }
                 }
                 val session = jsch.getSession(user, host, port)
-                if (password.isNotEmpty()) session.setPassword(password)
+                if (password.isNotEmpty()) session.setPassword(password.toByteArray(Charsets.UTF_8))
                 val cfg = Properties()
                 // 首次连接不校验主机指纹（与多数手机 SFTP 客户端一致），凭据仍走加密通道
                 cfg["StrictHostKeyChecking"] = "no"

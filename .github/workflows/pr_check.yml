@@ -16,19 +16,19 @@ jobs:
 
     steps:
     - name: Checkout Repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v6
       with:
         distribution: temurin
         java-version: '17'
 
     # setup-gradle 自带依赖与构建缓存；v4 对缓存服务故障更宽容（此前 v3 在 403 时直接失败）
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v6
       with:
-        gradle-version: '9.4.1'
+        gradle-version: '9.9.3'
       continue-on-error: true
 
     - name: Verify Gradle

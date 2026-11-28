@@ -105,13 +105,13 @@ fun SelectionActionSheet(
             // ================== 1. 专属操作 ==================
             if (isApk) {
                 onInstallApk?.let {
-                    SheetItem("安装应用", isPrimary = true) { it(singleItem!!); onDismiss() }
+                    SheetItem("安装应用", isPrimary = true) { it(singleItem); onDismiss() }
                 }
                 onBrowseApk?.let {
-                    SheetItem("浏览内部", isPrimary = true) { it(singleItem!!); onDismiss() }
+                    SheetItem("浏览内部", isPrimary = true) { it(singleItem); onDismiss() }
                 }
                 onViewManifest?.let {
-                    SheetItem("查看 Manifest / 权限") { it(singleItem!!); onDismiss() }
+                    SheetItem("查看 Manifest / 权限") { it(singleItem); onDismiss() }
                 }
                 Spacer(Modifier.height(8.dp))
             } else if (hasArchive) {
@@ -166,7 +166,7 @@ fun SelectionActionSheet(
                 }
                 if (isSingle && singleItem != null) {
                     onEditPermission?.let { cb ->
-                        SheetItem("修改权限 (chmod)") { cb(singleItem!!); onDismiss() }
+                        SheetItem("修改权限 (chmod)") { cb(singleItem); onDismiss() }
                     }
                 }
                 if (isSingle && singleItem != null && !singleItem.isDirectory) {

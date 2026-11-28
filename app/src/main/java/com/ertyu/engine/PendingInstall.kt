@@ -28,9 +28,9 @@ object PendingInstall {
     }
 
     /** 读 APK 里的 versionCode（用于和已装版本比较） */
+    @Suppress("DEPRECATION")
     fun apkVersionCode(context: Context, apk: File): Long {
         return try {
-            @Suppress("DEPRECATION")
             val info = context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0) ?: return 0L
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
         } catch (_: Exception) {
