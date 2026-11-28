@@ -273,6 +273,56 @@ object VaultEngine {
         }
     }
 
+    /**
+     * 改密码：用新派生密钥把所有密文重新加密到新的 blob，
+     * 成功后才写 meta，失败时旧密码/旧文件仍然可用。
+     */
+    suspend fun changePassword(
+        oldPassword: String,
+        newPassword: String,
+        onProgress: (Int, Int) -> Unit = { _, _ -> }
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (newPassword.length < 4) throw IllegalArgumentException("新密码至少 4 位")
+            val oldKey = keyFor(oldPassword) ?: throw IllegalStateException("原密码错误")
+            val entries = list()
+            val salt = ByteArray(SALT_LEN).also { SecureRandom().nextBytes(it) }
+            val newKey = keyOf(newPassword, salt)
+
+            val updated = ArrayList<VaultEntry>(entries.size)
+            entries.forEachIndexed { index, e ->
+                val oldBlob = File(dir, e.blob)
+                if (!oldBlob.isFile) {
+                    // 文件丢了就跳过，不让整个改密码失败
+                    updated.add(e)
+                    onProgress(index + 1, entries.size)
+                    return@forEachIndexed
+                }
+                val newBlobName = "${e.id}.v2.bin"
+                val newBlob = File(dir, newBlobName)
+                val tmp = File(dir, ".tmp_${e.id}")
+                decryptTo(oldBlob, tmp, oldKey) { }
+                encryptTo(tmp, newBlob, newKey) { }
+                tmp.delete()
+                updated.add(e.copy(blob = newBlobName))
+                onProgress(index + 1, entries.size)
+            }
+
+            val meta = readMeta() ?: throw IllegalStateException("元数据丢失")
+            meta.put("salt", android.util.Base64.encodeToString(salt, android.util.Base64.NO_WRAP))
+            meta.put("verify", sha256(newKey))
+            writeMeta(meta)
+            saveEntries(updated)
+
+            // 新数据落盘后再删旧密文
+            entries.forEach { old ->
+                val f = File(dir, old.blob)
+                if (f.name != updated.firstOrNull { it.id == old.id }?.blob) f.delete()
+            }
+            updated.size
+        }
+    }
+
     fun deleteEntry(entry: VaultEntry) {
         try {
             File(dir, entry.blob).delete()

@@ -1,6 +1,14 @@
 package com.ertyu
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,6 +42,30 @@ fun VaultScreen(vm: MainViewModel) {
     var pwd2 by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
     var confirmDestroy by remember { mutableStateOf(false) }
+    var showChangePw by remember { mutableStateOf(false) }
+    var oldPw by remember { mutableStateOf("") }
+    var newPw by remember { mutableStateOf("") }
+    var newPw2 by remember { mutableStateOf("") }
+
+    // 自动锁定：退到后台立刻锁；页内 2 分钟无操作也锁
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var lastActive by remember { mutableStateOf(System.currentTimeMillis()) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && state.unlocked) vm.lockVault()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(state.unlocked) {
+        while (state.unlocked) {
+            delay(15_000)
+            if (System.currentTimeMillis() - lastActive > 120_000) {
+                vm.lockVault()
+                vm.showToast("闲置 2 分钟，已自动锁定")
+            }
+        }
+    }
 
     BackHandler { vm.closeVault() }
 
@@ -57,6 +89,10 @@ fun VaultScreen(vm: MainViewModel) {
                             }
                             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                                 DropdownMenuItem(
+                                    text = { Text("修改密码") },
+                                    onClick = { showMenu = false; oldPw = ""; newPw = ""; newPw2 = ""; showChangePw = true }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("清空隐私空间", color = MaterialTheme.colorScheme.error) },
                                     onClick = { showMenu = false; confirmDestroy = true }
                                 )
@@ -67,7 +103,19 @@ fun VaultScreen(vm: MainViewModel) {
             )
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent(PointerEventPass.Initial)
+                            lastActive = System.currentTimeMillis()
+                        }
+                    }
+                }
+        ) {
 
             if (state.busy) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -202,6 +250,61 @@ fun VaultScreen(vm: MainViewModel) {
                 }
             }
         }
+    }
+
+    if (showChangePw) {
+        AlertDialog(
+            onDismissRequest = { showChangePw = false },
+            title = { Text("修改密码") },
+            text = {
+                Column {
+                    Text(
+                        "会用新密码把现有文件全部重新加密，过程可能需要一会儿；中途失败旧密码仍然有效。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = oldPw, onValueChange = { oldPw = it },
+                        label = { Text("原密码") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newPw, onValueChange = { newPw = it },
+                        label = { Text("新密码（至少 4 位）") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newPw2, onValueChange = { newPw2 = it },
+                        label = { Text("确认新密码") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "⚠️ 忘记新密码同样无法恢复数据。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showChangePw = false
+                        vm.changeVaultPassword(oldPw, newPw, newPw2)
+                    },
+                    enabled = oldPw.isNotEmpty() && newPw.length >= 4 && newPw == newPw2
+                ) { Text("重新加密") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChangePw = false }) { Text("取消") }
+            }
+        )
     }
 
     if (confirmDestroy) {

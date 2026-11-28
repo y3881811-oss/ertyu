@@ -143,6 +143,33 @@ fun MainViewModel.exportFromVault(entry: VaultEntry) {
     }
 }
 
+fun MainViewModel.changeVaultPassword(oldPw: String, newPw: String, confirm: String) {
+    if (newPw.length < 4) {
+        showToast("新密码至少 4 位")
+        return
+    }
+    if (newPw != confirm) {
+        showToast("两次输入的新密码不一致")
+        return
+    }
+    viewModelScope.launch {
+        VaultHolder.state.update { it.copy(busy = true, busyText = "正在用新密码重新加密…") }
+        val r = VaultEngine.changePassword(oldPw, newPw) { done, total ->
+            VaultHolder.state.update { it.copy(busyText = "正在重新加密 $done/$total") }
+        }
+        VaultHolder.state.update { it.copy(busy = false, busyText = "") }
+        r.onSuccess { count ->
+            VaultHolder.password = newPw
+            VaultHolder.state.update { it.copy(entries = VaultEngine.list()) }
+            AppLogger.i("Vault", "密码已更换，重加密 $count 项")
+            showToast("密码已更换（$count 项已重新加密）")
+        }.onFailure {
+            AppLogger.e("Vault", "改密码失败", it)
+            showToast("改密码失败：${it.message}")
+        }
+    }
+}
+
 fun MainViewModel.deleteVaultEntry(entry: VaultEntry) {
     VaultEngine.deleteEntry(entry)
     refreshVault()

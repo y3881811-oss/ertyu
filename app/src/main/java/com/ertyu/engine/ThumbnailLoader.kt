@@ -20,6 +20,8 @@ object ThumbnailLoader {
 
     suspend fun load(path: String, isVideo: Boolean = false): Bitmap? {
         if (path.isEmpty()) return null
+        // 隐私空间里的密文不做缩略图
+        if (com.ertyu.engine.VaultGuard.isVaultPath(path)) return null
         mutex.withLock { cache.get(path) }?.let { return it }
 
         // 二级缓存：磁盘（冷启动不用重新解码）

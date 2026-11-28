@@ -34,6 +34,7 @@ object ThumbnailDiskCache {
     }
 
     fun get(path: String): Bitmap? {
+        if (com.ertyu.engine.VaultGuard.isVaultPath(path)) return null
         val d = dir ?: return null
         val k = key(path) ?: return null
         return try {
