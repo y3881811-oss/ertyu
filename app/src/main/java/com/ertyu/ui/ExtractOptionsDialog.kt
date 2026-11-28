@@ -1,6 +1,8 @@
 package com.ertyu.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,7 +30,7 @@ fun ExtractOptionsDialog(vm: MainViewModel) {
         onDismissRequest = { vm.cancelExtractOptions() },
         title = { Text("解压") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { isFolderMode = false }) {
                     RadioButton(selected = !isFolderMode, onClick = { isFolderMode = false })
                     Text("解压到当前目录")
