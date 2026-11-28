@@ -17,12 +17,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.AddToHomeScreen
+import androidx.compose.material.icons.automirrored.filled.AddToHomeScreen
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.CompareArrows
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
@@ -167,7 +167,7 @@ fun DrawerContent(
                 vm.startDuplicateScan(File("/storage/emulated/0"))
             }
 
-            DrawerItem("目录对比与同步", Icons.Default.CompareArrows) {
+            DrawerItem("目录对比与同步", Icons.AutoMirrored.Filled.CompareArrows) {
                 onDismiss()
                 vm.openDirCompare()
             }
@@ -183,7 +183,7 @@ fun DrawerContent(
                 com.ertyu.engine.GroupPrefs.setEnabled(context, next)
                 vm.showToast(if (next) "已按类型分组显示" else "已恢复默认排序")
             }
-            DrawerItem("当前目录放到桌面", Icons.Default.AddToHomeScreen) {
+            DrawerItem("当前目录放到桌面", Icons.AutoMirrored.Filled.AddToHomeScreen) {
                 val cur = vm.leftPanel.value.currentUri?.path ?: "/storage/emulated/0"
                 onDismiss()
                 val label = java.io.File(cur).name.ifBlank { "EYU" }

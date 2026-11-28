@@ -36,7 +36,7 @@ fun FileActionDock(
                 Icon(Icons.Default.CreateNewFolder, contentDescription = "新建文件夹")
             }
             IconButton(onClick = { vm.openNewFilePrompt(isLeft) }) {
-                Icon(Icons.Default.NoteAdd, contentDescription = "新建文件")
+                Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = "新建文件")
             }
             IconButton(onClick = { vm.openSortDialog(isLeft) }) {
                 // 👇 修改了图标调用
