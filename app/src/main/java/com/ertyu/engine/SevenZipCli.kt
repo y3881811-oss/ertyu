@@ -60,7 +60,15 @@ object SevenZipCli {
             cmd.addAll(rel)
 
             val proc = try {
-                ProcessBuilder(cmd).directory(cwd).redirectErrorStream(true).start()
+                val pb = ProcessBuilder(cmd).directory(cwd).redirectErrorStream(true)
+                // 7zz 依赖 libc++_shared.so，两者都在 nativeLibraryDir
+                val libDir = bin.parentFile?.absolutePath.orEmpty()
+                if (libDir.isNotEmpty()) {
+                    val env = pb.environment()
+                    val old = env["LD_LIBRARY_PATH"]
+                    env["LD_LIBRARY_PATH"] = if (old.isNullOrBlank()) libDir else "$libDir:$old"
+                }
+                pb.start()
             } catch (e: Exception) {
                 return@withContext Result.failure(IllegalStateException("7zz 无法启动：${e.message}"))
             }

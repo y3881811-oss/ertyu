@@ -79,7 +79,8 @@ android {
                 "kotlin-tooling-metadata.json"
             )
         }
-        jniLibs { useLegacyPackaging = false }
+        // 需要把 lib7zz.so / libc++_shared.so 解压到 nativeLibraryDir 才能 exec（Android 10+ 只允许从 lib 目录执行）
+        jniLibs { useLegacyPackaging = true }
     }
 
     compileOptions {
