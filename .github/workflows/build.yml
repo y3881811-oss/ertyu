@@ -65,7 +65,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.4.1'
+          gradle-version: '9.9.3'
         continue-on-error: true   # 缓存服务故障时不要让整条发布流程挂掉
 
       - name: Generate version
